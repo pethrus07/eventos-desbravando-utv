@@ -256,8 +256,8 @@ export default {
         if (admin) {
           const ct = await db.prepare("SELECT COALESCE(SUM(valor),0) AS t FROM custos WHERE evento_id=?").bind(eid).first();
           custo_total = ct ? ct.t : 0;
-          const pc = await db.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN tipo='crianca' THEN 1 ELSE 0 END) AS criancas, SUM(CASE WHEN tipo<>'crianca' THEN 1 ELSE 0 END) AS adultos FROM clientes WHERE evento_id=?").bind(eid).first();
-          pessoas = { total: (pc && pc.total) || 0, adultos: (pc && pc.adultos) || 0, criancas: (pc && pc.criancas) || 0 };
+          const pc = await db.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN tipo='crianca' THEN 1 ELSE 0 END) AS criancas, SUM(CASE WHEN tipo<>'crianca' THEN 1 ELSE 0 END) AS adultos, SUM(CASE WHEN utv='4 lugares' THEN 1 ELSE 0 END) AS utv4, SUM(CASE WHEN utv='2 lugares' THEN 1 ELSE 0 END) AS utv2 FROM clientes WHERE evento_id=?").bind(eid).first();
+          pessoas = { total: (pc && pc.total) || 0, adultos: (pc && pc.adultos) || 0, criancas: (pc && pc.criancas) || 0, utv4: (pc && pc.utv4) || 0, utv2: (pc && pc.utv2) || 0 };
         }
         return json({ evento: ev, itens: results, custo_total, pessoas });
       }
