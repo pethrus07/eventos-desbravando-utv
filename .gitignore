@@ -12,6 +12,10 @@ dist/
 # O arquivo continua no disco como backup local; so nao entra no git.
 seed_dados_reais.sql
 
+# Backups do banco de producao (contem dados reais) — nunca versionar
+backup*.sql
+*.backup.sql
+
 # Sistema
 .DS_Store
 Thumbs.db
