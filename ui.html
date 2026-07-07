@@ -90,11 +90,14 @@ input.mini,select.mini{padding:7px 8px;font-size:13px;border-radius:8px}
 .simtab tr.dragging{opacity:.55;background:var(--card)}
 .simtab tr.cst-pago td:nth-child(2){border-left:3px solid var(--ok)}
 .simtab tr.cst-andamento td:nth-child(2){border-left:3px solid var(--warn)}
+.simtab tr.cst-parcial td:nth-child(2){border-left:3px solid #38bdf8}
 .simtab tr.cst-pendente td:nth-child(2){border-left:3px solid var(--p1)}
 select.stsel{font-weight:700}
 .simtab tr.cst-pago select.stsel{color:var(--ok)}
 .simtab tr.cst-andamento select.stsel{color:var(--warn)}
+.simtab tr.cst-parcial select.stsel{color:#38bdf8}
 .simtab tr.cst-pendente select.stsel{color:var(--p1)}
+.tabscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px}
 .qcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
 .qcard .qh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px}
 .qcard .qh h4{font-family:'Anton',sans-serif;font-size:17px;text-transform:uppercase;font-weight:400}
@@ -470,7 +473,7 @@ function renderEvento(aba){
       '<span><span class="dot" style="background:var(--warn)"></span><b>'+s.and+'</b> em andamento</span>' +
       (PAPEL==="admin" ? '<span>Custos: <b>'+brl(EV.custo_total||0)+'</b></span>' : '') +
       (PAPEL==="admin" && EV.pessoas ? '<span>👥 <b>'+EV.pessoas.total+'</b> ('+EV.pessoas.adultos+' ad · '+EV.pessoas.criancas+' cri)</span>' : '') +
-      (PAPEL==="admin" && EV.pessoas && (EV.pessoas.utv4+EV.pessoas.utv2) > capacidadeUTV() ? '<span style="color:var(--p1);font-weight:700">⚠ transporte +'+((EV.pessoas.utv4+EV.pessoas.utv2)-capacidadeUTV())+' UTV</span>' : '') +
+      (PAPEL==="admin" && EV.pessoas && (EV.pessoas.utv4+EV.pessoas.utv2) ? '<span>🚙 <b>'+EV.pessoas.utv4+'</b>×4L · <b>'+EV.pessoas.utv2+'</b>×2L</span>' : '') +
     '</div>' +
     '<div class="tabs">'+tabsHtml+'</div>';
   $("voltar").onclick = function(){ location.hash = "#/"; };
@@ -695,7 +698,14 @@ function recarregar(){
 var CU = { custos: [] };   // custos do evento aberto
 var FORN = [];             // fornecedores (globais)
 var CUSUB = "itens";       // sub-aba: 'itens' | 'fornecedores'
-var CUSTO_ST = [["pendente","Pendente"],["andamento","Em andamento"],["pago","Pago"]];
+var CUSTO_ST = [["pendente","Pendente"],["andamento","Em andamento"],["parcial","Parcial"],["pago","Pago"]];
+/* status derivado do quanto já foi pago (valor_pago) vs. o valor total do item */
+function statusPorPago(valor, pago, statusAtual){
+  var v = +valor||0, p = +pago||0;
+  if (v > 0 && p >= v) return "pago";
+  if (p > 0 && p < v) return "parcial";
+  return statusAtual==="andamento" ? "andamento" : "pendente";
+}
 
 function carregarCustos(){
   $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
@@ -729,11 +739,16 @@ function linhaCusto(c){
   var stsel = CUSTO_ST.map(function(s){ return '<option value="'+s[0]+'"'+(c.status===s[0]?' selected':'')+'>'+s[1]+'</option>'; }).join("");
   var vq = c.quantidade!=null ? String(c.quantidade).replace(".",",") : "";
   var vv = c.valor!=null ? String(c.valor).replace(".",",") : "";
+  var vp = c.valor_pago ? String(c.valor_pago).replace(".",",") : "";
+  var vparc = c.parcelas!=null ? String(c.parcelas) : "";
   return '<tr data-row="'+c.id+'" class="cst-'+(c.status||"pendente")+'">' +
     '<td><span class="draghandle" data-drag="'+c.id+'" title="Arraste para reordenar">⋮⋮</span></td>' +
     '<td><input class="mini" data-cu="'+c.id+'" data-campo="item" value="'+esc(c.item)+'" style="min-width:120px"></td>' +
-    '<td><input class="mini" data-cu="'+c.id+'" data-campo="quantidade" inputmode="decimal" value="'+vq+'" style="width:52px"></td>' +
-    '<td><input class="mini" data-cu="'+c.id+'" data-campo="valor" inputmode="decimal" value="'+vv+'" style="width:88px"></td>' +
+    '<td><input class="mini" data-cu="'+c.id+'" data-campo="quantidade" inputmode="decimal" value="'+vq+'" style="width:48px"></td>' +
+    '<td><input class="mini" data-cu="'+c.id+'" data-campo="valor" inputmode="decimal" value="'+vv+'" style="width:84px" placeholder="total"></td>' +
+    '<td><input class="mini" data-cu="'+c.id+'" data-campo="valor_pago" inputmode="decimal" value="'+vp+'" style="width:84px" placeholder="pago"></td>' +
+    '<td><input class="mini" data-cu="'+c.id+'" data-campo="forma_pagamento" list="dl_formas" maxlength="60" value="'+esc(c.forma_pagamento||"")+'" style="width:88px" placeholder="Pix…"></td>' +
+    '<td><input class="mini" data-cu="'+c.id+'" data-campo="parcelas" inputmode="numeric" value="'+vparc+'" style="width:40px" placeholder="1"></td>' +
     '<td><select class="mini" data-cu="'+c.id+'" data-campo="fornecedor_id" style="max-width:130px">'+opts+'</select></td>' +
     '<td><select class="mini stsel" data-cu="'+c.id+'" data-campo="status">'+stsel+'</select></td>' +
     '<td><button class="delx" data-cudel="'+c.id+'" title="Remover">×</button></td></tr>';
@@ -741,26 +756,44 @@ function linhaCusto(c){
 
 function renderCustosItens(){
   var itens = CU.custos || [];
-  var total=0, pago=0, and=0, pend=0;
+  var staff = CU.staff || [];
+  var totalItens=0, pago=0;
   itens.forEach(function(c){
-    var v = c.valor||0; total+=v;
-    if (c.status==="pago") pago+=v; else if (c.status==="andamento") and+=v; else pend+=v;
+    var v = c.valor||0, vp = c.valor_pago||0; totalItens += v;
+    pago += v>0 ? Math.min(vp, v) : vp;
   });
+  var custoStaff=0; staff.forEach(function(s){ custoStaff += s.pacote||0; });
+  var total = totalItens + custoStaff;
+  var aPagar = total - pago;
   var h = '<div class="kpis">' +
     '<div class="kpi"><small>Total</small><b>'+brl(total)+'</b></div>' +
     '<div class="kpi"><small>Pago</small><b class="ok">'+brl(pago)+'</b></div>' +
-    '<div class="kpi"><small>Em andamento</small><b class="warn">'+brl(and)+'</b></div>' +
-    '<div class="kpi"><small>Pendente</small><b class="bad">'+brl(pend)+'</b></div>' +
+    '<div class="kpi"><small>A pagar</small><b class="'+(aPagar>0.005?'bad':'ok')+'">'+brl(aPagar)+'</b></div>' +
+    (custoStaff>0 ? '<div class="kpi"><small>Staff (equipe)</small><b>'+brl(custoStaff)+'</b></div>' : '') +
     '</div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
       '<button class="btn2" id="cu_import">↧ Importar da Simulação</button>' +
-    '</div>';
+    '</div>' +
+    '<datalist id="dl_formas"><option value="Pix"><option value="Boleto"><option value="Cartão"><option value="Dinheiro"><option value="Transferência"><option value="Cheque"></datalist>';
   if (!itens.length) h += '<div class="empty">Nenhum item de custo. Adicione abaixo ou importe de um cenário da Simulação.</div>';
   else {
-    h += '<table class="simtab" id="cu_tab"><thead><tr><th></th><th>Item</th><th>Qtd</th><th>Valor</th><th>Fornecedor</th><th>Status</th><th></th></tr></thead><tbody>' +
-      itens.map(linhaCusto).join("") + '</tbody></table>';
+    h += '<div class="tabscroll"><table class="simtab" id="cu_tab"><thead><tr><th></th><th>Item</th><th>Qtd</th><th>Valor</th><th>Pago</th><th>Forma</th><th>Parc.</th><th>Fornecedor</th><th>Status</th><th></th></tr></thead><tbody>' +
+      itens.map(linhaCusto).join("") + '</tbody></table></div>';
   }
   h += '<button class="addrow" id="cu_add">+ Adicionar item de custo</button>';
+
+  if (staff.length){
+    h += '<div style="margin-top:22px"><h3 class="anton" style="font-size:15px;color:var(--mut);margin-bottom:4px">Staff (equipe) — custo</h3>' +
+      '<p class="meta" style="margin:0 0 8px">Participantes marcados como staff. O valor entra no total de custos.</p>' +
+      '<table class="simtab"><tbody>' +
+      staff.map(function(s){
+        var v = s.pacote!=null ? String(s.pacote).replace(".",",") : "";
+        return '<tr><td style="padding-left:2px">'+esc(s.nome)+(s.grupo?' <span style="color:var(--dim)">· '+esc(s.grupo)+'</span>':'')+'</td>' +
+          '<td class="num"><input class="mini" data-staff="'+s.id+'" inputmode="decimal" value="'+v+'" style="width:96px;text-align:right" placeholder="custo"></td></tr>';
+      }).join("") +
+      '<tr><td style="font-weight:700;padding-left:2px">Subtotal staff</td><td class="num" style="font-weight:700">'+brl(custoStaff)+'</td></tr>' +
+      '</tbody></table></div>';
+  }
   $("cubody").innerHTML = h;
 
   $("cu_import").onclick = sheetImportarSim;
@@ -771,16 +804,32 @@ function renderCustosItens(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-cu]"), function(el){
     el.onchange = function(){
       var campo = el.getAttribute("data-campo"), id = el.getAttribute("data-cu"), val = el.value, b = {};
+      var item = (CU.custos||[]).find(function(x){ return x.id===+id; }) || {};
+      var recalc = false;
       if (campo === "fornecedor_id"){
         if (val === "__novo"){ sheetFornecedor(null); renderCustos(); return; }
         b.fornecedor_id = val ? +val : null;
-      } else if (campo === "valor" || campo === "quantidade"){
+      } else if (campo === "valor" || campo === "quantidade" || campo === "valor_pago"){
         b[campo] = parseMoeda(val);
+        if (campo === "valor" || campo === "valor_pago") recalc = true;
+      } else if (campo === "parcelas"){
+        var p = parseInt(val, 10); b.parcelas = (isFinite(p) && p > 0) ? p : null;
       } else b[campo] = val;
+      if (recalc){
+        var nv = campo==="valor" ? b.valor : item.valor;
+        var np = campo==="valor_pago" ? b.valor_pago : item.valor_pago;
+        b.status = statusPorPago(nv, np, item.status);
+      }
       b.atualizado_por = NOME;
       api("/api/custos/"+id,"PATCH",b)
-        .then(function(){ if (campo==="status" || campo==="valor" || campo==="fornecedor_id") carregarCustos(); })
+        .then(function(){ if (campo==="status" || campo==="valor" || campo==="valor_pago" || campo==="fornecedor_id") carregarCustos(); })
         .catch(function(e){ toast(e.message,true); });
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-staff]"), function(el){
+    el.onchange = function(){
+      api("/api/clientes/"+el.getAttribute("data-staff"),"PATCH",{pacote:parseMoeda(el.value),atualizado_por:NOME})
+        .then(function(){ carregarCustos(); }).catch(function(e){ toast(e.message,true); });
     };
   });
   Array.prototype.forEach.call(document.querySelectorAll("[data-cudel]"), function(b){
@@ -1001,30 +1050,22 @@ function pendencias(obj, regras){ var r=[]; regras.forEach(function(x){ if(x.fal
 function chipFalta(obj, regras){ var f=pendencias(obj,regras); return f.length ? '<span class="chip bad">⚠ Falta: '+f.join(", ")+'</span>' : ''; }
 function avisoFalta(obj, regras){ var f=pendencias(obj,regras); return f.length ? '<div class="aviso-falta">⚠ Faltando nesta pessoa: <b>'+f.join(", ")+'</b></div>' : ''; }
 
-/* ---------- capacidade de transporte (cegonhas) — ajuste a frota aqui ----------
-   Frota: cegonha4 = cegonhas que levam 4 UTVs; cegonha2 = cegonhas que levam 2 UTVs.
-   Base 4×4 + 7×2 = 30 UTVs. Regra de troca: +1 cegonha de 4 ⇒ −2 de 2 (2·c4 + c2 ≤ 15). */
-var FROTA = { cegonha4: 4, cegonha2: 7 };
-function capacidadeUTV(){ return FROTA.cegonha4 * 4 + FROTA.cegonha2 * 2; } // = 30
-function avisoTransporte(nUTVs){
-  var cap = capacidadeUTV();
-  if (nUTVs <= cap) return '';
-  return '<div class="aviso-erro">⚠ Transporte: ' + nUTVs + ' UTVs necessários e a frota comporta ' + cap +
-    '. Excede em <b>' + (nUTVs - cap) + ' UTV(s)</b>.</div>';
-}
-
-var PFILT = { q:"", tipo:"", pend:false };
+var PFILT = { q:"", tipo:"", pend:false, staff:false };
 function renderParticipantes(){
-  var adultos=0, criancas=0, receita=0, recebido=0, cam={}, utv4=0, utv2=0, cSim=0, comPend=0;
+  var adultos=0, criancas=0, receita=0, recebido=0, cam={}, utv4=0, utv2=0, cSim=0, comPend=0, staff=0, custoStaff=0;
   CL.forEach(function(c){
+    if (c.staff){ staff++; if (c.pacote!=null) custoStaff += c.pacote; }
+    else {
+      if (c.pacote!=null) receita += c.pacote;
+      recebido += c.pago || 0;
+      if (c.contrato_assinado) cSim++;
+      if (pendencias(c, OBRIG_PART).length) comPend++;
+    }
     if (c.tipo==="crianca") criancas++; else adultos++;
-    if (c.pacote!=null) receita += c.pacote;
-    recebido += c.pago || 0;
     if (c.camiseta) cam[c.camiseta] = (cam[c.camiseta]||0)+1;
     if (c.utv==="4 lugares") utv4++; if (c.utv==="2 lugares") utv2++;
-    if (c.contrato_assinado) cSim++;
-    if (pendencias(c, OBRIG_PART).length) comPend++;
   });
+  var naoStaff = CL.length - staff;
   var saldo = receita - recebido;
   var camTxt = Object.keys(cam).sort().map(function(k){ return k+": "+cam[k]; }).join(" · ") || "—";
   var html =
@@ -1032,20 +1073,21 @@ function renderParticipantes(){
       '<div class="kpi"><small>Pessoas</small><b>'+CL.length+'</b></div>' +
       '<div class="kpi"><small>Adultos</small><b>'+adultos+'</b></div>' +
       '<div class="kpi"><small>Crianças</small><b>'+criancas+'</b></div>' +
+      '<div class="kpi"><small>Staff (equipe)</small><b>'+staff+'</b>'+(custoStaff>0?'<span style="font-size:11px;color:var(--dim)"> '+brl(custoStaff)+' custo</span>':'')+'</div>' +
       '<div class="kpi"><small>Com pendências</small><b class="'+(comPend?'bad':'ok')+'">'+comPend+'</b></div>' +
       '<div class="kpi"><small>Receita</small><b>'+brl(receita)+'</b></div>' +
       '<div class="kpi"><small>Recebido</small><b class="'+(recebido>0?'ok':'')+'">'+brl(recebido)+'</b></div>' +
       '<div class="kpi"><small>A receber</small><b class="'+(saldo>0?'warn':'ok')+'">'+brl(saldo)+'</b></div>' +
-      '<div class="kpi"><small>Contratos assinados</small><b>'+cSim+' / '+CL.length+'</b></div>' +
-      '<div class="kpi"><small>UTVs</small><b class="'+((utv4+utv2)>capacidadeUTV()?'bad':'')+'">'+(utv4+utv2)+' / '+capacidadeUTV()+'</b><span style="font-size:11px;color:var(--dim)"> '+utv4+'×4L · '+utv2+'×2L</span></div>' +
+      '<div class="kpi"><small>Contratos assinados</small><b>'+cSim+' / '+naoStaff+'</b></div>' +
+      '<div class="kpi"><small>UTVs</small><b>'+(utv4+utv2)+'</b><span style="font-size:11px;color:var(--dim)"> '+utv4+' de 4 lugares · '+utv2+' de 2 lugares</span></div>' +
       '<div class="kpi" style="grid-column:1/-1"><small>Camisetas</small><b style="font-size:14px;font-family:\'Archivo\'">'+esc(camTxt)+'</b></div>' +
     '</div>' +
-    avisoTransporte(utv4+utv2) +
     '<input id="p_q" placeholder="Buscar nome, grupo, CPF, telefone…" value="'+esc(PFILT.q)+'" style="margin-bottom:10px">' +
     '<div class="tabs" style="margin-bottom:12px">' +
-      '<button class="tab'+(!PFILT.tipo&&!PFILT.pend?' on':'')+'" data-pf="all">Todos</button>' +
+      '<button class="tab'+(!PFILT.tipo&&!PFILT.pend&&!PFILT.staff?' on':'')+'" data-pf="all">Todos</button>' +
       '<button class="tab'+(PFILT.tipo==="adulto"?' on':'')+'" data-pf="adulto">Adultos</button>' +
       '<button class="tab'+(PFILT.tipo==="crianca"?' on':'')+'" data-pf="crianca">Crianças</button>' +
+      (staff ? '<button class="tab'+(PFILT.staff?' on':'')+'" data-pf="staff">Staff ('+staff+')</button>' : '') +
       '<button class="tab'+(PFILT.pend?' on':'')+'" data-pf="pend">Com pendências ('+comPend+')</button>' +
     '</div>';
 
@@ -1058,8 +1100,9 @@ function renderParticipantes(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-pf]"), function(b){
     b.onclick = function(){
       var v = b.getAttribute("data-pf");
-      if (v==="all"){ PFILT.tipo=""; PFILT.pend=false; }
+      if (v==="all"){ PFILT.tipo=""; PFILT.pend=false; PFILT.staff=false; }
       else if (v==="pend"){ PFILT.pend=!PFILT.pend; }
+      else if (v==="staff"){ PFILT.staff=!PFILT.staff; }
       else { PFILT.tipo = PFILT.tipo===v ? "" : v; }
       renderParticipantes();
     };
@@ -1074,7 +1117,8 @@ function desenharListaClientes(){
     if (q && (c.nome+" "+c.grupo+" "+c.cpf+" "+c.telefone).toLowerCase().indexOf(q)<0) return;
     if (PFILT.tipo==="adulto" && c.tipo==="crianca") return;
     if (PFILT.tipo==="crianca" && c.tipo!=="crianca") return;
-    if (PFILT.pend && !pendencias(c, OBRIG_PART).length) return;
+    if (PFILT.pend && (c.staff || !pendencias(c, OBRIG_PART).length)) return;
+    if (PFILT.staff && !c.staff) return;
     var g = c.grupo || "Sem grupo";
     (grupos[g]=grupos[g]||[]).push(c);
   });
@@ -1085,22 +1129,25 @@ function desenharListaClientes(){
       var pago = c.pago||0, pac = c.pacote;
       var pct = pac ? Math.min(100, Math.round(pago/pac*100)) : 0;
       var chips = [];
-      var cfP = chipFalta(c, OBRIG_PART); if (cfP) chips.push(cfP);
+      if (c.staff) chips.push('<span class="chip" style="border-color:#7c5cff;color:#b7a6ff">👷 staff</span>');
+      if (!c.staff){ var cfP = chipFalta(c, OBRIG_PART); if (cfP) chips.push(cfP); }
       if (c.tipo==="crianca") chips.push('<span class="chip">criança</span>');
       if (c.camiseta) chips.push('<span class="chip">'+esc(c.camiseta)+'</span>');
       if (c.utv) chips.push('<span class="chip">UTV '+esc(c.utv)+'</span>');
-      chips.push(c.contrato_assinado ? '<span class="chip ok">contrato ✓</span>'
+      if (!c.staff) chips.push(c.contrato_assinado ? '<span class="chip ok">contrato ✓</span>'
         : (c.contrato_enviado ? '<span class="chip warn">contrato enviado</span>' : '<span class="chip bad">sem contrato</span>'));
       if (c.nf) chips.push('<span class="chip ok">NF '+esc(c.nf)+'</span>');
       if (c.notas) chips.push('<span class="chip">'+c.notas+' anotação(ões)</span>');
       h += '<div class="row" data-cli="'+c.id+'" role="button" tabindex="0">' +
         '<div class="info"><div class="nm">'+esc(c.nome)+'</div>' +
         '<div class="sub" style="margin-top:4px">'+chips.join("")+'</div>' +
-        (pac!=null ?
+        (c.staff ?
+          '<div style="font-size:11px;color:var(--dim);margin-top:6px">custo do staff: '+(pac!=null?brl(pac):'—')+'</div>'
+          : (pac!=null ?
           '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:6px">' +
           '<span>'+brl(pago)+' de '+brl(pac)+'</span><span>'+pct+'%</span></div>' +
           '<div class="paybar"><i class="'+(pct>=100?'full':'')+'" style="width:'+pct+'%"></i></div>'
-          : '<div style="font-size:11px;color:var(--dim);margin-top:6px">sem pacote definido</div>') +
+          : '<div style="font-size:11px;color:var(--dim);margin-top:6px">sem pacote definido</div>')) +
         '</div></div>';
     });
   });
@@ -1141,9 +1188,10 @@ function sheetCliente(id){
           '<option value="1"'+(c.contrato_enviado&&!c.contrato_assinado?" selected":"")+'>Enviado</option>' +
           '<option value="2"'+(c.contrato_assinado?" selected":"")+'>Assinado</option></select></div>' +
         '<div><label class="top">Nota fiscal</label><input id="c_nf" maxlength="40" value="'+esc(c.nf)+'" placeholder="ok, pendente…"></div>' +
-        '<div><label class="top">Pacote (R$)</label><input id="c_pac" inputmode="decimal" value="'+(c.pacote!=null?esc(String(c.pacote).replace(".",",")):"")+'" placeholder="9500,00"></div>' +
+        '<div><label class="top" id="lb_pac">'+(c.staff?'Custo do staff (R$)':'Pacote (R$)')+'</label><input id="c_pac" inputmode="decimal" value="'+(c.pacote!=null?esc(String(c.pacote).replace(".",",")):"")+'" placeholder="9500,00"></div>' +
         '<div><label class="top">Forma de pagamento</label><input id="c_forma" maxlength="60" value="'+esc(c.forma_pagamento)+'" placeholder="5x boleto, pix…"></div>' +
       '</div>' +
+      '<label class="top" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px"><input type="checkbox" id="c_staff"'+(c.staff?' checked':'')+' style="width:auto;margin:0"> É staff (equipe) — não entra na receita; vira custo</label>' +
       '<label class="top">Cliente do CRM (ficha da pessoa)</label>' +
       '<select id="c_crm"><option value="">— sem vínculo —</option>' +
         CRMLIST.map(function(k){
@@ -1190,6 +1238,7 @@ function sheetCliente(id){
         contrato_enviado: ctr!=="0" ? 1:0, contrato_assinado: ctr==="2" ? 1:0,
         nf: $("c_nf").value.trim(), pacote: parseMoeda($("c_pac").value),
         forma_pagamento: $("c_forma").value.trim(), observacoes: $("c_obs").value.trim(),
+        staff: $("c_staff").checked ? 1 : 0,
         contato_id: $("c_crm").value ? +$("c_crm").value : null,
         atualizado_por: NOME
       };
@@ -1239,11 +1288,13 @@ function sheetCliente(id){
           .catch(function(e){ toast(e.message,true); });
       };
     });
+    var cs = $("c_staff");
+    if (cs) cs.onchange = function(){ var lb=$("lb_pac"); if(lb) lb.textContent = cs.checked ? "Custo do staff (R$)" : "Pacote (R$)"; };
     setTimeout(function(){ $("c_nome").focus(); }, 50);
   };
   comContatos(function(){
     if (novo) render({grupo:"",nome:"",cpf:"",telefone:"",tipo:"adulto",camiseta:"",utv:"",nf:"",
-                      contrato_enviado:0,contrato_assinado:0,pacote:null,forma_pagamento:"",observacoes:"",contato_id:null}, [], []);
+                      contrato_enviado:0,contrato_assinado:0,pacote:null,forma_pagamento:"",staff:0,observacoes:"",contato_id:null}, [], []);
     else api("/api/clientes/"+id).then(function(j){ render(j.cliente, j.pagamentos||[], j.notas||[]); })
           .catch(function(e){ toast(e.message,true); });
   });
@@ -1624,7 +1675,8 @@ function renderTarefas(){
       (resps.length>1 ? '<select id="t_resp"><option value="">Todos os responsáveis</option>'+opts(resps,TFILT.resp)+'</select>' : '') +
       (setores.length>1 ? '<select id="t_setor"><option value="">Todos os setores</option>'+opts(setores,TFILT.setor)+'</select>' : '') +
     '</div>' +
-    (temFiltro ? '<div class="fclear"><button class="link" id="t_clear">Limpar filtros</button></div>' : '');
+    (temFiltro ? '<div class="fclear"><button class="link" id="t_clear">Limpar filtros</button></div>' : '') +
+    '<button class="btn" id="t_add" style="width:100%;margin:2px 0 16px">+ Nova tarefa</button>';
 
   if (!TA.length) html += '<div class="empty">Nenhuma tarefa ainda. Adicione a primeira abaixo.</div>';
   else if (!lista.length) html += '<div class="empty">Nenhuma tarefa com esses filtros.</div>';
@@ -1644,7 +1696,6 @@ function renderTarefas(){
       (t.prioridade!=null ? '<span class="pbadge'+(t.prioridade<=1?' p1':'')+'">P'+t.prioridade+'</span>' : '') +
       '</div>';
   });
-  html += '<button class="btn" id="t_add" style="width:100%;margin-top:14px">+ Nova tarefa</button>';
   $("main").innerHTML = html;
 
   $("t_q").oninput = debounce(function(){ TFILT.q = this.value; renderTarefas(); }, 250);
@@ -1676,6 +1727,16 @@ function cicloTarefa(id){
       toast("Sem conexão — o status não foi salvo. Tente de novo.", true); });
 }
 
+/* opções fixas dos campos de tarefa (dropdowns) */
+var TAREFA_SETORES = ["Diário","Compra e venda","Expedição","Vestuário","Marcas","Manutenção","Pessoal","Evento"];
+var TAREFA_RESPS   = ["Gustavo","Zana","Ana","Pedrinho","Anai","Prestador de serviços","Outros"];
+function selectFixo(id, lista, atual){
+  var val = String(atual||"");
+  var extra = (val && lista.indexOf(val)<0) ? '<option value="'+esc(val)+'" selected>'+esc(val)+' (antigo)</option>' : '';
+  return '<select id="'+id+'"><option value="">—</option>' +
+    lista.map(function(v){ return '<option value="'+esc(v)+'"'+(v===val?' selected':'')+'>'+esc(v)+'</option>'; }).join("") + extra + '</select>';
+}
+
 function sheetTarefa(id){
   var t = id ? TA.find(function(x){ return x.id===id; }) : null;
   var novo = !t;
@@ -1686,8 +1747,8 @@ function sheetTarefa(id){
     '<label class="top" for="tf_tit">Tarefa *</label>' +
     '<input id="tf_tit" maxlength="300" value="'+esc(t.titulo)+'" placeholder="ex.: Precificar expedição Tavares">' +
     '<div class="grid2">' +
-      '<div><label class="top">Setor</label><input id="tf_setor" list="dl_tsetores" maxlength="80" value="'+esc(t.setor)+'" placeholder="Expedição, Vestuário…"></div>' +
-      '<div><label class="top">Responsável</label><input id="tf_resp" list="dl_tresps" maxlength="60" value="'+esc(t.responsavel)+'" placeholder="ex.: Pedrinho"></div>' +
+      '<div><label class="top">Setor</label>'+selectFixo("tf_setor", TAREFA_SETORES, t.setor)+'</div>' +
+      '<div><label class="top">Responsável</label>'+selectFixo("tf_resp", TAREFA_RESPS, t.responsavel)+'</div>' +
       '<div><label class="top">Status</label><select id="tf_st">' +
         ['afazer','andamento','concluido'].map(function(st){
           return '<option value="'+st+'"'+(t.status===st?' selected':'')+'>'+STATUS_TXT[st]+'</option>'; }).join("") +
@@ -1700,8 +1761,6 @@ function sheetTarefa(id){
     '<input id="tf_dl" maxlength="20" value="'+esc(t.data_limite)+'" placeholder="Hoje, 05/07…">' +
     '<label class="top">Observações</label>' +
     '<textarea id="tf_obs" maxlength="600">'+esc(t.observacoes)+'</textarea>' +
-    '<datalist id="dl_tsetores">'+tUniques("setor").map(function(v){return '<option value="'+esc(v)+'">';}).join("")+'</datalist>' +
-    '<datalist id="dl_tresps">'+tUniques("responsavel").map(function(v){return '<option value="'+esc(v)+'">';}).join("")+'</datalist>' +
     '<div class="actions">' +
       (novo ? '<button class="btn2" data-close>Cancelar</button>' : '<button class="btn-danger" id="tf_del">Excluir</button>') +
       '<button class="btn" id="tf_save">'+(novo?'Adicionar':'Salvar')+'</button>' +

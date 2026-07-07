@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS clientes (
   contrato_assinado INTEGER NOT NULL DEFAULT 0,
   pacote            REAL,
   forma_pagamento   TEXT NOT NULL DEFAULT '',
+  staff             INTEGER NOT NULL DEFAULT 0, -- 1 = equipe (sai da receita; vira custo)
   observacoes       TEXT NOT NULL DEFAULT '',
   contato_id        INTEGER,                    -- vínculo com crm_contatos (a pessoa)
   atualizado_em     TEXT NOT NULL DEFAULT (datetime('now')),
@@ -199,7 +200,10 @@ CREATE TABLE IF NOT EXISTS custos (
   quantidade     REAL NOT NULL DEFAULT 1,
   valor          REAL,                             -- valor total do item, em reais
   fornecedor_id  INTEGER,                          -- vínculo com fornecedores (opcional)
-  status         TEXT NOT NULL DEFAULT 'pendente', -- pago | andamento | pendente
+  status         TEXT NOT NULL DEFAULT 'pendente', -- pago | parcial | andamento | pendente
+  forma_pagamento TEXT NOT NULL DEFAULT '',        -- Pix, Boleto, Cartão…
+  parcelas       INTEGER,                          -- nº de parcelas (opcional)
+  valor_pago     REAL NOT NULL DEFAULT 0,          -- quanto já foi pago (calcula saldo/status)
   observacoes    TEXT NOT NULL DEFAULT '',
   atualizado_em  TEXT NOT NULL DEFAULT (datetime('now')),
   atualizado_por TEXT NOT NULL DEFAULT ''

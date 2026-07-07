@@ -63,6 +63,7 @@ function limparCliente(b) {
   if ("contrato_enviado" in b) o.contrato_enviado = B(b.contrato_enviado);
   if ("contrato_assinado" in b) o.contrato_assinado = B(b.contrato_assinado);
   if ("pacote" in b) o.pacote = N(b.pacote);
+  if ("staff" in b) o.staff = B(b.staff);
   return o;
 }
 function limparCenario(b) {
@@ -114,7 +115,7 @@ function limparContato(b) {
   return o;
 }
 
-const CUSTO_STATUS = new Set(["pago", "andamento", "pendente"]);
+const CUSTO_STATUS = new Set(["pago", "parcial", "andamento", "pendente"]);
 
 function limparCusto(b) {
   const o = {};
@@ -125,6 +126,9 @@ function limparCusto(b) {
   if ("valor" in b) o.valor = N(b.valor);
   if ("fornecedor_id" in b) o.fornecedor_id = I(b.fornecedor_id);
   if ("status" in b && CUSTO_STATUS.has(b.status)) o.status = b.status;
+  if ("forma_pagamento" in b) o.forma_pagamento = S(b.forma_pagamento, 60);
+  if ("parcelas" in b) o.parcelas = I(b.parcelas);
+  if ("valor_pago" in b) o.valor_pago = N(b.valor_pago) ?? 0;
   if ("observacoes" in b) o.observacoes = S(b.observacoes, 600);
   return o;
 }
@@ -314,12 +318,12 @@ export default {
         if (!c.nome) return json({ erro: "informe o nome" }, 400);
         const r = await db.prepare(`
           INSERT INTO clientes (evento_id, grupo, nome, cpf, telefone, tipo, camiseta, utv, nf,
-                                contrato_enviado, contrato_assinado, pacote, forma_pagamento,
+                                contrato_enviado, contrato_assinado, pacote, forma_pagamento, staff,
                                 observacoes, contato_id, atualizado_por)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
           eid, c.grupo ?? "", c.nome, c.cpf ?? "", c.telefone ?? "", c.tipo ?? "adulto",
           c.camiseta ?? "", c.utv ?? "", c.nf ?? "", c.contrato_enviado ?? 0,
-          c.contrato_assinado ?? 0, c.pacote ?? null, c.forma_pagamento ?? "",
+          c.contrato_assinado ?? 0, c.pacote ?? null, c.forma_pagamento ?? "", c.staff ?? 0,
           c.observacoes ?? "", c.contato_id ?? null, S(b.atualizado_por, 60)).run();
         return json({ ok: true, id: r.meta.last_row_id });
       }
@@ -708,7 +712,9 @@ export default {
           SELECT c.*, f.nome AS fornecedor_nome
           FROM custos c LEFT JOIN fornecedores f ON f.id=c.fornecedor_id
           WHERE c.evento_id=? ORDER BY c.ordem, c.id`).bind(eid).all();
-        return json({ custos: results });
+        const { results: staff } = await db.prepare(
+          "SELECT id, nome, grupo, pacote FROM clientes WHERE evento_id=? AND staff=1 ORDER BY nome COLLATE NOCASE").bind(eid).all();
+        return json({ custos: results, staff });
       }
       if (method === "POST") {
         const b = await request.json().catch(() => ({}));
@@ -720,10 +726,12 @@ export default {
           ordem = (mx ? mx.mo : 0) + 1;
         }
         const r = await db.prepare(`
-          INSERT INTO custos (evento_id, ordem, item, categoria, quantidade, valor, fornecedor_id, status, observacoes, atualizado_por)
-          VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(
+          INSERT INTO custos (evento_id, ordem, item, categoria, quantidade, valor, fornecedor_id, status,
+                              forma_pagamento, parcelas, valor_pago, observacoes, atualizado_por)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
           eid, ordem, c.item, c.categoria ?? "", c.quantidade ?? 1, c.valor ?? null,
-          c.fornecedor_id ?? null, c.status ?? "pendente", c.observacoes ?? "", S(b.atualizado_por, 60)).run();
+          c.fornecedor_id ?? null, c.status ?? "pendente", c.forma_pagamento ?? "", c.parcelas ?? null,
+          c.valor_pago ?? 0, c.observacoes ?? "", S(b.atualizado_por, 60)).run();
         return json({ ok: true, id: r.meta.last_row_id });
       }
     }
