@@ -83,6 +83,16 @@ input.mini,select.mini{padding:7px 8px;font-size:13px;border-radius:8px}
 .simtab td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--mut);white-space:nowrap}
 .delx{background:none;border:none;color:var(--dim);font-size:16px;padding:2px 6px;cursor:pointer}
 .delx:hover{color:var(--p1)}
+.draghandle{display:inline-block;cursor:grab;color:var(--dim);user-select:none;touch-action:none;padding:6px 4px;font-size:13px;letter-spacing:-3px;line-height:1}
+.draghandle:active{cursor:grabbing;color:var(--txt)}
+.simtab tr.dragging{opacity:.55;background:var(--card)}
+.simtab tr.cst-pago td:nth-child(2){border-left:3px solid var(--ok)}
+.simtab tr.cst-andamento td:nth-child(2){border-left:3px solid var(--warn)}
+.simtab tr.cst-pendente td:nth-child(2){border-left:3px solid var(--p1)}
+select.stsel{font-weight:700}
+.simtab tr.cst-pago select.stsel{color:var(--ok)}
+.simtab tr.cst-andamento select.stsel{color:var(--warn)}
+.simtab tr.cst-pendente select.stsel{color:var(--p1)}
 .qcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
 .qcard .qh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px}
 .qcard .qh h4{font-family:'Anton',sans-serif;font-size:17px;text-transform:uppercase;font-weight:400}
@@ -276,13 +286,14 @@ function route(){
   if (m) return telaEvento(+m[1], m[2] || "");
   if (h === "#/tarefas") return telaTarefas();
   if (h === "#/crm") return telaCRM();
+  if (h === "#/fornecedores") return telaFornecedores();
   telaHome();
 }
 
 /* nav das três áreas (home) */
 function navAreas(cur){
   var T = [["#/","Eventos"],["#/tarefas","Tarefas"]];
-  if (PAPEL === "admin") T.push(["#/crm","CRM"]);
+  if (PAPEL === "admin") T.push(["#/crm","CRM"], ["#/fornecedores","Fornecedores"]);
   return '<div class="tabs" style="margin-top:14px;margin-bottom:0">' + T.map(function(t){
     return '<button class="tab'+(cur===t[0]?' on':'')+'" data-nav="'+t[0]+'">'+t[1]+'</button>';
   }).join("") + '</div>';
@@ -438,8 +449,8 @@ function itensFiltrados(){
 
 function renderEvento(aba){
   var ev = EV.evento, s = stats(EV.itens);
-  var TABS = [["","Checklist"],["custos","Custos"]];
-  if (PAPEL === "admin") TABS.push(["participantes","Participantes"],["simulador","Simulador"]);
+  var TABS = [["","Checklist"]];
+  if (PAPEL === "admin") TABS.push(["custos","Custos"],["participantes","Participantes"],["simulador","Simulador"]);
   TABS.push(["hospedagem","Hospedagem"]);
   var tabsHtml = TABS.map(function(t){
     return '<button class="tab'+(aba===t[0]?' on':'')+'" data-tab="'+t[0]+'">'+t[1]+'</button>';
@@ -448,23 +459,25 @@ function renderEvento(aba){
     '<button class="backln" id="voltar">← Todos os eventos</button>' +
     '<div class="evhead">' +
       '<h1 class="anton" style="flex:1;min-width:0">'+esc(ev.nome)+'</h1>' +
+      (PAPEL==="admin" ? '<button class="backln" id="ev_acoes" style="padding:0 6px;font-size:20px" title="Ações do evento">⚙</button>' : '') +
       '<div class="anton big">'+s.pct+'<small>%</small></div>' +
     '</div>' +
     '<div class="bar'+(s.pct===100&&s.total?' done':'')+'"><i style="width:'+s.pct+'%"></i></div>' +
     '<div class="statline">' +
       '<span><b>'+s.done+'</b> de <b>'+s.total+'</b> concluídos</span>' +
       '<span><span class="dot" style="background:var(--warn)"></span><b>'+s.and+'</b> em andamento</span>' +
-      '<span>Custos: <b>'+brl(s.valor)+'</b></span>' +
+      (PAPEL==="admin" ? '<span>Custos: <b>'+brl(EV.custo_total||0)+'</b></span>' : '') +
     '</div>' +
     '<div class="tabs">'+tabsHtml+'</div>';
   $("voltar").onclick = function(){ location.hash = "#/"; };
+  var evAc = $("ev_acoes"); if (evAc) evAc.onclick = sheetAcoesEvento;
   Array.prototype.forEach.call(document.querySelectorAll("[data-tab]"), function(b){
     b.onclick = function(){
       var t = b.getAttribute("data-tab");
       location.hash = "#/e/"+ev.id+(t?"/"+t:"");
     };
   });
-  if (aba === "custos") renderCustos();
+  if (aba === "custos") carregarCustos();
   else if (aba === "participantes") carregarParticipantes();
   else if (aba === "simulador") carregarSimulador();
   else if (aba === "hospedagem") carregarHospedagem();
@@ -672,63 +685,283 @@ function recarregar(){
   });
 }
 
-/* ---------- custos ---------- */
-function agrupaSoma(campo){
-  var g = {};
-  EV.itens.forEach(function(i){
-    var k = String(i[campo]||"").trim() || "—";
-    g[k] = g[k] || { n:0, comValor:0, total:0 };
-    g[k].n++;
-    if (i.valor!=null){ g[k].comValor++; g[k].total += i.valor; }
-  });
-  return g;
-}
+/* ============================================================
+   CUSTOS (admin · financeiro) + FORNECEDORES (globais)
+   ============================================================ */
+var CU = { custos: [] };   // custos do evento aberto
+var FORN = [];             // fornecedores (globais)
+var CUSUB = "itens";       // sub-aba: 'itens' | 'fornecedores'
+var CUSTO_ST = [["pendente","Pendente"],["andamento","Em andamento"],["pago","Pago"]];
 
-function tabelaCustos(titulo, g, ordena){
-  var chaves = Object.keys(g).sort(ordena);
-  var totN=0, totV=0;
-  var linhas = chaves.map(function(k){
-    totN += g[k].n; totV += g[k].total;
-    return '<tr><td>'+esc(k)+'</td><td class="num">'+g[k].comValor+' / '+g[k].n+'</td>' +
-           '<td class="num">'+(g[k].total?brl(g[k].total):'—')+'</td></tr>';
-  }).join("");
-  return '<h3 class="anton" style="font-size:22px;margin-top:26px">'+titulo+'</h3>' +
-    '<table><thead><tr><th>'+titulo+'</th><th class="num">Com valor</th><th class="num">Total</th></tr></thead>' +
-    '<tbody>'+linhas+'<tr class="total"><td>Total</td><td class="num">—</td><td class="num">'+brl(totV)+'</td></tr></tbody></table>';
+function carregarCustos(){
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+  Promise.all([
+    api("/api/eventos/"+EV.evento.id+"/custos"),
+    api("/api/fornecedores")
+  ]).then(function(r){
+    CU = r[0] || { custos: [] };
+    FORN = (r[1] && r[1].fornecedores) || [];
+    renderCustos();
+  }).catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
 }
 
 function renderCustos(){
-  var s = stats(EV.itens);
-  var html =
-    '<div class="anton money">'+brl(s.valor)+'</div>' +
-    '<div class="moneysub">Soma dos valores preenchidos · ' +
-      (s.semvalor ? s.semvalor+' item(ns) ainda sem valor' : 'todos os itens têm valor') + '</div>' +
-    tabelaCustos("Setor", agrupaSoma("setor"), function(a,b){ return a.localeCompare(b); }) +
-    tabelaCustos("Dia",   agrupaSoma("dia"),   function(a,b){ return ordDia(a)-ordDia(b); }) +
-    (PAPEL==="admin" ?
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">' +
-      '<button class="btn2" id="c_arq">'+(EV.evento.arquivado?'Desarquivar evento':'Arquivar evento')+'</button>' +
-      '<button class="btn2" id="c_ren">Renomear</button>' +
-      '<button class="btn-danger" id="c_del">Excluir evento</button>' +
-    '</div>' : '');
-  $("main").innerHTML = html;
-  if (PAPEL!=="admin") return;
+  $("main").innerHTML =
+    '<div class="tabs" style="margin-bottom:14px">' +
+      '<button class="tab'+(CUSUB==="itens"?' on':'')+'" data-cusub="itens">Itens de custo</button>' +
+      '<button class="tab'+(CUSUB==="fornecedores"?' on':'')+'" data-cusub="fornecedores">Fornecedores</button>' +
+    '</div><div id="cubody"></div>';
+  Array.prototype.forEach.call(document.querySelectorAll("[data-cusub]"), function(b){
+    b.onclick = function(){ CUSUB = b.getAttribute("data-cusub"); renderCustos(); };
+  });
+  if (CUSUB === "fornecedores") renderFornList("cubody");
+  else renderCustosItens();
+}
 
-  $("c_arq").onclick = function(){
-    api("/api/eventos/"+EV.evento.id,"PATCH",{arquivado: EV.evento.arquivado?0:1})
-      .then(function(){ toast(EV.evento.arquivado?"Evento desarquivado":"Evento arquivado"); return recarregar(); })
+function linhaCusto(c){
+  var opts = '<option value="">— fornecedor —</option>' +
+    FORN.map(function(f){ return '<option value="'+f.id+'"'+(c.fornecedor_id===f.id?' selected':'')+'>'+esc(f.nome)+'</option>'; }).join("") +
+    '<option value="__novo">+ novo fornecedor…</option>';
+  var stsel = CUSTO_ST.map(function(s){ return '<option value="'+s[0]+'"'+(c.status===s[0]?' selected':'')+'>'+s[1]+'</option>'; }).join("");
+  var vq = c.quantidade!=null ? String(c.quantidade).replace(".",",") : "";
+  var vv = c.valor!=null ? String(c.valor).replace(".",",") : "";
+  return '<tr data-row="'+c.id+'" class="cst-'+(c.status||"pendente")+'">' +
+    '<td><span class="draghandle" data-drag="'+c.id+'" title="Arraste para reordenar">⋮⋮</span></td>' +
+    '<td><input class="mini" data-cu="'+c.id+'" data-campo="item" value="'+esc(c.item)+'" style="min-width:120px"></td>' +
+    '<td><input class="mini" data-cu="'+c.id+'" data-campo="quantidade" inputmode="decimal" value="'+vq+'" style="width:52px"></td>' +
+    '<td><input class="mini" data-cu="'+c.id+'" data-campo="valor" inputmode="decimal" value="'+vv+'" style="width:88px"></td>' +
+    '<td><select class="mini" data-cu="'+c.id+'" data-campo="fornecedor_id" style="max-width:130px">'+opts+'</select></td>' +
+    '<td><select class="mini stsel" data-cu="'+c.id+'" data-campo="status">'+stsel+'</select></td>' +
+    '<td><button class="delx" data-cudel="'+c.id+'" title="Remover">×</button></td></tr>';
+}
+
+function renderCustosItens(){
+  var itens = CU.custos || [];
+  var total=0, pago=0, and=0, pend=0;
+  itens.forEach(function(c){
+    var v = c.valor||0; total+=v;
+    if (c.status==="pago") pago+=v; else if (c.status==="andamento") and+=v; else pend+=v;
+  });
+  var h = '<div class="kpis">' +
+    '<div class="kpi"><small>Total</small><b>'+brl(total)+'</b></div>' +
+    '<div class="kpi"><small>Pago</small><b class="ok">'+brl(pago)+'</b></div>' +
+    '<div class="kpi"><small>Em andamento</small><b class="warn">'+brl(and)+'</b></div>' +
+    '<div class="kpi"><small>Pendente</small><b class="bad">'+brl(pend)+'</b></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
+      '<button class="btn2" id="cu_import">↧ Importar da Simulação</button>' +
+    '</div>';
+  if (!itens.length) h += '<div class="empty">Nenhum item de custo. Adicione abaixo ou importe de um cenário da Simulação.</div>';
+  else {
+    h += '<table class="simtab" id="cu_tab"><thead><tr><th></th><th>Item</th><th>Qtd</th><th>Valor</th><th>Fornecedor</th><th>Status</th><th></th></tr></thead><tbody>' +
+      itens.map(linhaCusto).join("") + '</tbody></table>';
+  }
+  h += '<button class="addrow" id="cu_add">+ Adicionar item de custo</button>';
+  $("cubody").innerHTML = h;
+
+  $("cu_import").onclick = sheetImportarSim;
+  $("cu_add").onclick = function(){
+    api("/api/eventos/"+EV.evento.id+"/custos","POST",{item:"Novo item",quantidade:1,valor:null,status:"pendente",atualizado_por:NOME})
+      .then(function(){ carregarCustos(); }).catch(function(e){ toast(e.message,true); });
+  };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-cu]"), function(el){
+    el.onchange = function(){
+      var campo = el.getAttribute("data-campo"), id = el.getAttribute("data-cu"), val = el.value, b = {};
+      if (campo === "fornecedor_id"){
+        if (val === "__novo"){ sheetFornecedor(null); renderCustos(); return; }
+        b.fornecedor_id = val ? +val : null;
+      } else if (campo === "valor" || campo === "quantidade"){
+        b[campo] = parseMoeda(val);
+      } else b[campo] = val;
+      b.atualizado_por = NOME;
+      api("/api/custos/"+id,"PATCH",b)
+        .then(function(){ if (campo==="status" || campo==="valor" || campo==="fornecedor_id") carregarCustos(); })
+        .catch(function(e){ toast(e.message,true); });
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-cudel]"), function(b){
+    b.onclick = function(){
+      api("/api/custos/"+b.getAttribute("data-cudel"),"DELETE")
+        .then(function(){ carregarCustos(); }).catch(function(e){ toast(e.message,true); });
+    };
+  });
+  ligarDragCustos();
+}
+
+/* reordenar por arrastar (funciona no toque e no mouse via Pointer Events) */
+function ligarDragCustos(){
+  var tbody = document.querySelector("#cu_tab tbody");
+  if (!tbody) return;
+  Array.prototype.forEach.call(document.querySelectorAll(".draghandle"), function(handle){
+    handle.addEventListener("pointerdown", function(ev){
+      ev.preventDefault();
+      var row = handle.parentNode.parentNode;
+      if (!row) return;
+      row.classList.add("dragging");
+      handle.setPointerCapture(ev.pointerId);
+      function onMove(e){
+        var after = null;
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr:not(.dragging)"));
+        for (var i=0;i<rows.length;i++){
+          var rect = rows[i].getBoundingClientRect();
+          if (e.clientY < rect.top + rect.height/2){ after = rows[i]; break; }
+        }
+        if (after) tbody.insertBefore(row, after); else tbody.appendChild(row);
+      }
+      function onUp(){
+        try { handle.releasePointerCapture(ev.pointerId); } catch(_){}
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        row.classList.remove("dragging");
+        var ids = Array.prototype.map.call(tbody.querySelectorAll("tr[data-row]"), function(tr){ return +tr.getAttribute("data-row"); });
+        api("/api/eventos/"+EV.evento.id+"/custos/reordenar","POST",{ids:ids})
+          .then(function(){ CU.custos.sort(function(a,b){ return ids.indexOf(a.id)-ids.indexOf(b.id); }); })
+          .catch(function(e){ toast(e.message,true); carregarCustos(); });
+      }
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+    });
+  });
+}
+
+function sheetImportarSim(){
+  api("/api/eventos/"+EV.evento.id+"/cenarios").then(function(j){
+    var cens = j.cenarios || [];
+    if (!cens.length) return toast("Nenhum cenário na Simulação para importar", true);
+    var opts = cens.map(function(c){ return '<option value="'+c.id+'">'+esc(c.nome)+' ('+c.pessoas+' pessoas)</option>'; }).join("");
+    abrirSheet(
+      '<h2 class="anton">Importar da Simulação</h2>' +
+      '<p class="meta" style="margin:6px 0 12px">Cada linha do cenário vira um item de custo com o valor total calculado. Os itens atuais são mantidos.</p>' +
+      '<label class="top">Cenário</label><select id="im_cen">'+opts+'</select>' +
+      '<div class="actions"><button class="btn2" data-close>Cancelar</button><button class="btn" id="im_ok">Importar</button></div>'
+    );
+    $("im_ok").onclick = function(){
+      $("im_ok").disabled = true;
+      api("/api/eventos/"+EV.evento.id+"/custos/importar","POST",{cenario_id:+$("im_cen").value})
+        .then(function(r){ fecharSheet(); toast(r.n+" item(ns) importado(s)"); carregarCustos(); })
+        .catch(function(e){ $("im_ok").disabled=false; toast(e.message,true); });
+    };
+  }).catch(function(e){ toast(e.message,true); });
+}
+
+/* ---------- Fornecedores (lista compartilhada: sub-aba de Custos e tela própria) ---------- */
+function refazerForn(){
+  if (/\/custos$/.test(location.hash)) return carregarCustos();
+  return telaFornecedores();
+}
+
+function renderFornList(containerId){
+  var totalGeral = 0; FORN.forEach(function(f){ totalGeral += f.total||0; });
+  $(containerId).innerHTML =
+    '<div class="kpis">' +
+      '<div class="kpi"><small>Fornecedores</small><b>'+FORN.length+'</b></div>' +
+      '<div class="kpi"><small>Total vinculado</small><b>'+brl(totalGeral)+'</b></div>' +
+    '</div>' +
+    '<input id="fn_q" placeholder="Buscar fornecedor, categoria, cidade…" style="margin-bottom:12px">' +
+    '<div id="fn_lista"></div>' +
+    '<button class="btn" id="fn_add" style="width:100%;margin-top:14px">+ Adicionar fornecedor</button>';
+  desenharFornList("");
+  $("fn_q").oninput = debounce(function(){ desenharFornList(this.value.toLowerCase()); }, 200);
+  $("fn_add").onclick = function(){ sheetFornecedor(null); };
+}
+
+function desenharFornList(q){
+  var lista = FORN.filter(function(f){
+    if (!q) return true;
+    return (f.nome+" "+f.categoria+" "+f.cidade+" "+f.contato+" "+f.telefone).toLowerCase().indexOf(q) >= 0;
+  });
+  if (!lista.length){ $("fn_lista").innerHTML = '<div class="empty">Nenhum fornecedor'+(q?' com essa busca':'. Adicione o primeiro abaixo')+'.</div>'; return; }
+  $("fn_lista").innerHTML = lista.map(function(f){
+    var chips = [];
+    if (f.categoria) chips.push('<span class="chip">'+esc(f.categoria)+'</span>');
+    if (f.cidade) chips.push('<span class="chip">'+esc(f.cidade)+'</span>');
+    if (f.itens) chips.push('<span class="chip">'+f.itens+' item(ns) · '+brl(f.total)+'</span>');
+    return '<button class="evcard" data-forn="'+f.id+'" style="padding:14px 16px;margin-bottom:10px">' +
+      '<h2 class="anton" style="font-size:19px;margin-bottom:2px">'+esc(f.nome)+'</h2>' +
+      ((f.telefone||f.contato)?'<div class="meta" style="margin-top:4px"><span>'+esc(f.telefone||"")+(f.contato?' · '+esc(f.contato):'')+'</span></div>':'') +
+      (chips.length?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">'+chips.join("")+'</div>':'') +
+      '</button>';
+  }).join("");
+  Array.prototype.forEach.call(document.querySelectorAll("[data-forn]"), function(b){
+    b.onclick = function(){ sheetFornecedor(FORN.find(function(f){ return f.id===+b.getAttribute("data-forn"); })); };
+  });
+}
+
+function sheetFornecedor(f){
+  var novo = !f; f = f || { nome:"",categoria:"",contato:"",telefone:"",cidade:"",observacoes:"" };
+  abrirSheet(
+    '<h2 class="anton">'+(novo?'Novo fornecedor':'Editar fornecedor')+'</h2>' +
+    '<label class="top">Nome</label><input id="ff_nome" maxlength="160" value="'+esc(f.nome)+'">' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:2px">' +
+      '<div><label class="top">Categoria</label><input id="ff_cat" maxlength="120" value="'+esc(f.categoria)+'" placeholder="bebidas, transporte…"></div>' +
+      '<div><label class="top">Cidade</label><input id="ff_cid" maxlength="120" value="'+esc(f.cidade)+'"></div>' +
+      '<div><label class="top">Telefone</label><input id="ff_tel" maxlength="120" value="'+esc(f.telefone)+'"></div>' +
+      '<div><label class="top">Contato</label><input id="ff_ct" maxlength="120" value="'+esc(f.contato)+'" placeholder="nome do contato"></div>' +
+    '</div>' +
+    '<label class="top">Observações</label><textarea id="ff_obs" class="mini" maxlength="600" style="min-height:56px">'+esc(f.observacoes)+'</textarea>' +
+    '<div class="actions">' +
+      (novo?'':'<button class="btn-danger" id="ff_del">Excluir</button>') +
+      '<button class="btn2" data-close>Cancelar</button>' +
+      '<button class="btn" id="ff_ok">'+(novo?'Adicionar':'Salvar')+'</button>' +
+    '</div>'
+  );
+  $("ff_ok").onclick = function(){
+    var b = { nome:$("ff_nome").value.trim(), categoria:$("ff_cat").value.trim(), cidade:$("ff_cid").value.trim(),
+              telefone:$("ff_tel").value.trim(), contato:$("ff_ct").value.trim(), observacoes:$("ff_obs").value.trim(),
+              atualizado_por:NOME };
+    if (!b.nome) return toast("Informe o nome do fornecedor", true);
+    var p = novo ? api("/api/fornecedores","POST",b) : api("/api/fornecedores/"+f.id,"PATCH",b);
+    p.then(function(){ fecharSheet(); toast(novo?"Fornecedor adicionado":"Salvo"); refazerForn(); })
+     .catch(function(e){ toast(e.message,true); });
+  };
+  if (!novo) $("ff_del").onclick = function(){
+    if (!confirm('Excluir o fornecedor "'+f.nome+'"? Os itens de custo ligados a ele ficam sem fornecedor.')) return;
+    api("/api/fornecedores/"+f.id,"DELETE").then(function(){ fecharSheet(); toast("Fornecedor excluído"); refazerForn(); })
       .catch(function(e){ toast(e.message,true); });
   };
-  $("c_ren").onclick = function(){
-    var n = prompt("Novo nome do evento:", EV.evento.nome);
+  setTimeout(function(){ $("ff_nome").focus(); }, 50);
+}
+
+function telaFornecedores(){
+  $("head").innerHTML =
+    '<h1 class="anton">Fornecedores</h1>' +
+    '<p style="color:var(--mut);font-size:14px;margin-top:8px">Cadastro geral — compartilhado por todas as expedições.</p>' +
+    navAreas("#/fornecedores");
+  ligarNav();
+  if (PAPEL !== "admin"){ $("main").innerHTML = '<div class="empty">Disponível apenas com a chave admin.</div>'; return; }
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+  api("/api/fornecedores").then(function(j){ FORN = j.fornecedores || []; renderFornList("main"); })
+    .catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
+}
+
+/* ---------- ações do evento (arquivar / renomear / excluir) ---------- */
+function sheetAcoesEvento(){
+  var ev = EV.evento;
+  abrirSheet(
+    '<h2 class="anton">Ações do evento</h2>' +
+    '<p class="meta" style="margin:6px 0 16px">'+esc(ev.nome)+'</p>' +
+    '<div style="display:flex;flex-direction:column;gap:10px">' +
+      '<button class="btn2" id="ae_arq">'+(ev.arquivado?'Desarquivar evento':'Arquivar evento')+'</button>' +
+      '<button class="btn2" id="ae_ren">Renomear</button>' +
+      '<button class="btn-danger" id="ae_del">Excluir evento</button>' +
+    '</div>' +
+    '<div class="actions"><button class="btn2" data-close style="flex:1">Fechar</button></div>'
+  );
+  $("ae_arq").onclick = function(){
+    api("/api/eventos/"+ev.id,"PATCH",{arquivado: ev.arquivado?0:1})
+      .then(function(){ fecharSheet(); toast(ev.arquivado?"Evento desarquivado":"Evento arquivado"); return recarregar(); })
+      .catch(function(e){ toast(e.message,true); });
+  };
+  $("ae_ren").onclick = function(){
+    var n = prompt("Novo nome do evento:", ev.nome);
     if (!n || !n.trim()) return;
-    api("/api/eventos/"+EV.evento.id,"PATCH",{nome:n.trim()})
-      .then(function(){ toast("Renomeado"); return recarregar(); })
+    api("/api/eventos/"+ev.id,"PATCH",{nome:n.trim()})
+      .then(function(){ fecharSheet(); toast("Renomeado"); return recarregar(); })
       .catch(function(e){ toast(e.message,true); });
   };
-  $("c_del").onclick = function(){
-    if (!confirm('Excluir "'+EV.evento.nome+'" e todos os seus '+EV.itens.length+' itens? Não dá para desfazer.')) return;
-    api("/api/eventos/"+EV.evento.id,"DELETE")
+  $("ae_del").onclick = function(){
+    if (!confirm('Excluir "'+ev.nome+'" e TUDO dele (checklist, custos, participantes, simulação, hospedagem)? Não dá para desfazer.')) return;
+    api("/api/eventos/"+ev.id,"DELETE")
       .then(function(){ toast("Evento excluído"); location.hash="#/"; })
       .catch(function(e){ toast(e.message,true); });
   };
@@ -982,8 +1215,8 @@ function carregarSimulador(foco){
 }
 
 function renderSimulador(){
-  var realizado = stats(EV.itens).valor;
-  var h = '<p style="color:var(--mut);font-size:13.5px;margin-bottom:14px">Cenários de custo previsto. O realizado vem dos valores preenchidos no checklist: <b style="color:var(--txt)">'+brl(realizado)+'</b> até agora.</p>';
+  var realizado = EV.custo_total||0;
+  var h = '<p style="color:var(--mut);font-size:13.5px;margin-bottom:14px">Cenários de custo previsto. O realizado vem dos custos lançados: <b style="color:var(--txt)">'+brl(realizado)+'</b> até agora.</p>';
   if (!SIM.cenarios.length) h += '<div class="empty">Nenhum cenário ainda. Crie o primeiro para simular o custo do evento.</div>';
   SIM.cenarios.forEach(function(c){
     var linhas = SIM.linhas.filter(function(l){ return l.cenario_id===c.id; });
@@ -1035,7 +1268,7 @@ function renderCenario(cid){
   if (!c) return renderSimulador();
   var linhas = SIM.linhas.filter(function(l){ return l.cenario_id===cid; });
   var r = calcCenario(c, linhas);
-  var realizado = stats(EV.itens).valor;
+  var realizado = EV.custo_total||0;
   var mult = { nenhum:1, diarias:c.diarias, dias_trilha:c.dias_trilha, refeicoes:c.refeicoes, eventos:c.eventos_qtd };
 
   var params = [["pessoas","Pessoas"],["diarias","Diárias"],["dias_trilha","Dias de trilha"],["refeicoes","Refeições"],["eventos_qtd","Eventos"]];
@@ -1044,7 +1277,7 @@ function renderCenario(cid){
     '<div class="kpis">' +
       '<div class="kpi"><small>Por pessoa</small><b>'+brl(r.pp)+'</b></div>' +
       '<div class="kpi"><small>Total previsto</small><b>'+brl(r.total)+'</b></div>' +
-      '<div class="kpi"><small>Realizado (checklist)</small><b class="'+(realizado>r.total?'bad':'ok')+'">'+brl(realizado)+'</b></div>' +
+      '<div class="kpi"><small>Realizado (custos)</small><b class="'+(realizado>r.total?'bad':'ok')+'">'+brl(realizado)+'</b></div>' +
     '</div>' +
     '<div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(95px,1fr))">' +
     params.map(function(p){
