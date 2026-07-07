@@ -1,0 +1,17 @@
+# Cloudflare / Wrangler (cache e artefatos locais)
+.wrangler/
+node_modules/
+dist/
+
+# Segredos / variaveis de ambiente
+.env
+.env.*
+.dev.vars
+
+# DADOS PESSOAIS REAIS (CPF / financeiro / CRM) — NUNCA versionar nem enviar pra nuvem.
+# O arquivo continua no disco como backup local; so nao entra no git.
+seed_dados_reais.sql
+
+# Sistema
+.DS_Store
+Thumbs.db

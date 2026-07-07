@@ -1,0 +1,1659 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Controle de Eventos · Desbravando UTV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0B0B0B;--card:#171717;--card2:#101010;--line:#2B2B2B;
+  --txt:#FFFFFF;--mut:#C7C7C7;--dim:#8A8A8A;
+  --ok:#6FCF97;--warn:#F2C94C;--p1:#EB5757;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--txt);font-family:'Archivo',-apple-system,'Segoe UI',Roboto,Arial,sans-serif;line-height:1.5;padding-bottom:120px}
+button{font-family:inherit;cursor:pointer}
+:focus-visible{outline:2px solid #FFF;outline-offset:2px;border-radius:4px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+.anton{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:-.5px;line-height:.92}
+.wrap{max-width:880px;margin:0 auto;padding:0 18px}
+
+input,textarea,select{width:100%;background:#0F0F0F;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px}
+input:focus,textarea:focus,select:focus{outline:none;border-color:#FFF}
+::placeholder{color:#5E5E5E}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239A9A9A' stroke-width='1.6' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;cursor:pointer}
+label.top{display:block;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);margin:14px 0 6px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#FFF;color:#000;border:none;border-radius:12px;padding:13px 22px;font-size:15px;font-weight:700}
+.btn:disabled{opacity:.45;cursor:default}
+.btn2{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:transparent;color:#FFF;border:1px solid var(--line);border-radius:12px;padding:12px 20px;font-size:14px;font-weight:600}
+.btn2:hover{border-color:#666}
+.btn-danger{background:transparent;color:var(--p1);border:1px solid #4a2323;border-radius:12px;padding:12px 20px;font-size:14px;font-weight:600}
+.link{background:none;border:none;color:var(--dim);text-decoration:underline;font-size:13px;padding:4px}
+
+header.top{padding:26px 0 18px;border-bottom:1px solid var(--line);margin-bottom:22px}
+header.top .brand{font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:var(--dim);margin-bottom:10px}
+h1{font-size:clamp(30px,6.5vw,50px)}
+
+.bar{height:6px;background:#242424;border-radius:99px;overflow:hidden}
+.bar>i{display:block;height:100%;background:#FFF;border-radius:99px;transition:width .4s ease}
+.bar.done>i{background:var(--ok)}
+
+/* ---- home ---- */
+.evcard{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:14px;color:var(--txt);border-color:var(--line)}
+.evcard:hover{border-color:#555}
+.evcard h2{font-size:clamp(22px,4.5vw,30px);margin-bottom:12px}
+.evcard .meta{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--mut);margin-top:10px}
+.evcard .pct{color:var(--txt);font-weight:700}
+.evcard.arq{opacity:.5}
+.empty{border:1px dashed var(--line);border-radius:16px;padding:34px 20px;text-align:center;color:var(--dim);font-size:14px}
+
+/* ---- evento ---- */
+.evhead{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:4px 0 14px}
+.evhead .big{font-size:clamp(44px,12vw,84px)}
+.evhead .big small{font-size:.42em;color:var(--dim);letter-spacing:0}
+.statline{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--mut);margin:10px 0 16px}
+.statline b{color:var(--txt)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:1px}
+.tabs{display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:none;background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:12px;padding:10px 15px;font-size:13.5px;font-weight:600;white-space:nowrap}
+.tab.on{background:#FFF;color:#000;border-color:#FFF}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:2px 0 18px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.kpi small{display:block;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);margin-bottom:3px}
+.kpi b{font-family:'Anton',sans-serif;font-size:19px;font-weight:400;letter-spacing:0}
+.kpi b.ok{color:var(--ok)} .kpi b.warn{color:var(--warn)} .kpi b.bad{color:var(--p1)}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;border:1px solid var(--line);border-radius:99px;padding:2px 8px;color:var(--mut);white-space:nowrap}
+.chip.ok{border-color:#2e5c44;color:var(--ok)}
+.chip.warn{border-color:#6b5a22;color:var(--warn)}
+.chip.bad{border-color:#4a2323;color:var(--p1)}
+.chip .x{cursor:pointer;color:var(--dim);font-size:13px;line-height:1;padding:0 1px}
+.chip .x:hover{color:var(--p1)}
+.paybar{height:4px;background:#242424;border-radius:99px;overflow:hidden;margin-top:5px;width:100%}
+.paybar>i{display:block;height:100%;border-radius:99px;background:var(--warn)}
+.paybar>i.full{background:var(--ok)}
+input.mini,select.mini{padding:7px 8px;font-size:13px;border-radius:8px}
+.simtab{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0}
+.simtab th{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);text-align:left;padding:6px 5px;border-bottom:1px solid var(--line)}
+.simtab td{padding:5px 4px;border-bottom:1px solid #1d1d1d;vertical-align:middle}
+.simtab td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--mut);white-space:nowrap}
+.delx{background:none;border:none;color:var(--dim);font-size:16px;padding:2px 6px;cursor:pointer}
+.delx:hover{color:var(--p1)}
+.qcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
+.qcard .qh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px}
+.qcard .qh h4{font-family:'Anton',sans-serif;font-size:17px;text-transform:uppercase;font-weight:400}
+.qcard .occ{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.qadd{display:flex;gap:6px;margin-top:8px}
+.qadd select,.qadd input{flex:1}
+
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.filters .full{grid-column:1/-1}
+.filters select,.filters input{padding:9px 12px;font-size:14px}
+.fclear{text-align:right;margin-bottom:10px}
+
+.dayblock{margin:22px 0}
+.dayhead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:8px}
+.dayhead h3{font-size:clamp(20px,4.5vw,26px)}
+.dayhead .cnt{font-size:13px;color:var(--dim);white-space:nowrap}
+.dayblock .bar{margin-bottom:10px}
+
+.row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;color:var(--txt)}
+.row:hover{border-color:#555}
+.row.st-concluido{opacity:.55}
+.row.st-concluido .nm{text-decoration:line-through;text-decoration-color:var(--dim)}
+.stbtn{flex:none;width:30px;height:30px;border-radius:50%;border:2px solid var(--dim);background:transparent;display:flex;align-items:center;justify-content:center;font-size:15px;color:#000;transition:all .15s}
+.st-andamento .stbtn{border-color:var(--warn);background:linear-gradient(90deg,var(--warn) 50%,transparent 50%)}
+.st-concluido .stbtn{border-color:var(--ok);background:var(--ok)}
+.row .info{flex:1;min-width:0}
+.row .nm{font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.row .sub{font-size:12px;color:var(--dim);display:flex;flex-wrap:wrap;gap:3px 10px;margin-top:2px}
+.row .sub .vl{color:var(--mut);font-weight:600}
+.pbadge{flex:none;font-size:11px;font-weight:700;border:1px solid var(--line);color:var(--dim);border-radius:6px;padding:2px 7px}
+.pbadge.p1{border-color:var(--p1);color:var(--p1)}
+.addrow{width:100%;background:transparent;border:1px dashed var(--line);border-radius:12px;padding:11px;color:var(--dim);font-size:14px}
+.addrow:hover{color:var(--txt);border-color:#666}
+
+/* ---- custos ---- */
+.money{font-size:clamp(38px,10vw,64px);margin:6px 0 2px}
+.moneysub{color:var(--dim);font-size:13px;margin-bottom:20px}
+table{width:100%;border-collapse:collapse;margin:10px 0 26px;font-size:14px}
+th{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid #1d1d1d;color:var(--mut)}
+td:first-child{color:var(--txt)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+tr.total td{color:var(--txt);font-weight:700;border-top:1px solid var(--line)}
+
+/* ---- modal / sheet ---- */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:50;padding:0}
+.overlay.on{display:flex}
+.sheet{background:var(--card);border:1px solid var(--line);border-bottom:none;border-radius:18px 18px 0 0;width:100%;max-width:620px;max-height:92dvh;overflow:auto;padding:22px 20px 30px}
+.sheet h2{font-size:clamp(22px,5vw,28px);margin-bottom:4px}
+.sheet .meta{font-size:12px;color:var(--dim)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.sheet .actions{display:flex;gap:10px;margin-top:22px}
+.sheet .actions .btn{flex:1}
+@media(min-width:640px){.overlay{align-items:center;padding:20px}.sheet{border-radius:18px;border-bottom:1px solid var(--line)}}
+
+/* ---- toast / login ---- */
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#FFF;color:#000;font-size:14px;font-weight:600;padding:11px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:all .25s;z-index:99;max-width:90vw;text-align:center}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{background:var(--p1);color:#FFF}
+#login{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px}
+#login .box{width:100%;max-width:420px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:30px 26px}
+#login .brand{font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:var(--dim);margin-bottom:12px}
+#login h1{font-size:clamp(30px,8vw,42px);margin-bottom:8px}
+#login p{color:var(--mut);font-size:14px}
+#login .btn{width:100%;margin-top:20px}
+.hide{display:none!important}
+.backln{display:inline-flex;align-items:center;gap:6px;background:none;border:none;color:var(--dim);font-size:14px;padding:14px 0 4px}
+.backln:hover{color:#FFF}
+</style>
+</head>
+<body>
+
+<div id="login" class="hide">
+  <div class="box">
+    <div class="brand">Desbravando UTV</div>
+    <h1 class="anton">Controle de<br>Eventos</h1>
+    <p>Acesso da equipe. Informe a chave e como você quer aparecer nas edições.</p>
+    <label class="top" for="lkey">Chave de acesso</label>
+    <input id="lkey" type="password" autocomplete="current-password" placeholder="Chave da equipe">
+    <label class="top" for="lnome">Seu nome</label>
+    <input id="lnome" type="text" maxlength="40" placeholder="ex.: Ana Julia">
+    <button class="btn" id="lbtn">Entrar</button>
+  </div>
+</div>
+
+<div id="app" class="hide">
+  <header class="top">
+    <div class="wrap">
+      <div class="brand">Desbravando UTV</div>
+      <div id="head"></div>
+    </div>
+  </header>
+  <main class="wrap" id="main"></main>
+</div>
+
+<div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   Estado e utilidades
+   ============================================================ */
+var KEY  = localStorage.getItem("ev_key")  || "";
+var NOME = localStorage.getItem("ev_nome") || "";
+var PAPEL = "equipe";           // admin | equipe (definido no login via /api/me)
+var eventos = [];               // cache da home
+var EV = null;                  // evento aberto {evento, itens}
+var CL = null;                  // participantes do evento aberto
+var SIM = null;                 // {cenarios, linhas}
+var HO = null;                  // {quartos, alocacoes, participantes}
+var FILT = { q:"", dia:"", setor:"", status:"", prio:"", resp:"" };
+var pollTimer = null;
+
+var STATUS_SEQ = { afazer:"andamento", andamento:"concluido", concluido:"afazer" };
+var STATUS_TXT = { afazer:"A fazer", andamento:"Em andamento", concluido:"Concluído" };
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function brl(v){ return (v==null||isNaN(v)) ? "—" :
+  Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"}); }
+function parseMoeda(s){
+  s = String(s||"").trim(); if(!s) return null;
+  s = s.replace(/[R$\s]/g,"");
+  if (s.indexOf(",") > -1) s = s.replace(/\./g,"").replace(",",".");
+  var n = Number(s); return isNaN(n) ? null : n;
+}
+function toast(msg, err){
+  var t = $("toast"); t.textContent = msg;
+  t.className = err ? "on err" : "on";
+  clearTimeout(t._h); t._h = setTimeout(function(){ t.className=""; }, 3200);
+}
+function fmtData(iso){
+  if(!iso) return "";
+  var d = new Date(iso.replace(" ","T") + (iso.indexOf("Z")>-1?"":"Z"));
+  if (isNaN(d)) return iso;
+  return d.toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+}
+
+function api(path, method, body){
+  return fetch(path, {
+    method: method || "GET",
+    headers: { "content-type":"application/json", "x-app-key": KEY },
+    body: body ? JSON.stringify(body) : undefined
+  }).then(function(r){
+    if (r.status === 401){ logout(); throw new Error("Chave inválida"); }
+    return r.json().then(function(j){
+      if (!r.ok) throw new Error(j.erro || ("Erro " + r.status));
+      return j;
+    });
+  });
+}
+
+/* ============================================================
+   Login
+   ============================================================ */
+function logout(){
+  localStorage.removeItem("ev_key"); KEY = "";
+  $("app").classList.add("hide"); $("login").classList.remove("hide");
+}
+$("lbtn").onclick = function(){
+  var k = $("lkey").value.trim(), n = $("lnome").value.trim();
+  if(!k) return toast("Informe a chave de acesso", true);
+  if(!n) return toast("Informe seu nome", true);
+  KEY = k;
+  api("/api/me").then(function(me){
+    PAPEL = me.papel || "equipe";
+    localStorage.setItem("ev_key", k);
+    localStorage.setItem("ev_nome", n); NOME = n;
+    $("login").classList.add("hide"); $("app").classList.remove("hide");
+    route();
+  }).catch(function(e){ KEY=""; toast(e.message, true); });
+};
+$("lkey").addEventListener("keydown", function(e){ if(e.key==="Enter") $("lnome").focus(); });
+$("lnome").addEventListener("keydown", function(e){ if(e.key==="Enter") $("lbtn").click(); });
+
+/* ============================================================
+   Rotas: #/  |  #/e/ID  |  #/e/ID/custos
+   ============================================================ */
+window.addEventListener("hashchange", route);
+
+function route(){
+  if(!KEY){ $("login").classList.remove("hide"); $("app").classList.add("hide"); return; }
+  $("login").classList.add("hide"); $("app").classList.remove("hide");
+  fecharSheet();
+  clearInterval(pollTimer); pollTimer = null;
+
+  var h = location.hash || "#/";
+  var m = h.match(/^#\/e\/(\d+)(?:\/(custos|participantes|simulador|hospedagem))?$/);
+  if (m) return telaEvento(+m[1], m[2] || "");
+  if (h === "#/tarefas") return telaTarefas();
+  if (h === "#/crm") return telaCRM();
+  telaHome();
+}
+
+/* nav das três áreas (home) */
+function navAreas(cur){
+  var T = [["#/","Eventos"],["#/tarefas","Tarefas"]];
+  if (PAPEL === "admin") T.push(["#/crm","CRM"]);
+  return '<div class="tabs" style="margin-top:14px;margin-bottom:0">' + T.map(function(t){
+    return '<button class="tab'+(cur===t[0]?' on':'')+'" data-nav="'+t[0]+'">'+t[1]+'</button>';
+  }).join("") + '</div>';
+}
+function ligarNav(){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-nav]"), function(b){
+    b.onclick = function(){ location.hash = b.getAttribute("data-nav"); };
+  });
+}
+
+/* ============================================================
+   Home — lista de eventos
+   ============================================================ */
+function telaHome(){
+  $("head").innerHTML =
+    '<h1 class="anton">Controle de Eventos</h1>' +
+    '<p style="color:var(--mut);font-size:14px;margin-top:8px">Checklist, custos e progresso de cada evento — em tempo real, no celular de todo mundo.</p>' +
+    navAreas("#/");
+  ligarNav();
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+
+  api("/api/eventos").then(function(j){
+    eventos = j.eventos || [];
+    var ativos = eventos.filter(function(e){ return !e.arquivado; });
+    var arq    = eventos.filter(function(e){ return  e.arquivado; });
+    var html = "";
+
+    if (!ativos.length && !arq.length){
+      html += '<div class="empty">Nenhum evento ainda. Crie o primeiro — ou duplique quando já houver um modelo.</div>';
+    }
+    ativos.forEach(function(e){ html += cardEvento(e); });
+    if (PAPEL==="admin") html += '<button class="btn" id="novoev" style="width:100%;margin-top:8px">+ Novo evento</button>';
+    if (arq.length){
+      html += '<h3 class="anton" style="font-size:20px;margin:30px 0 12px;color:var(--dim)">Arquivados</h3>';
+      arq.forEach(function(e){ html += cardEvento(e); });
+    }
+    $("main").innerHTML = html;
+    var nv = $("novoev"); if (nv) nv.onclick = modalNovoEvento;
+    Array.prototype.forEach.call(document.querySelectorAll("[data-open]"), function(b){
+      b.onclick = function(){ location.hash = "#/e/" + b.getAttribute("data-open"); };
+    });
+  }).catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
+}
+
+function cardEvento(e){
+  var total = e.total||0, done = e.concluidos||0;
+  var pct = total ? Math.round(done/total*100) : 0;
+  return '<button class="evcard'+(e.arquivado?' arq':'')+'" data-open="'+e.id+'">' +
+    '<h2 class="anton">'+esc(e.nome)+'</h2>' +
+    '<div class="bar'+(pct===100&&total?' done':'')+'"><i style="width:'+pct+'%"></i></div>' +
+    '<div class="meta">' +
+      '<span><span class="pct">'+pct+'%</span> · '+done+' de '+total+' concluídos</span>' +
+      (e.andamento ? '<span><span class="dot" style="background:var(--warn)"></span>'+e.andamento+' em andamento</span>' : '') +
+      (e.valor_total ? '<span>Custos: <span class="pct">'+brl(e.valor_total)+'</span></span>' : '') +
+    '</div></button>';
+}
+
+function modalNovoEvento(){
+  var opts = eventos.filter(function(e){return e.total>0;}).map(function(e){
+    return '<option value="'+e.id+'">'+esc(e.nome)+' ('+e.total+' itens)</option>';
+  }).join("");
+  abrirSheet(
+    '<h2 class="anton">Novo evento</h2>' +
+    '<label class="top" for="nv_nome">Nome do evento</label>' +
+    '<input id="nv_nome" maxlength="120" placeholder="ex.: Serra Catarinense · Março">' +
+    '<label class="top">Como começar</label>' +
+    '<select id="nv_modo"><option value="">Do zero (checklist vazio)</option>' +
+    (opts ? '<optgroup label="Duplicar de um evento (modelo)">'+opts+'</optgroup>' : '') +
+    '</select>' +
+    '<div id="nv_extra" class="hide" style="margin-top:12px">' +
+      '<label style="display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--mut)">' +
+      '<input type="checkbox" id="nv_limpar" checked style="width:auto;margin-top:3px">' +
+      '<span>Limpar fornecedores e valores (mantém itens, dias, setores, prioridades e responsáveis). O status sempre recomeça em "A fazer".</span></label>' +
+    '</div>' +
+    '<div class="actions"><button class="btn2" data-close>Cancelar</button>' +
+    '<button class="btn" id="nv_ok">Criar evento</button></div>'
+  );
+  $("nv_modo").onchange = function(){
+    $("nv_extra").classList.toggle("hide", !this.value);
+  };
+  $("nv_ok").onclick = function(){
+    var nome = $("nv_nome").value.trim();
+    if(!nome) return toast("Dê um nome ao evento", true);
+    var b = { nome: nome };
+    if ($("nv_modo").value){
+      b.copiar_de = +$("nv_modo").value;
+      b.limpar_valores = $("nv_limpar").checked;
+    }
+    $("nv_ok").disabled = true;
+    api("/api/eventos","POST",b).then(function(j){
+      fecharSheet(); toast("Evento criado");
+      location.hash = "#/e/" + j.id;
+    }).catch(function(e){ $("nv_ok").disabled=false; toast(e.message,true); });
+  };
+  setTimeout(function(){ $("nv_nome").focus(); }, 50);
+}
+
+/* ============================================================
+   Evento — checklist e custos
+   ============================================================ */
+function ordDia(d){
+  d = String(d||"").trim();
+  if (!d) return 8000;
+  if (/^pr[eé]/i.test(d)) return 0;
+  var m = d.match(/^(\d{1,2})\/(\d{1,2})/);
+  if (m) return 100 + (+m[2])*31 + (+m[1]);
+  if (/^p[oó]s/i.test(d)) return 9000;
+  return 8500;
+}
+
+function telaEvento(id, aba){
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+  api("/api/eventos/"+id+"/itens").then(function(j){
+    EV = j; renderEvento(aba);
+    if (aba === "") {
+      pollTimer = setInterval(function(){
+        if (document.visibilityState !== "visible") return;
+        if ($("overlay").classList.contains("on")) return; /* não recarrega com formulário aberto */
+        var ae = document.activeElement;
+        if (ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return; /* nem enquanto alguém digita */
+        api("/api/eventos/"+id+"/itens").then(function(nj){ EV = nj; renderEvento(""); }).catch(function(){});
+      }, 25000);
+    }
+  }).catch(function(e){
+    $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>';
+    $("head").innerHTML = '<button class="backln" onclick="location.hash=\'#/\'">← Todos os eventos</button>';
+  });
+}
+
+function stats(itens){
+  var s = { total: itens.length, done:0, and:0, valor:0, semvalor:0 };
+  itens.forEach(function(i){
+    if (i.status==="concluido") s.done++;
+    if (i.status==="andamento") s.and++;
+    if (i.valor!=null) s.valor += i.valor; else s.semvalor++;
+  });
+  s.pct = s.total ? Math.round(s.done/s.total*100) : 0;
+  return s;
+}
+
+function itensFiltrados(){
+  var q = FILT.q.toLowerCase();
+  return EV.itens.filter(function(i){
+    if (FILT.dia    && i.dia !== FILT.dia) return false;
+    if (FILT.setor  && i.setor !== FILT.setor) return false;
+    if (FILT.status && i.status !== FILT.status) return false;
+    if (FILT.prio   && String(i.prioridade||"") !== FILT.prio) return false;
+    if (FILT.resp   && i.responsavel !== FILT.resp) return false;
+    if (q && (i.item+" "+i.setor+" "+i.fornecedor+" "+i.observacoes+" "+i.responsavel).toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  });
+}
+
+function renderEvento(aba){
+  var ev = EV.evento, s = stats(EV.itens);
+  var TABS = [["","Checklist"],["custos","Custos"]];
+  if (PAPEL === "admin") TABS.push(["participantes","Participantes"],["simulador","Simulador"]);
+  TABS.push(["hospedagem","Hospedagem"]);
+  var tabsHtml = TABS.map(function(t){
+    return '<button class="tab'+(aba===t[0]?' on':'')+'" data-tab="'+t[0]+'">'+t[1]+'</button>';
+  }).join("");
+  $("head").innerHTML =
+    '<button class="backln" id="voltar">← Todos os eventos</button>' +
+    '<div class="evhead">' +
+      '<h1 class="anton" style="flex:1;min-width:0">'+esc(ev.nome)+'</h1>' +
+      '<div class="anton big">'+s.pct+'<small>%</small></div>' +
+    '</div>' +
+    '<div class="bar'+(s.pct===100&&s.total?' done':'')+'"><i style="width:'+s.pct+'%"></i></div>' +
+    '<div class="statline">' +
+      '<span><b>'+s.done+'</b> de <b>'+s.total+'</b> concluídos</span>' +
+      '<span><span class="dot" style="background:var(--warn)"></span><b>'+s.and+'</b> em andamento</span>' +
+      '<span>Custos: <b>'+brl(s.valor)+'</b></span>' +
+    '</div>' +
+    '<div class="tabs">'+tabsHtml+'</div>';
+  $("voltar").onclick = function(){ location.hash = "#/"; };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-tab]"), function(b){
+    b.onclick = function(){
+      var t = b.getAttribute("data-tab");
+      location.hash = "#/e/"+ev.id+(t?"/"+t:"");
+    };
+  });
+  if (aba === "custos") renderCustos();
+  else if (aba === "participantes") carregarParticipantes();
+  else if (aba === "simulador") carregarSimulador();
+  else if (aba === "hospedagem") carregarHospedagem();
+  else renderChecklist();
+}
+
+/* ---------- checklist ---------- */
+function uniques(campo){
+  var set = {};
+  EV.itens.forEach(function(i){ var v = String(i[campo]||"").trim(); if(v) set[v]=1; });
+  return Object.keys(set);
+}
+
+function renderChecklist(){
+  var dias = uniques("dia").sort(function(a,b){ return ordDia(a)-ordDia(b); });
+  var setores = uniques("setor").sort();
+  var resps = uniques("responsavel").sort();
+  var temFiltro = FILT.q||FILT.dia||FILT.setor||FILT.status||FILT.prio||FILT.resp;
+
+  function opts(list, sel){
+    return list.map(function(v){
+      return '<option value="'+esc(v)+'"'+(v===sel?' selected':'')+'>'+esc(v)+'</option>';
+    }).join("");
+  }
+
+  var html =
+    '<div class="filters">' +
+      '<input class="full" id="f_q" placeholder="Buscar item, fornecedor, observação…" value="'+esc(FILT.q)+'">' +
+      '<select id="f_dia"><option value="">Todos os dias</option>'+opts(dias,FILT.dia)+'</select>' +
+      '<select id="f_setor"><option value="">Todos os setores</option>'+opts(setores,FILT.setor)+'</select>' +
+      '<select id="f_status"><option value="">Todos os status</option>' +
+        ['afazer','andamento','concluido'].map(function(st){
+          return '<option value="'+st+'"'+(FILT.status===st?' selected':'')+'>'+STATUS_TXT[st]+'</option>'; }).join("") +
+      '</select>' +
+      '<select id="f_prio"><option value="">Toda prioridade</option>' +
+        [1,2,3,4].map(function(p){ return '<option value="'+p+'"'+(FILT.prio===String(p)?' selected':'')+'>P'+p+'</option>'; }).join("") +
+      '</select>' +
+      (resps.length>1 ? '<select id="f_resp" class="full"><option value="">Todos os responsáveis</option>'+opts(resps,FILT.resp)+'</select>' : '') +
+    '</div>' +
+    (temFiltro ? '<div class="fclear"><button class="link" id="f_clear">Limpar filtros</button></div>' : '');
+
+  var lista = itensFiltrados();
+  if (!EV.itens.length){
+    html += '<div class="empty">Checklist vazio. Adicione o primeiro item abaixo.</div>';
+  } else if (!lista.length){
+    html += '<div class="empty">Nenhum item com esses filtros.</div>';
+  }
+
+  /* agrupa por dia */
+  var grupos = {};
+  lista.forEach(function(i){
+    var d = String(i.dia||"").trim() || "Sem dia";
+    (grupos[d] = grupos[d] || []).push(i);
+  });
+  Object.keys(grupos).sort(function(a,b){ return ordDia(a)-ordDia(b); }).forEach(function(d){
+    var its = grupos[d], gs = stats(its);
+    html += '<section class="dayblock">' +
+      '<div class="dayhead"><h3 class="anton">'+esc(d)+'</h3>' +
+      '<span class="cnt">'+gs.done+' / '+gs.total+(gs.valor?' · '+brl(gs.valor):'')+'</span></div>' +
+      '<div class="bar'+(gs.pct===100?' done':'')+'"><i style="width:'+gs.pct+'%"></i></div>';
+    its.forEach(function(i){ html += rowItem(i); });
+    html += '<button class="addrow" data-adddia="'+esc(d==="Sem dia"?"":d)+'">+ Adicionar item em '+esc(d)+'</button>' +
+      '</section>';
+  });
+
+  html += '<button class="btn2" id="add_geral" style="width:100%;margin-top:16px">+ Adicionar item</button>';
+  $("main").innerHTML = html;
+
+  /* eventos de filtro */
+  $("f_q").oninput = debounce(function(){ FILT.q = this.value; renderChecklist(); }, 250);
+  ["dia","setor","status","prio","resp"].forEach(function(f){
+    var el = $("f_"+f); if(!el) return;
+    el.onchange = function(){ FILT[f] = this.value; renderChecklist(); };
+  });
+  var fc = $("f_clear");
+  if (fc) fc.onclick = function(){ FILT = {q:"",dia:"",setor:"",status:"",prio:"",resp:""}; renderChecklist(); };
+
+  /* eventos de item */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-st]"), function(b){
+    b.onclick = function(ev){ ev.stopPropagation(); cicloStatus(+b.getAttribute("data-st")); };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-edit]"), function(r){
+    r.onclick = function(){ sheetItem(+r.getAttribute("data-edit")); };
+    r.onkeydown = function(e){
+      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); sheetItem(+r.getAttribute("data-edit")); }
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-adddia]"), function(b){
+    b.onclick = function(){ sheetItem(null, b.getAttribute("data-adddia")); };
+  });
+  $("add_geral").onclick = function(){ sheetItem(null, ""); };
+}
+
+function rowItem(i){
+  var sub = [];
+  if (i.setor) sub.push(esc(i.setor));
+  if (i.responsavel) sub.push(esc(i.responsavel));
+  if (i.data_limite) sub.push("até "+esc(i.data_limite));
+  if (i.quantidade) sub.push("qtd "+esc(i.quantidade));
+  if (i.valor!=null) sub.push('<span class="vl">'+brl(i.valor)+'</span>');
+  var check = i.status==="concluido" ? "✓" : "";
+  return '<div class="row st-'+i.status+'" data-edit="'+i.id+'" role="button" tabindex="0">' +
+    '<button class="stbtn" data-st="'+i.id+'" title="'+STATUS_TXT[i.status]+' — toque para mudar" aria-label="Mudar status: '+STATUS_TXT[i.status]+'">'+check+'</button>' +
+    '<div class="info"><div class="nm">'+esc(i.item)+'</div>' +
+    (sub.length?'<div class="sub"><span>'+sub.join("</span><span>")+'</span></div>':'') +
+    '</div>' +
+    (i.prioridade ? '<span class="pbadge'+(i.prioridade===1?' p1':'')+'">P'+i.prioridade+'</span>' : '') +
+    '</div>';
+}
+
+function cicloStatus(id){
+  var i = EV.itens.find(function(x){ return x.id===id; });
+  if (!i) return;
+  var novo = STATUS_SEQ[i.status] || "afazer";
+  var antigo = i.status;
+  i.status = novo; renderChecklist();           /* otimista */
+  api("/api/itens/"+id, "PATCH", { status: novo, atualizado_por: NOME })
+    .catch(function(e){
+      i.status = antigo; renderChecklist();
+      toast("Sem conexão — o status não foi salvo. Tente de novo.", true);
+    });
+}
+
+/* ---------- formulário de item ---------- */
+function sheetItem(id, diaSugerido){
+  var i = id ? EV.itens.find(function(x){ return x.id===id; }) : null;
+  var novo = !i;
+  i = i || { dia: diaSugerido||"", item:"", setor:"", status:"afazer", prioridade:"",
+             data_limite:"", responsavel:"", fornecedor:"", quantidade:"", valor:null, observacoes:"" };
+
+  abrirSheet(
+    '<h2 class="anton">'+(novo?'Novo item':'Editar item')+'</h2>' +
+    (!novo && i.atualizado_por ? '<div class="meta">Última alteração: '+esc(i.atualizado_por)+' · '+fmtData(i.atualizado_em)+'</div>' : '') +
+    '<label class="top" for="it_item">Item *</label>' +
+    '<input id="it_item" maxlength="300" value="'+esc(i.item)+'" placeholder="ex.: Cerveja heineken">' +
+    '<div class="grid2">' +
+      '<div><label class="top" for="it_dia">Dia</label><input id="it_dia" list="dl_dias" maxlength="30" value="'+esc(i.dia)+'" placeholder="Pré, 26/08, Pós…"></div>' +
+      '<div><label class="top" for="it_setor">Setor</label><input id="it_setor" list="dl_setores" maxlength="80" value="'+esc(i.setor)+'" placeholder="ex.: Bebidas trilha"></div>' +
+      '<div><label class="top" for="it_status">Status</label><select id="it_status">' +
+        ['afazer','andamento','concluido'].map(function(st){
+          return '<option value="'+st+'"'+(i.status===st?' selected':'')+'>'+STATUS_TXT[st]+'</option>'; }).join("") +
+      '</select></div>' +
+      '<div><label class="top" for="it_prio">Prioridade</label><select id="it_prio">' +
+        '<option value="">—</option>' +
+        [1,2,3,4].map(function(p){ return '<option value="'+p+'"'+(i.prioridade===p?' selected':'')+'>P'+p+'</option>'; }).join("") +
+      '</select></div>' +
+      '<div><label class="top" for="it_data">Data limite</label><input id="it_data" maxlength="20" value="'+esc(i.data_limite)+'" placeholder="ex.: 03/07"></div>' +
+      '<div><label class="top" for="it_resp">Responsável</label><input id="it_resp" list="dl_resps" maxlength="60" value="'+esc(i.responsavel)+'" placeholder="ex.: Ana Julia"></div>' +
+      '<div><label class="top" for="it_forn">Fornecedor</label><input id="it_forn" maxlength="120" value="'+esc(i.fornecedor)+'"></div>' +
+      '<div><label class="top" for="it_qtd">Quantidade</label><input id="it_qtd" maxlength="40" value="'+esc(i.quantidade)+'" placeholder="ex.: 3 caixas"></div>' +
+    '</div>' +
+    '<label class="top" for="it_valor">Valor (R$)</label>' +
+    '<input id="it_valor" inputmode="decimal" value="'+(i.valor!=null?esc(String(i.valor).replace(".",",")):"")+'" placeholder="ex.: 350,00">' +
+    '<label class="top" for="it_obs">Observações</label>' +
+    '<textarea id="it_obs" maxlength="600">'+esc(i.observacoes)+'</textarea>' +
+    '<datalist id="dl_dias">'+uniques("dia").map(function(v){return '<option value="'+esc(v)+'">';}).join("")+'</datalist>' +
+    '<datalist id="dl_setores">'+uniques("setor").map(function(v){return '<option value="'+esc(v)+'">';}).join("")+'</datalist>' +
+    '<datalist id="dl_resps">'+uniques("responsavel").map(function(v){return '<option value="'+esc(v)+'">';}).join("")+'</datalist>' +
+    '<div class="actions">' +
+      (novo ? '<button class="btn2" data-close>Cancelar</button>'
+            : '<button class="btn-danger" id="it_del">Excluir</button>') +
+      '<button class="btn" id="it_save">'+(novo?'Adicionar':'Salvar')+'</button>' +
+    '</div>'
+  );
+
+  $("it_save").onclick = function(){
+    var body = {
+      item: $("it_item").value.trim(),
+      dia: $("it_dia").value.trim(),
+      setor: $("it_setor").value.trim(),
+      status: $("it_status").value,
+      prioridade: $("it_prio").value || null,
+      data_limite: $("it_data").value.trim(),
+      responsavel: $("it_resp").value.trim(),
+      fornecedor: $("it_forn").value.trim(),
+      quantidade: $("it_qtd").value.trim(),
+      valor: parseMoeda($("it_valor").value),
+      observacoes: $("it_obs").value.trim(),
+      atualizado_por: NOME
+    };
+    if (!body.item) return toast("O campo Item é obrigatório", true);
+    $("it_save").disabled = true;
+    var p = novo
+      ? api("/api/eventos/"+EV.evento.id+"/itens","POST", body)
+      : api("/api/itens/"+id, "PATCH", body);
+    p.then(function(){ fecharSheet(); toast(novo?"Item adicionado":"Salvo"); return recarregar(); })
+     .catch(function(e){ $("it_save").disabled=false; toast(e.message||"Sem conexão — tente de novo", true); });
+  };
+
+  var del = $("it_del");
+  if (del) del.onclick = function(){
+    if (!confirm("Excluir este item? Não dá para desfazer.")) return;
+    api("/api/itens/"+id, "DELETE")
+      .then(function(){ fecharSheet(); toast("Item excluído"); return recarregar(); })
+      .catch(function(e){ toast(e.message, true); });
+  };
+  setTimeout(function(){ $("it_item").focus(); }, 50);
+}
+
+function recarregar(){
+  return api("/api/eventos/"+EV.evento.id+"/itens").then(function(j){
+    EV = j;
+    var m = location.hash.match(/^#\/e\/\d+(?:\/(custos|participantes|simulador|hospedagem))?$/);
+    renderEvento((m && m[1]) || "");
+  });
+}
+
+/* ---------- custos ---------- */
+function agrupaSoma(campo){
+  var g = {};
+  EV.itens.forEach(function(i){
+    var k = String(i[campo]||"").trim() || "—";
+    g[k] = g[k] || { n:0, comValor:0, total:0 };
+    g[k].n++;
+    if (i.valor!=null){ g[k].comValor++; g[k].total += i.valor; }
+  });
+  return g;
+}
+
+function tabelaCustos(titulo, g, ordena){
+  var chaves = Object.keys(g).sort(ordena);
+  var totN=0, totV=0;
+  var linhas = chaves.map(function(k){
+    totN += g[k].n; totV += g[k].total;
+    return '<tr><td>'+esc(k)+'</td><td class="num">'+g[k].comValor+' / '+g[k].n+'</td>' +
+           '<td class="num">'+(g[k].total?brl(g[k].total):'—')+'</td></tr>';
+  }).join("");
+  return '<h3 class="anton" style="font-size:22px;margin-top:26px">'+titulo+'</h3>' +
+    '<table><thead><tr><th>'+titulo+'</th><th class="num">Com valor</th><th class="num">Total</th></tr></thead>' +
+    '<tbody>'+linhas+'<tr class="total"><td>Total</td><td class="num">—</td><td class="num">'+brl(totV)+'</td></tr></tbody></table>';
+}
+
+function renderCustos(){
+  var s = stats(EV.itens);
+  var html =
+    '<div class="anton money">'+brl(s.valor)+'</div>' +
+    '<div class="moneysub">Soma dos valores preenchidos · ' +
+      (s.semvalor ? s.semvalor+' item(ns) ainda sem valor' : 'todos os itens têm valor') + '</div>' +
+    tabelaCustos("Setor", agrupaSoma("setor"), function(a,b){ return a.localeCompare(b); }) +
+    tabelaCustos("Dia",   agrupaSoma("dia"),   function(a,b){ return ordDia(a)-ordDia(b); }) +
+    (PAPEL==="admin" ?
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">' +
+      '<button class="btn2" id="c_arq">'+(EV.evento.arquivado?'Desarquivar evento':'Arquivar evento')+'</button>' +
+      '<button class="btn2" id="c_ren">Renomear</button>' +
+      '<button class="btn-danger" id="c_del">Excluir evento</button>' +
+    '</div>' : '');
+  $("main").innerHTML = html;
+  if (PAPEL!=="admin") return;
+
+  $("c_arq").onclick = function(){
+    api("/api/eventos/"+EV.evento.id,"PATCH",{arquivado: EV.evento.arquivado?0:1})
+      .then(function(){ toast(EV.evento.arquivado?"Evento desarquivado":"Evento arquivado"); return recarregar(); })
+      .catch(function(e){ toast(e.message,true); });
+  };
+  $("c_ren").onclick = function(){
+    var n = prompt("Novo nome do evento:", EV.evento.nome);
+    if (!n || !n.trim()) return;
+    api("/api/eventos/"+EV.evento.id,"PATCH",{nome:n.trim()})
+      .then(function(){ toast("Renomeado"); return recarregar(); })
+      .catch(function(e){ toast(e.message,true); });
+  };
+  $("c_del").onclick = function(){
+    if (!confirm('Excluir "'+EV.evento.nome+'" e todos os seus '+EV.itens.length+' itens? Não dá para desfazer.')) return;
+    api("/api/eventos/"+EV.evento.id,"DELETE")
+      .then(function(){ toast("Evento excluído"); location.hash="#/"; })
+      .catch(function(e){ toast(e.message,true); });
+  };
+}
+
+
+/* ============================================================
+   PARTICIPANTES + FINANCEIRO (admin)
+   ============================================================ */
+function carregarParticipantes(){
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+  api("/api/eventos/"+EV.evento.id+"/clientes").then(function(j){
+    CL = j.clientes || []; renderParticipantes();
+  }).catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
+}
+
+function renderParticipantes(){
+  var adultos=0, criancas=0, receita=0, recebido=0, cam={}, utv4=0, utv2=0, cSim=0, cNao=0;
+  CL.forEach(function(c){
+    if (c.tipo==="crianca") criancas++; else adultos++;
+    if (c.pacote!=null) receita += c.pacote;
+    recebido += c.pago || 0;
+    if (c.camiseta) cam[c.camiseta] = (cam[c.camiseta]||0)+1;
+    if (c.utv==="4 lugares") utv4++; if (c.utv==="2 lugares") utv2++;
+    if (c.contrato_assinado) cSim++; else cNao++;
+  });
+  var saldo = receita - recebido;
+  var camTxt = Object.keys(cam).sort().map(function(k){ return k+": "+cam[k]; }).join(" · ") || "—";
+  var html =
+    '<div class="kpis">' +
+      '<div class="kpi"><small>Pessoas</small><b>'+CL.length+'</b><span style="font-size:11px;color:var(--dim)"> '+adultos+' ad · '+criancas+' cri</span></div>' +
+      '<div class="kpi"><small>Receita</small><b>'+brl(receita)+'</b></div>' +
+      '<div class="kpi"><small>Recebido</small><b class="'+(recebido>0?'ok':'')+'">'+brl(recebido)+'</b></div>' +
+      '<div class="kpi"><small>A receber</small><b class="'+(saldo>0?'warn':'ok')+'">'+brl(saldo)+'</b></div>' +
+      '<div class="kpi"><small>Contratos assinados</small><b>'+cSim+' / '+CL.length+'</b></div>' +
+      '<div class="kpi"><small>UTVs</small><b>'+utv4+'×4 · '+utv2+'×2</b></div>' +
+      '<div class="kpi" style="grid-column:1/-1"><small>Camisetas</small><b style="font-size:14px;font-family:\'Archivo\'">'+esc(camTxt)+'</b></div>' +
+    '</div>' +
+    '<input id="p_q" placeholder="Buscar nome, grupo, CPF, telefone…" style="margin-bottom:12px">';
+
+  if (!CL.length) html += '<div class="empty">Nenhum participante. Adicione o primeiro abaixo.</div>';
+  html += '<div id="p_lista"></div>' +
+    '<button class="btn" id="p_add" style="width:100%;margin-top:14px">+ Adicionar participante</button>';
+  $("main").innerHTML = html;
+  desenharListaClientes("");
+  $("p_q").oninput = debounce(function(){ desenharListaClientes(this.value.toLowerCase()); }, 200);
+  $("p_add").onclick = function(){ sheetCliente(null); };
+}
+
+function desenharListaClientes(q){
+  var grupos = {};
+  CL.forEach(function(c){
+    if (q && (c.nome+" "+c.grupo+" "+c.cpf+" "+c.telefone).toLowerCase().indexOf(q)<0) return;
+    var g = c.grupo || "Sem grupo";
+    (grupos[g]=grupos[g]||[]).push(c);
+  });
+  var h = "";
+  Object.keys(grupos).sort().forEach(function(g){
+    h += '<h3 class="anton" style="font-size:16px;margin:16px 0 8px;color:var(--mut)">'+esc(g)+'</h3>';
+    grupos[g].forEach(function(c){
+      var pago = c.pago||0, pac = c.pacote;
+      var pct = pac ? Math.min(100, Math.round(pago/pac*100)) : 0;
+      var chips = [];
+      if (c.tipo==="crianca") chips.push('<span class="chip">criança</span>');
+      if (c.camiseta) chips.push('<span class="chip">'+esc(c.camiseta)+'</span>');
+      if (c.utv) chips.push('<span class="chip">UTV '+esc(c.utv)+'</span>');
+      chips.push(c.contrato_assinado ? '<span class="chip ok">contrato ✓</span>'
+        : (c.contrato_enviado ? '<span class="chip warn">contrato enviado</span>' : '<span class="chip bad">sem contrato</span>'));
+      if (c.nf) chips.push('<span class="chip ok">NF '+esc(c.nf)+'</span>');
+      if (c.notas) chips.push('<span class="chip">'+c.notas+' anotação(ões)</span>');
+      h += '<div class="row" data-cli="'+c.id+'" role="button" tabindex="0">' +
+        '<div class="info"><div class="nm">'+esc(c.nome)+'</div>' +
+        '<div class="sub" style="margin-top:4px">'+chips.join("")+'</div>' +
+        (pac!=null ?
+          '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:6px">' +
+          '<span>'+brl(pago)+' de '+brl(pac)+'</span><span>'+pct+'%</span></div>' +
+          '<div class="paybar"><i class="'+(pct>=100?'full':'')+'" style="width:'+pct+'%"></i></div>'
+          : '<div style="font-size:11px;color:var(--dim);margin-top:6px">sem pacote definido</div>') +
+        '</div></div>';
+    });
+  });
+  $("p_lista").innerHTML = h || '<div class="empty">Nenhum participante com essa busca.</div>';
+  Array.prototype.forEach.call(document.querySelectorAll("[data-cli]"), function(r){
+    var abrir = function(){ sheetCliente(+r.getAttribute("data-cli")); };
+    r.onclick = abrir;
+    r.onkeydown = function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); abrir(); } };
+  });
+}
+
+var CRMLIST = null;
+function comContatos(fn){
+  if (CRMLIST) return fn();
+  api("/api/crm").then(function(j){ CRMLIST = j.contatos||[]; fn(); })
+    .catch(function(){ CRMLIST = []; fn(); });
+}
+
+function sheetCliente(id){
+  var novo = !id;
+  var render = function(c, pags, notas){
+    notas = notas || [];
+    var grupos = {};
+    CL.forEach(function(x){ if(x.grupo) grupos[x.grupo]=1; });
+    abrirSheet(
+      '<h2 class="anton">'+(novo?'Novo participante':'Editar participante')+'</h2>' +
+      '<label class="top">Nome *</label><input id="c_nome" maxlength="150" value="'+esc(c.nome)+'">' +
+      '<div class="grid2">' +
+        '<div><label class="top">Grupo / reserva</label><input id="c_grupo" list="dl_grupos" maxlength="80" value="'+esc(c.grupo)+'" placeholder="ex.: Zana"></div>' +
+        '<div><label class="top">Tipo</label><select id="c_tipo"><option value="adulto"'+(c.tipo!=="crianca"?" selected":"")+'>Adulto</option><option value="crianca"'+(c.tipo==="crianca"?" selected":"")+'>Criança</option></select></div>' +
+        '<div><label class="top">CPF</label><input id="c_cpf" maxlength="20" value="'+esc(c.cpf)+'"></div>' +
+        '<div><label class="top">Telefone</label><input id="c_tel" maxlength="25" value="'+esc(c.telefone)+'"></div>' +
+        '<div><label class="top">Camiseta</label><input id="c_cam" maxlength="10" value="'+esc(c.camiseta)+'" placeholder="P, M, G, GG…"></div>' +
+        '<div><label class="top">UTV</label><select id="c_utv"><option value="">—</option><option'+(c.utv==="4 lugares"?" selected":"")+'>4 lugares</option><option'+(c.utv==="2 lugares"?" selected":"")+'>2 lugares</option></select></div>' +
+        '<div><label class="top">Contrato</label><select id="c_ctr">' +
+          '<option value="0"'+(!c.contrato_enviado&&!c.contrato_assinado?" selected":"")+'>Não enviado</option>' +
+          '<option value="1"'+(c.contrato_enviado&&!c.contrato_assinado?" selected":"")+'>Enviado</option>' +
+          '<option value="2"'+(c.contrato_assinado?" selected":"")+'>Assinado</option></select></div>' +
+        '<div><label class="top">Nota fiscal</label><input id="c_nf" maxlength="40" value="'+esc(c.nf)+'" placeholder="ok, pendente…"></div>' +
+        '<div><label class="top">Pacote (R$)</label><input id="c_pac" inputmode="decimal" value="'+(c.pacote!=null?esc(String(c.pacote).replace(".",",")):"")+'" placeholder="9500,00"></div>' +
+        '<div><label class="top">Forma de pagamento</label><input id="c_forma" maxlength="60" value="'+esc(c.forma_pagamento)+'" placeholder="5x boleto, pix…"></div>' +
+      '</div>' +
+      '<label class="top">Cliente do CRM (ficha da pessoa)</label>' +
+      '<select id="c_crm"><option value="">— sem vínculo —</option>' +
+        CRMLIST.map(function(k){
+          return '<option value="'+k.id+'"'+(c.contato_id===k.id?' selected':'')+'>'+esc(k.nome)+(k.grupo&&k.grupo!==k.nome?' ('+esc(k.grupo)+')':'')+'</option>';
+        }).join("") + '</select>' +
+      '<label class="top">Observações</label><textarea id="c_obs" maxlength="600">'+esc(c.observacoes)+'</textarea>' +
+      '<datalist id="dl_grupos">'+Object.keys(grupos).map(function(g){return '<option value="'+esc(g)+'">';}).join("")+'</datalist>' +
+      (!novo ?
+        '<label class="top" style="margin-top:20px">Pagamentos</label>' +
+        '<div id="c_pags">'+(pags.length ? pags.map(function(p){
+          return '<div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);border-bottom:1px solid #1d1d1d;padding:6px 0">' +
+            '<span style="flex:1">'+brl(p.valor)+(p.data?' · '+esc(p.data):'')+(p.forma?' · '+esc(p.forma):'')+'</span>' +
+            '<button class="delx" data-pgdel="'+p.id+'" title="Remover pagamento">×</button></div>';
+        }).join("") : '<div style="font-size:13px;color:var(--dim);padding:4px 0">Nenhum pagamento registrado.</div>')+'</div>' +
+        '<div style="display:flex;gap:6px;margin-top:10px">' +
+          '<input id="pg_valor" class="mini" inputmode="decimal" placeholder="Valor (R$)" style="flex:1.2">' +
+          '<input id="pg_data" class="mini" placeholder="Data" style="flex:1">' +
+          '<input id="pg_forma" class="mini" placeholder="Forma" style="flex:1">' +
+          '<button class="btn2" id="pg_add" style="padding:8px 14px">+</button>' +
+        '</div>' +
+        '<label class="top" style="margin-top:20px">Anotações</label>' +
+        '<div id="c_notas">'+(notas.length ? notas.map(function(n){
+          return '<div style="display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--mut);border-bottom:1px solid #1d1d1d;padding:7px 0">' +
+            '<span style="flex:1;white-space:pre-wrap">'+esc(n.texto)+
+            '<span style="display:block;font-size:11px;color:var(--dim);margin-top:2px">'+(n.criado_por?esc(n.criado_por)+' · ':'')+fmtData(n.criado_em)+'</span></span>' +
+            '<button class="delx" data-ntdel="'+n.id+'" title="Remover anotação">×</button></div>';
+        }).join("") : '<div style="font-size:13px;color:var(--dim);padding:4px 0">Nenhuma anotação ainda.</div>')+'</div>' +
+        '<div style="display:flex;gap:6px;margin-top:10px;align-items:flex-end">' +
+          '<textarea id="nt_texto" class="mini" maxlength="1000" placeholder="Escreva uma anotação livre sobre este participante…" style="flex:1;min-height:56px"></textarea>' +
+          '<button class="btn2" id="nt_add" style="padding:8px 14px">+</button>' +
+        '</div>'
+      : '') +
+      '<div class="actions">' +
+        (novo ? '<button class="btn2" data-close>Cancelar</button>' : '<button class="btn-danger" id="c_del">Excluir</button>') +
+        '<button class="btn" id="c_save">'+(novo?'Adicionar':'Salvar')+'</button>' +
+      '</div>'
+    );
+    $("c_save").onclick = function(){
+      var ctr = $("c_ctr").value;
+      var body = {
+        nome: $("c_nome").value.trim(), grupo: $("c_grupo").value.trim(),
+        tipo: $("c_tipo").value, cpf: $("c_cpf").value.trim(), telefone: $("c_tel").value.trim(),
+        camiseta: $("c_cam").value.trim(), utv: $("c_utv").value,
+        contrato_enviado: ctr!=="0" ? 1:0, contrato_assinado: ctr==="2" ? 1:0,
+        nf: $("c_nf").value.trim(), pacote: parseMoeda($("c_pac").value),
+        forma_pagamento: $("c_forma").value.trim(), observacoes: $("c_obs").value.trim(),
+        contato_id: $("c_crm").value ? +$("c_crm").value : null,
+        atualizado_por: NOME
+      };
+      if (!body.nome) return toast("O nome é obrigatório", true);
+      $("c_save").disabled = true;
+      var p = novo ? api("/api/eventos/"+EV.evento.id+"/clientes","POST",body)
+                   : api("/api/clientes/"+id,"PATCH",body);
+      p.then(function(){ fecharSheet(); toast(novo?"Participante adicionado":"Salvo"); carregarParticipantes(); })
+       .catch(function(e){ $("c_save").disabled=false; toast(e.message,true); });
+    };
+    var del = $("c_del");
+    if (del) del.onclick = function(){
+      if (!confirm("Excluir "+c.nome+"? Os pagamentos registrados também serão removidos.")) return;
+      api("/api/clientes/"+id,"DELETE").then(function(){ fecharSheet(); toast("Excluído"); carregarParticipantes(); })
+        .catch(function(e){ toast(e.message,true); });
+    };
+    var pa = $("pg_add");
+    if (pa) pa.onclick = function(){
+      var v = parseMoeda($("pg_valor").value);
+      if (!v || v<=0) return toast("Informe o valor do pagamento", true);
+      api("/api/clientes/"+id+"/pagamentos","POST",{
+        valor:v, data:$("pg_data").value.trim(), forma:$("pg_forma").value.trim(), criado_por:NOME
+      }).then(function(){ toast("Pagamento registrado"); sheetCliente(id); carregarClientesSilencioso(); })
+        .catch(function(e){ toast(e.message,true); });
+    };
+    var na = $("nt_add");
+    if (na) na.onclick = function(){
+      var texto = $("nt_texto").value.trim();
+      if (!texto) return toast("Escreva a anotação", true);
+      api("/api/clientes/"+id+"/notas","POST",{ texto:texto, criado_por:NOME })
+        .then(function(){ toast("Anotação registrada"); sheetCliente(id); })
+        .catch(function(e){ toast(e.message,true); });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll("[data-ntdel]"), function(b){
+      b.onclick = function(){
+        if (!confirm("Remover esta anotação?")) return;
+        api("/api/cliente-notas/"+b.getAttribute("data-ntdel"),"DELETE")
+          .then(function(){ toast("Anotação removida"); sheetCliente(id); })
+          .catch(function(e){ toast(e.message,true); });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-pgdel]"), function(b){
+      b.onclick = function(){
+        if (!confirm("Remover este pagamento?")) return;
+        api("/api/pagamentos/"+b.getAttribute("data-pgdel"),"DELETE")
+          .then(function(){ toast("Pagamento removido"); sheetCliente(id); carregarClientesSilencioso(); })
+          .catch(function(e){ toast(e.message,true); });
+      };
+    });
+    setTimeout(function(){ $("c_nome").focus(); }, 50);
+  };
+  comContatos(function(){
+    if (novo) render({grupo:"",nome:"",cpf:"",telefone:"",tipo:"adulto",camiseta:"",utv:"",nf:"",
+                      contrato_enviado:0,contrato_assinado:0,pacote:null,forma_pagamento:"",observacoes:"",contato_id:null}, [], []);
+    else api("/api/clientes/"+id).then(function(j){ render(j.cliente, j.pagamentos||[], j.notas||[]); })
+          .catch(function(e){ toast(e.message,true); });
+  });
+}
+function carregarClientesSilencioso(){
+  api("/api/eventos/"+EV.evento.id+"/clientes").then(function(j){ CL = j.clientes||[]; }).catch(function(){});
+}
+
+/* ============================================================
+   SIMULADOR DE CUSTOS (admin)
+   ============================================================ */
+var MULT_TXT = { nenhum:"—", diarias:"× diárias", dias_trilha:"× dias de trilha", refeicoes:"× refeições", eventos:"× eventos" };
+
+function calcCenario(c, linhas){
+  var mult = { nenhum:1, diarias:c.diarias, dias_trilha:c.dias_trilha, refeicoes:c.refeicoes, eventos:c.eventos_qtd };
+  var pp = 0, fixo = 0;
+  linhas.forEach(function(l){
+    var m = mult[l.mult] || 1;
+    if (l.tipo === "fixo") fixo += l.preco * m;
+    else pp += l.media * l.preco * m;
+  });
+  var pessoas = c.pessoas || 1;
+  return { pp: pp + fixo/pessoas, total: pp*pessoas + fixo, fixo: fixo };
+}
+
+function carregarSimulador(foco){
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+  api("/api/eventos/"+EV.evento.id+"/cenarios").then(function(j){
+    SIM = j; if (foco) renderCenario(foco); else renderSimulador();
+  }).catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
+}
+
+function renderSimulador(){
+  var realizado = stats(EV.itens).valor;
+  var h = '<p style="color:var(--mut);font-size:13.5px;margin-bottom:14px">Cenários de custo previsto. O realizado vem dos valores preenchidos no checklist: <b style="color:var(--txt)">'+brl(realizado)+'</b> até agora.</p>';
+  if (!SIM.cenarios.length) h += '<div class="empty">Nenhum cenário ainda. Crie o primeiro para simular o custo do evento.</div>';
+  SIM.cenarios.forEach(function(c){
+    var linhas = SIM.linhas.filter(function(l){ return l.cenario_id===c.id; });
+    var r = calcCenario(c, linhas);
+    var delta = realizado - r.total;
+    h += '<button class="evcard" data-cen="'+c.id+'">' +
+      '<h2 class="anton" style="font-size:22px">'+esc(c.nome)+'</h2>' +
+      '<div class="meta" style="margin-top:6px">' +
+        '<span>'+c.pessoas+' pessoas · '+c.diarias+' diárias · '+c.dias_trilha+' dias de trilha</span>' +
+        '<span>Por pessoa: <span class="pct">'+brl(r.pp)+'</span></span>' +
+        '<span>Total previsto: <span class="pct">'+brl(r.total)+'</span></span>' +
+        (realizado>0 ? '<span>Realizado: <span class="pct" style="color:'+(delta>0?'var(--p1)':'var(--ok)')+'">'+brl(realizado)+' ('+(delta>0?'+':'')+brl(delta)+')</span></span>' : '') +
+      '</div></button>';
+  });
+  h += '<button class="btn" id="s_add" style="width:100%;margin-top:8px">+ Novo cenário</button>';
+  $("main").innerHTML = h;
+  Array.prototype.forEach.call(document.querySelectorAll("[data-cen]"), function(b){
+    b.onclick = function(){ renderCenario(+b.getAttribute("data-cen")); };
+  });
+  $("s_add").onclick = function(){
+    var opts = SIM.cenarios.map(function(c){ return '<option value="'+c.id+'">'+esc(c.nome)+'</option>'; }).join("");
+    abrirSheet(
+      '<h2 class="anton">Novo cenário</h2>' +
+      '<label class="top">Nome</label><input id="sn_nome" maxlength="120" placeholder="ex.: Família (25)">' +
+      '<label class="top">Como começar</label>' +
+      '<select id="sn_modo"><option value="">Linhas padrão (preços zerados)</option>' +
+      (opts?'<optgroup label="Duplicar de">'+opts+'</optgroup>':'')+'</select>' +
+      '<div class="actions"><button class="btn2" data-close>Cancelar</button><button class="btn" id="sn_ok">Criar</button></div>'
+    );
+    $("sn_ok").onclick = function(){
+      var nome = $("sn_nome").value.trim();
+      if (!nome) return toast("Dê um nome ao cenário", true);
+      var b = { nome:nome, pessoas:20, diarias:3, dias_trilha:2, refeicoes:5, eventos_qtd:2 };
+      if ($("sn_modo").value){
+        b.copiar_de = +$("sn_modo").value;
+        var o = SIM.cenarios.find(function(c){ return c.id===b.copiar_de; });
+        if (o){ b.pessoas=o.pessoas; b.diarias=o.diarias; b.dias_trilha=o.dias_trilha; b.refeicoes=o.refeicoes; b.eventos_qtd=o.eventos_qtd; }
+      }
+      api("/api/eventos/"+EV.evento.id+"/cenarios","POST",b)
+        .then(function(j){ fecharSheet(); toast("Cenário criado"); carregarSimulador(j.id); })
+        .catch(function(e){ toast(e.message,true); });
+    };
+    setTimeout(function(){ $("sn_nome").focus(); }, 50);
+  };
+}
+
+function renderCenario(cid){
+  var c = SIM.cenarios.find(function(x){ return x.id===cid; });
+  if (!c) return renderSimulador();
+  var linhas = SIM.linhas.filter(function(l){ return l.cenario_id===cid; });
+  var r = calcCenario(c, linhas);
+  var realizado = stats(EV.itens).valor;
+  var mult = { nenhum:1, diarias:c.diarias, dias_trilha:c.dias_trilha, refeicoes:c.refeicoes, eventos:c.eventos_qtd };
+
+  var params = [["pessoas","Pessoas"],["diarias","Diárias"],["dias_trilha","Dias de trilha"],["refeicoes","Refeições"],["eventos_qtd","Eventos"]];
+  var h = '<button class="backln" id="s_volta">← Cenários</button>' +
+    '<h2 class="anton" style="font-size:24px;margin:2px 0 12px">'+esc(c.nome)+'</h2>' +
+    '<div class="kpis">' +
+      '<div class="kpi"><small>Por pessoa</small><b>'+brl(r.pp)+'</b></div>' +
+      '<div class="kpi"><small>Total previsto</small><b>'+brl(r.total)+'</b></div>' +
+      '<div class="kpi"><small>Realizado (checklist)</small><b class="'+(realizado>r.total?'bad':'ok')+'">'+brl(realizado)+'</b></div>' +
+    '</div>' +
+    '<div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(95px,1fr))">' +
+    params.map(function(p){
+      return '<div class="kpi"><small>'+p[1]+'</small><input class="mini" data-param="'+p[0]+'" inputmode="numeric" value="'+c[p[0]]+'" style="margin-top:2px"></div>';
+    }).join("") + '</div>' +
+    '<table class="simtab"><thead><tr><th>Item</th><th>Tipo</th><th>Média</th><th>Preço</th><th>Mult.</th><th class="num" style="text-align:right">Por pessoa</th><th></th></tr></thead><tbody>';
+
+  linhas.forEach(function(l){
+    var m = mult[l.mult]||1;
+    var pp = l.tipo==="fixo" ? (l.preco*m)/(c.pessoas||1) : l.media*l.preco*m;
+    h += '<tr>' +
+      '<td><input class="mini" data-lin="'+l.id+'" data-campo="item" value="'+esc(l.item)+'" style="min-width:110px"></td>' +
+      '<td><select class="mini" data-lin="'+l.id+'" data-campo="tipo"><option value="pessoa"'+(l.tipo!=="fixo"?" selected":"")+'>por pessoa</option><option value="fixo"'+(l.tipo==="fixo"?" selected":"")+'>fixo total</option></select></td>' +
+      '<td><input class="mini" data-lin="'+l.id+'" data-campo="media" inputmode="decimal" value="'+l.media+'" style="width:56px"'+(l.tipo==="fixo"?' disabled':'')+'></td>' +
+      '<td><input class="mini" data-lin="'+l.id+'" data-campo="preco" inputmode="decimal" value="'+String(l.preco).replace(".",",")+'" style="width:78px"></td>' +
+      '<td><select class="mini" data-lin="'+l.id+'" data-campo="mult">' +
+        Object.keys(MULT_TXT).map(function(k){ return '<option value="'+k+'"'+(l.mult===k?" selected":"")+'>'+MULT_TXT[k]+'</option>'; }).join("") +
+      '</select></td>' +
+      '<td class="num">'+brl(pp)+'</td>' +
+      '<td><button class="delx" data-lindel="'+l.id+'" title="Remover linha">×</button></td></tr>';
+  });
+  h += '</tbody></table>' +
+    '<button class="addrow" id="s_addlin">+ Adicionar linha de custo</button>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">' +
+      '<button class="btn-danger" id="s_del">Excluir cenário</button>' +
+    '</div>';
+  $("main").innerHTML = h;
+
+  $("s_volta").onclick = renderSimulador;
+  Array.prototype.forEach.call(document.querySelectorAll("[data-param]"), function(inp){
+    inp.onchange = function(){
+      var b = {}; b[inp.getAttribute("data-param")] = parseInt(inp.value,10)||0;
+      api("/api/cenarios/"+cid,"PATCH",b).then(function(){ carregarSimulador(cid); })
+        .catch(function(e){ toast(e.message,true); });
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-lin]"), function(inp){
+    inp.onchange = function(){
+      var campo = inp.getAttribute("data-campo"), b = {};
+      b[campo] = (campo==="media"||campo==="preco") ? (parseMoeda(inp.value) ?? 0) : inp.value;
+      api("/api/linhas/"+inp.getAttribute("data-lin"),"PATCH",b)
+        .then(function(){ carregarSimulador(cid); })
+        .catch(function(e){ toast(e.message,true); });
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-lindel]"), function(b){
+    b.onclick = function(){
+      api("/api/linhas/"+b.getAttribute("data-lindel"),"DELETE")
+        .then(function(){ carregarSimulador(cid); }).catch(function(e){ toast(e.message,true); });
+    };
+  });
+  $("s_addlin").onclick = function(){
+    api("/api/cenarios/"+cid+"/linhas","POST",{item:"Novo item",tipo:"pessoa",media:1,preco:0,mult:"nenhum"})
+      .then(function(){ carregarSimulador(cid); }).catch(function(e){ toast(e.message,true); });
+  };
+  $("s_del").onclick = function(){
+    if (!confirm('Excluir o cenário "'+c.nome+'"?')) return;
+    api("/api/cenarios/"+cid,"DELETE").then(function(){ toast("Cenário excluído"); carregarSimulador(); })
+      .catch(function(e){ toast(e.message,true); });
+  };
+}
+
+/* ============================================================
+   HOSPEDAGEM (admin edita tudo; equipe vê e aloca por nome)
+   ============================================================ */
+var STATUS_HOSP = ["", "aguardo 1º contato", "aguardo escolha de quarto", "aguardo de pagamento", "confirmado"];
+
+function carregarHospedagem(){
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+  api("/api/eventos/"+EV.evento.id+"/quartos").then(function(j){
+    HO = j; renderHospedagem();
+  }).catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
+}
+
+function renderHospedagem(){
+  var camas=0, ocup=0, receita=0;
+  HO.quartos.forEach(function(q){
+    camas += q.capacidade;
+    var oc = HO.alocacoes.filter(function(a){ return a.quarto_id===q.id; }).length;
+    ocup += oc;
+    if (oc>0 && q.diaria!=null) receita += q.diaria + (q.adicional||0);
+  });
+  var h = '<div class="kpis">' +
+    '<div class="kpi"><small>Quartos</small><b>'+HO.quartos.length+'</b></div>' +
+    '<div class="kpi"><small>Camas</small><b>'+ocup+' / '+camas+'</b></div>' +
+    '<div class="kpi"><small>Diária dos ocupados</small><b>'+brl(receita)+'</b><span style="font-size:11px;color:var(--dim)"> /noite</span></div>' +
+  '</div>';
+  if (!HO.quartos.length) h += '<div class="empty">Nenhum quarto cadastrado.</div>';
+
+  HO.quartos.forEach(function(q){
+    var ocs = HO.alocacoes.filter(function(a){ return a.quarto_id===q.id; });
+    var cheio = ocs.length >= q.capacidade;
+    h += '<div class="qcard">' +
+      '<div class="qh"><h4>'+esc(q.nome)+'</h4>' +
+      '<span style="font-size:12px;color:'+(cheio?'var(--ok)':'var(--dim)')+'">'+ocs.length+' / '+q.capacidade+'</span></div>' +
+      '<div style="font-size:12px;color:var(--dim)">'+(q.diaria!=null?brl(q.diaria)+'/diária':'sem diária')+(q.adicional?' + '+brl(q.adicional)+' adicional':'')+(q.observacoes?' · '+esc(q.observacoes):'')+'</div>' +
+      '<div class="occ">' + (ocs.length ? ocs.map(function(a){
+        var st = a.status ? ' <span style="color:var(--dim)">('+esc(a.status)+')</span>' : '';
+        return '<span class="chip'+(a.status==="confirmado"?' ok':(a.status.indexOf("pagamento")>-1?' warn':''))+'" data-aloc="'+a.id+'" style="cursor:pointer">'+esc(a.nome||"—")+st+'<span class="x" data-desaloc="'+a.id+'" title="Remover do quarto">×</span></span>';
+      }).join("") : '<span style="font-size:12px;color:var(--dim)">Vazio</span>') + '</div>';
+    if (!cheio){
+      h += '<div class="qadd">';
+      if (PAPEL==="admin" && HO.participantes.length){
+        var alocados = {};
+        HO.alocacoes.forEach(function(a){ if(a.cliente_id) alocados[a.cliente_id]=1; });
+        h += '<select class="mini" data-qsel="'+q.id+'"><option value="">+ Participante…</option>' +
+          HO.participantes.filter(function(p){ return !alocados[p.id]; }).map(function(p){
+            return '<option value="'+p.id+'">'+esc(p.nome)+(p.grupo?' ('+esc(p.grupo)+')':'')+'</option>';
+          }).join("") + '</select>';
+      }
+      h += '<input class="mini" data-qnome="'+q.id+'" placeholder="ou nome livre" maxlength="120">' +
+        '<button class="btn2" data-qadd="'+q.id+'" style="padding:7px 12px">+</button></div>';
+    }
+    if (PAPEL==="admin") h += '<button class="link" data-qedit="'+q.id+'" style="margin-top:8px;padding:2px 0">Editar quarto</button>';
+    h += '</div>';
+  });
+  if (PAPEL==="admin") h += '<button class="btn" id="q_add" style="width:100%;margin-top:8px">+ Adicionar quarto</button>';
+  $("main").innerHTML = h;
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-qadd]"), function(b){
+    b.onclick = function(){
+      var qid = b.getAttribute("data-qadd");
+      var sel = document.querySelector('[data-qsel="'+qid+'"]');
+      var inp = document.querySelector('[data-qnome="'+qid+'"]');
+      var body = { cliente_id: sel && sel.value ? +sel.value : null, nome_livre: inp.value.trim() };
+      if (!body.cliente_id && !body.nome_livre) return toast("Escolha um participante ou digite um nome", true);
+      api("/api/quartos/"+qid+"/alocacoes","POST",body)
+        .then(function(){ carregarHospedagem(); }).catch(function(e){ toast(e.message,true); });
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-desaloc]"), function(x){
+    x.onclick = function(ev){
+      ev.stopPropagation();
+      api("/api/alocacoes/"+x.getAttribute("data-desaloc"),"DELETE")
+        .then(function(){ carregarHospedagem(); }).catch(function(e){ toast(e.message,true); });
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-aloc]"), function(ch){
+    ch.onclick = function(){
+      var aid = +ch.getAttribute("data-aloc");
+      var a = HO.alocacoes.find(function(x){ return x.id===aid; });
+      abrirSheet(
+        '<h2 class="anton" style="font-size:22px">'+esc(a.nome||"Hóspede")+'</h2>' +
+        '<label class="top">Situação</label>' +
+        '<select id="al_st">'+STATUS_HOSP.map(function(s){
+          return '<option value="'+esc(s)+'"'+(a.status===s?" selected":"")+'>'+(s||"—")+'</option>'; }).join("")+'</select>' +
+        '<div class="actions"><button class="btn2" data-close>Cancelar</button><button class="btn" id="al_ok">Salvar</button></div>'
+      );
+      $("al_ok").onclick = function(){
+        api("/api/alocacoes/"+aid,"PATCH",{status:$("al_st").value})
+          .then(function(){ fecharSheet(); carregarHospedagem(); }).catch(function(e){ toast(e.message,true); });
+      };
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-qedit]"), function(b){
+    b.onclick = function(){ sheetQuarto(+b.getAttribute("data-qedit")); };
+  });
+  var qa = $("q_add"); if (qa) qa.onclick = function(){ sheetQuarto(null); };
+}
+
+function sheetQuarto(id){
+  var novo = !id;
+  var q = novo ? {nome:"",capacidade:2,diaria:null,adicional:0,observacoes:""}
+               : HO.quartos.find(function(x){ return x.id===id; });
+  abrirSheet(
+    '<h2 class="anton">'+(novo?'Novo quarto':'Editar quarto')+'</h2>' +
+    '<label class="top">Nome *</label><input id="q_nome" maxlength="150" value="'+esc(q.nome)+'" placeholder="ex.: Chalé super luxo 3">' +
+    '<div class="grid2">' +
+      '<div><label class="top">Capacidade</label><input id="q_cap" inputmode="numeric" value="'+q.capacidade+'"></div>' +
+      '<div><label class="top">Diária (R$)</label><input id="q_dia" inputmode="decimal" value="'+(q.diaria!=null?String(q.diaria).replace(".",","):"")+'"></div>' +
+      '<div><label class="top">Adicional (R$)</label><input id="q_adi" inputmode="decimal" value="'+(q.adicional?String(q.adicional).replace(".",","):"")+'"></div>' +
+      '<div><label class="top">Observações</label><input id="q_obs" maxlength="150" value="'+esc(q.observacoes)+'" placeholder="Cama casal, sofá…"></div>' +
+    '</div>' +
+    '<div class="actions">' +
+      (novo?'<button class="btn2" data-close>Cancelar</button>':'<button class="btn-danger" id="q_del">Excluir</button>') +
+      '<button class="btn" id="q_ok">'+(novo?'Adicionar':'Salvar')+'</button></div>'
+  );
+  $("q_ok").onclick = function(){
+    var body = { nome:$("q_nome").value.trim(), capacidade:parseInt($("q_cap").value,10)||1,
+      diaria:parseMoeda($("q_dia").value), adicional:parseMoeda($("q_adi").value)||0,
+      observacoes:$("q_obs").value.trim() };
+    if (!body.nome) return toast("Dê um nome ao quarto", true);
+    var p = novo ? api("/api/eventos/"+EV.evento.id+"/quartos","POST",body)
+                 : api("/api/quartos/"+id,"PATCH",body);
+    p.then(function(){ fecharSheet(); toast(novo?"Quarto adicionado":"Salvo"); carregarHospedagem(); })
+     .catch(function(e){ toast(e.message,true); });
+  };
+  var d = $("q_del");
+  if (d) d.onclick = function(){
+    if (!confirm('Excluir o quarto "'+q.nome+'"? Os hóspedes alocados nele serão removidos da lista.')) return;
+    api("/api/quartos/"+id,"DELETE").then(function(){ fecharSheet(); toast("Quarto excluído"); carregarHospedagem(); })
+      .catch(function(e){ toast(e.message,true); });
+  };
+  setTimeout(function(){ $("q_nome").focus(); }, 50);
+}
+
+/* ============================================================
+   TAREFAS GERAIS (ambos os papéis)
+   ============================================================ */
+var TA = [];
+var TFILT = { q:"", status:"", prio:"", resp:"", setor:"" };
+
+function telaTarefas(){
+  $("head").innerHTML =
+    '<h1 class="anton">Tarefas gerais</h1>' +
+    '<p style="color:var(--mut);font-size:14px;margin-top:8px">O que precisa acontecer fora dos eventos — do dia a dia da operação.</p>' +
+    navAreas("#/tarefas");
+  ligarNav();
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+  api("/api/tarefas").then(function(j){
+    TA = j.tarefas || []; renderTarefas();
+    pollTimer = setInterval(function(){
+      if (document.visibilityState !== "visible") return;
+      if ($("overlay").classList.contains("on")) return;
+      var ae = document.activeElement;
+      if (ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
+      api("/api/tarefas").then(function(nj){ TA = nj.tarefas||[]; renderTarefas(); }).catch(function(){});
+    }, 25000);
+  }).catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
+}
+
+function tUniques(campo){
+  var set = {};
+  TA.forEach(function(t){ var v = String(t[campo]||"").trim(); if(v) set[v]=1; });
+  return Object.keys(set).sort();
+}
+
+function renderTarefas(){
+  var tot=TA.length, done=0, and=0, hoje=0;
+  TA.forEach(function(t){
+    if (t.status==="concluido") done++;
+    if (t.status==="andamento") and++;
+    if (t.status!=="concluido" && (t.data_limite||"").toLowerCase()==="hoje") hoje++;
+  });
+  var pct = tot ? Math.round(done/tot*100) : 0;
+  var resps = tUniques("responsavel"), setores = tUniques("setor");
+  function opts(list, sel){
+    return list.map(function(v){ return '<option value="'+esc(v)+'"'+(v===sel?' selected':'')+'>'+esc(v)+'</option>'; }).join("");
+  }
+  var q = TFILT.q.toLowerCase();
+  var lista = TA.filter(function(t){
+    if (TFILT.status && t.status !== TFILT.status) return false;
+    if (TFILT.prio && String(t.prioridade==null?"":t.prioridade) !== TFILT.prio) return false;
+    if (TFILT.resp && t.responsavel !== TFILT.resp) return false;
+    if (TFILT.setor && t.setor !== TFILT.setor) return false;
+    if (q && (t.titulo+" "+t.setor+" "+t.responsavel+" "+t.observacoes).toLowerCase().indexOf(q)<0) return false;
+    return true;
+  });
+  var temFiltro = TFILT.q||TFILT.status||TFILT.prio||TFILT.resp||TFILT.setor;
+
+  var html =
+    '<div class="kpis">' +
+      '<div class="kpi"><small>Tarefas</small><b>'+tot+'</b></div>' +
+      '<div class="kpi"><small>Concluídas</small><b class="ok">'+done+' ('+pct+'%)</b></div>' +
+      '<div class="kpi"><small>Em andamento</small><b class="warn">'+and+'</b></div>' +
+      '<div class="kpi"><small>Para hoje</small><b class="'+(hoje?'bad':'')+'">'+hoje+'</b></div>' +
+    '</div>' +
+    '<div class="filters">' +
+      '<input class="full" id="t_q" placeholder="Buscar tarefa, responsável, setor…" value="'+esc(TFILT.q)+'">' +
+      '<select id="t_status"><option value="">Todos os status</option>' +
+        ['afazer','andamento','concluido'].map(function(st){
+          return '<option value="'+st+'"'+(TFILT.status===st?' selected':'')+'>'+STATUS_TXT[st]+'</option>'; }).join("") +
+      '</select>' +
+      '<select id="t_prio"><option value="">Toda prioridade</option>' +
+        [0,1,2,3,4].map(function(p){ return '<option value="'+p+'"'+(TFILT.prio===String(p)?' selected':'')+'>P'+p+'</option>'; }).join("") +
+      '</select>' +
+      (resps.length>1 ? '<select id="t_resp"><option value="">Todos os responsáveis</option>'+opts(resps,TFILT.resp)+'</select>' : '') +
+      (setores.length>1 ? '<select id="t_setor"><option value="">Todos os setores</option>'+opts(setores,TFILT.setor)+'</select>' : '') +
+    '</div>' +
+    (temFiltro ? '<div class="fclear"><button class="link" id="t_clear">Limpar filtros</button></div>' : '');
+
+  if (!TA.length) html += '<div class="empty">Nenhuma tarefa ainda. Adicione a primeira abaixo.</div>';
+  else if (!lista.length) html += '<div class="empty">Nenhuma tarefa com esses filtros.</div>';
+
+  lista.forEach(function(t){
+    var sub = [];
+    if (t.setor) sub.push(esc(t.setor));
+    if (t.responsavel) sub.push(esc(t.responsavel));
+    if (t.data_limite) sub.push((t.data_limite.toLowerCase()==="hoje"?'<span style="color:var(--warn);font-weight:600">Hoje</span>':"até "+esc(t.data_limite)));
+    if (t.observacoes) sub.push(esc(t.observacoes.length>60 ? t.observacoes.slice(0,60)+"…" : t.observacoes));
+    var check = t.status==="concluido" ? "✓" : "";
+    html += '<div class="row st-'+t.status+'" data-tedit="'+t.id+'" role="button" tabindex="0">' +
+      '<button class="stbtn" data-tst="'+t.id+'" title="'+STATUS_TXT[t.status]+' — toque para mudar" aria-label="Mudar status: '+STATUS_TXT[t.status]+'">'+check+'</button>' +
+      '<div class="info"><div class="nm">'+esc(t.titulo)+'</div>' +
+      (sub.length?'<div class="sub"><span>'+sub.join("</span><span>")+'</span></div>':'') +
+      '</div>' +
+      (t.prioridade!=null ? '<span class="pbadge'+(t.prioridade<=1?' p1':'')+'">P'+t.prioridade+'</span>' : '') +
+      '</div>';
+  });
+  html += '<button class="btn" id="t_add" style="width:100%;margin-top:14px">+ Nova tarefa</button>';
+  $("main").innerHTML = html;
+
+  $("t_q").oninput = debounce(function(){ TFILT.q = this.value; renderTarefas(); }, 250);
+  ["status","prio","resp","setor"].forEach(function(f){
+    var el = $("t_"+f); if(!el) return;
+    el.onchange = function(){ TFILT[f] = this.value; renderTarefas(); };
+  });
+  var tc = $("t_clear");
+  if (tc) tc.onclick = function(){ TFILT = {q:"",status:"",prio:"",resp:"",setor:""}; renderTarefas(); };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-tst]"), function(b){
+    b.onclick = function(ev){ ev.stopPropagation(); cicloTarefa(+b.getAttribute("data-tst")); };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-tedit]"), function(r){
+    var abrir = function(){ sheetTarefa(+r.getAttribute("data-tedit")); };
+    r.onclick = abrir;
+    r.onkeydown = function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); abrir(); } };
+  });
+  $("t_add").onclick = function(){ sheetTarefa(null); };
+}
+
+function cicloTarefa(id){
+  var t = TA.find(function(x){ return x.id===id; });
+  if (!t) return;
+  var novo = STATUS_SEQ[t.status] || "afazer";
+  var antigo = t.status;
+  t.status = novo; renderTarefas();
+  api("/api/tarefas/"+id, "PATCH", { status: novo, atualizado_por: NOME })
+    .catch(function(){ t.status = antigo; renderTarefas();
+      toast("Sem conexão — o status não foi salvo. Tente de novo.", true); });
+}
+
+function sheetTarefa(id){
+  var t = id ? TA.find(function(x){ return x.id===id; }) : null;
+  var novo = !t;
+  t = t || { titulo:"", setor:"", status:"afazer", prioridade:"", data_limite:"", responsavel:"", observacoes:"" };
+  abrirSheet(
+    '<h2 class="anton">'+(novo?'Nova tarefa':'Editar tarefa')+'</h2>' +
+    (!novo && t.atualizado_por ? '<div class="meta">Última alteração: '+esc(t.atualizado_por)+' · '+fmtData(t.atualizado_em)+'</div>' : '') +
+    '<label class="top" for="tf_tit">Tarefa *</label>' +
+    '<input id="tf_tit" maxlength="300" value="'+esc(t.titulo)+'" placeholder="ex.: Precificar expedição Tavares">' +
+    '<div class="grid2">' +
+      '<div><label class="top">Setor</label><input id="tf_setor" list="dl_tsetores" maxlength="80" value="'+esc(t.setor)+'" placeholder="Expedição, Vestuário…"></div>' +
+      '<div><label class="top">Responsável</label><input id="tf_resp" list="dl_tresps" maxlength="60" value="'+esc(t.responsavel)+'" placeholder="ex.: Pedrinho"></div>' +
+      '<div><label class="top">Status</label><select id="tf_st">' +
+        ['afazer','andamento','concluido'].map(function(st){
+          return '<option value="'+st+'"'+(t.status===st?' selected':'')+'>'+STATUS_TXT[st]+'</option>'; }).join("") +
+      '</select></div>' +
+      '<div><label class="top">Prioridade</label><select id="tf_prio"><option value="">—</option>' +
+        [0,1,2,3,4].map(function(p){ return '<option value="'+p+'"'+(t.prioridade===p?' selected':'')+'>P'+p+'</option>'; }).join("") +
+      '</select></div>' +
+    '</div>' +
+    '<label class="top">Data limite</label>' +
+    '<input id="tf_dl" maxlength="20" value="'+esc(t.data_limite)+'" placeholder="Hoje, 05/07…">' +
+    '<label class="top">Observações</label>' +
+    '<textarea id="tf_obs" maxlength="600">'+esc(t.observacoes)+'</textarea>' +
+    '<datalist id="dl_tsetores">'+tUniques("setor").map(function(v){return '<option value="'+esc(v)+'">';}).join("")+'</datalist>' +
+    '<datalist id="dl_tresps">'+tUniques("responsavel").map(function(v){return '<option value="'+esc(v)+'">';}).join("")+'</datalist>' +
+    '<div class="actions">' +
+      (novo ? '<button class="btn2" data-close>Cancelar</button>' : '<button class="btn-danger" id="tf_del">Excluir</button>') +
+      '<button class="btn" id="tf_save">'+(novo?'Adicionar':'Salvar')+'</button>' +
+    '</div>'
+  );
+  $("tf_save").onclick = function(){
+    var body = {
+      titulo: $("tf_tit").value.trim(), setor: $("tf_setor").value.trim(),
+      status: $("tf_st").value, prioridade: $("tf_prio").value===""?null:+$("tf_prio").value,
+      data_limite: $("tf_dl").value.trim(), responsavel: $("tf_resp").value.trim(),
+      observacoes: $("tf_obs").value.trim(), atualizado_por: NOME
+    };
+    if (!body.titulo) return toast("O título é obrigatório", true);
+    $("tf_save").disabled = true;
+    var p = novo ? api("/api/tarefas","POST",body) : api("/api/tarefas/"+id,"PATCH",body);
+    p.then(function(){ fecharSheet(); toast(novo?"Tarefa adicionada":"Salvo");
+      return api("/api/tarefas").then(function(j){ TA=j.tarefas||[]; renderTarefas(); }); })
+     .catch(function(e){ $("tf_save").disabled=false; toast(e.message,true); });
+  };
+  var del = $("tf_del");
+  if (del) del.onclick = function(){
+    if (!confirm("Excluir esta tarefa? Não dá para desfazer.")) return;
+    api("/api/tarefas/"+id,"DELETE").then(function(){ fecharSheet(); toast("Tarefa excluída");
+      return api("/api/tarefas").then(function(j){ TA=j.tarefas||[]; renderTarefas(); }); })
+      .catch(function(e){ toast(e.message,true); });
+  };
+  setTimeout(function(){ $("tf_tit").focus(); }, 50);
+}
+
+/* ============================================================
+   MINI CRM (admin)
+   ============================================================ */
+var CRM = [];
+var CRMFILT = { q:"", etapa:"" };
+var ETAPAS = [["lead","Lead"],["contato","Em contato"],["proposta","Proposta"],["confirmado","Confirmado"],["pos_evento","Pós-evento"],["perdido","Perdido"]];
+var ETAPA_TXT = {}; ETAPAS.forEach(function(e){ ETAPA_TXT[e[0]] = e[1]; });
+var ETAPA_CLS = { lead:"", contato:"", proposta:"warn", confirmado:"ok", pos_evento:"ok", perdido:"bad" };
+
+function telaCRM(){
+  $("head").innerHTML =
+    '<h1 class="anton">CRM · Clientes</h1>' +
+    '<p style="color:var(--mut);font-size:14px;margin-top:8px">Acompanhamento de cada cliente: etapa, próxima ação e histórico de conversas.</p>' +
+    navAreas("#/crm");
+  ligarNav();
+  if (PAPEL !== "admin"){
+    $("main").innerHTML = '<div class="empty">O CRM é visível apenas com a chave admin.</div>';
+    return;
+  }
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+  api("/api/crm").then(function(j){ CRM = j.contatos || []; renderCRM(); })
+    .catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
+}
+
+function renderCRM(){
+  var porEtapa = {}, valorAtivo = 0;
+  CRM.forEach(function(c){
+    porEtapa[c.etapa] = (porEtapa[c.etapa]||0)+1;
+    if (c.etapa!=="perdido" && c.valor_potencial) valorAtivo += c.valor_potencial;
+  });
+  var q = CRMFILT.q.toLowerCase();
+  var lista = CRM.filter(function(c){
+    if (CRMFILT.etapa && c.etapa !== CRMFILT.etapa) return false;
+    if (q && (c.nome+" "+c.grupo+" "+c.telefone+" "+c.interesse+" "+c.cidade+" "+c.observacoes).toLowerCase().indexOf(q)<0) return false;
+    return true;
+  });
+
+  var html =
+    '<div class="kpis">' +
+      '<div class="kpi"><small>Contatos</small><b>'+CRM.length+'</b></div>' +
+      '<div class="kpi"><small>Confirmados</small><b class="ok">'+(porEtapa.confirmado||0)+'</b></div>' +
+      '<div class="kpi"><small>Em negociação</small><b class="warn">'+((porEtapa.lead||0)+(porEtapa.contato||0)+(porEtapa.proposta||0))+'</b></div>' +
+      '<div class="kpi"><small>Valor em carteira</small><b>'+brl(valorAtivo)+'</b></div>' +
+    '</div>' +
+    '<div class="tabs">' +
+      '<button class="tab'+(CRMFILT.etapa===""?' on':'')+'" data-etapa="">Todos ('+CRM.length+')</button>' +
+      ETAPAS.map(function(e){
+        var n = porEtapa[e[0]]||0; if(!n) return "";
+        return '<button class="tab'+(CRMFILT.etapa===e[0]?' on':'')+'" data-etapa="'+e[0]+'">'+e[1]+' ('+n+')</button>';
+      }).join("") +
+    '</div>' +
+    '<input id="crm_q" placeholder="Buscar nome, grupo, telefone, expedição…" value="'+esc(CRMFILT.q)+'" style="margin-bottom:12px">';
+
+  if (!CRM.length) html += '<div class="empty">Nenhum contato ainda. Adicione o primeiro abaixo.</div>';
+  else if (!lista.length) html += '<div class="empty">Nenhum contato com essa busca.</div>';
+
+  lista.forEach(function(c){
+    var chips = ['<span class="chip '+(ETAPA_CLS[c.etapa]||"")+'">'+(ETAPA_TXT[c.etapa]||c.etapa)+'</span>'];
+    if (c.grupo && c.grupo!==c.nome) chips.push('<span class="chip">'+esc(c.grupo)+'</span>');
+    if (c.telefone) chips.push('<span class="chip">'+esc(c.telefone)+'</span>');
+    if (c.camiseta) chips.push('<span class="chip">camiseta '+esc(c.camiseta)+'</span>');
+    if (c.participacoes) chips.push('<span class="chip ok">'+c.participacoes+' expedição(ões)</span>');
+    if (c.valor_potencial) chips.push('<span class="chip">'+brl(c.valor_potencial)+'</span>');
+    if (c.interacoes) chips.push('<span class="chip">'+c.interacoes+' interação(ões)</span>');
+    var prox = c.proxima_acao ? '<div style="font-size:12px;color:var(--warn);margin-top:5px">→ '+esc(c.proxima_acao)+(c.proxima_data?' · '+esc(c.proxima_data):'')+'</div>' : '';
+    html += '<div class="row" data-crm="'+c.id+'" role="button" tabindex="0">' +
+      '<div class="info"><div class="nm">'+esc(c.nome)+'</div>' +
+      '<div class="sub" style="margin-top:4px">'+chips.join("")+'</div>' +
+      (c.interesse?'<div style="font-size:11.5px;color:var(--dim);margin-top:4px">'+esc(c.interesse)+'</div>':'') +
+      prox + '</div></div>';
+  });
+  html += '<button class="btn" id="crm_add" style="width:100%;margin-top:14px">+ Novo contato</button>';
+  $("main").innerHTML = html;
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-etapa]"), function(b){
+    b.onclick = function(){ CRMFILT.etapa = b.getAttribute("data-etapa"); renderCRM(); };
+  });
+  $("crm_q").oninput = debounce(function(){ CRMFILT.q = this.value; renderCRM(); }, 200);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-crm]"), function(r){
+    var abrir = function(){ sheetContato(+r.getAttribute("data-crm")); };
+    r.onclick = abrir;
+    r.onkeydown = function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); abrir(); } };
+  });
+  $("crm_add").onclick = function(){ sheetContato(null); };
+}
+
+function sheetContato(id){
+  var novo = !id;
+  var render = function(c, ints, parts){
+    parts = parts || [];
+    abrirSheet(
+      '<h2 class="anton">'+(novo?'Novo contato':'Editar contato')+'</h2>' +
+      (!novo && c.atualizado_por ? '<div class="meta">Última alteração: '+esc(c.atualizado_por)+' · '+fmtData(c.atualizado_em)+'</div>' : '') +
+      '<label class="top">Nome *</label><input id="cr_nome" maxlength="150" value="'+esc(c.nome)+'">' +
+      '<div class="grid2">' +
+        '<div><label class="top">Grupo / apelido</label><input id="cr_grupo" maxlength="80" value="'+esc(c.grupo)+'" placeholder="ex.: Zana"></div>' +
+        '<div><label class="top">Telefone</label><input id="cr_tel" maxlength="25" value="'+esc(c.telefone)+'"></div>' +
+        '<div><label class="top">Etapa</label><select id="cr_etapa">' +
+          ETAPAS.map(function(e){ return '<option value="'+e[0]+'"'+(c.etapa===e[0]?' selected':'')+'>'+e[1]+'</option>'; }).join("") +
+        '</select></div>' +
+        '<div><label class="top">Valor potencial (R$)</label><input id="cr_valor" inputmode="decimal" value="'+(c.valor_potencial!=null?esc(String(c.valor_potencial).replace(".",",")):"")+'" placeholder="9500,00"></div>' +
+        '<div><label class="top">Camiseta</label><input id="cr_cam" maxlength="10" value="'+esc(c.camiseta||"")+'" placeholder="P, M, G, GG…"></div>' +
+        '<div><label class="top">CPF</label><input id="cr_cpf" maxlength="20" value="'+esc(c.cpf||"")+'"></div>' +
+        '<div><label class="top">Cidade</label><input id="cr_cidade" maxlength="80" value="'+esc(c.cidade)+'"></div>' +
+        '<div><label class="top">Origem</label><input id="cr_origem" maxlength="80" value="'+esc(c.origem)+'" placeholder="indicação, instagram…"></div>' +
+      '</div>' +
+      '<label class="top">Expedição(ões) de interesse</label>' +
+      '<input id="cr_int" maxlength="200" value="'+esc(c.interesse)+'" placeholder="ex.: Costa Doce · Dezembro">' +
+      '<div class="grid2">' +
+        '<div><label class="top">Próxima ação</label><input id="cr_prox" maxlength="200" value="'+esc(c.proxima_acao)+'" placeholder="ex.: Cobrar saldo"></div>' +
+        '<div><label class="top">Quando</label><input id="cr_proxd" maxlength="20" value="'+esc(c.proxima_data)+'" placeholder="ex.: 05/07"></div>' +
+      '</div>' +
+      '<label class="top">Observações</label><textarea id="cr_obs" maxlength="600">'+esc(c.observacoes)+'</textarea>' +
+      (!novo ?
+        '<label class="top" style="margin-top:20px">Expedições (participou / vai participar)</label>' +
+        '<div>'+(parts.length ? parts.map(function(p){
+          var pago = p.pago||0, pac = p.pacote;
+          var pct = pac ? Math.min(100, Math.round(pago/pac*100)) : 0;
+          var st = pac==null ? '<span class="chip">sem pacote</span>'
+                 : (pago>=pac ? '<span class="chip ok">pago</span>'
+                 : (pago>0 ? '<span class="chip warn">'+pct+'% pago</span>' : '<span class="chip bad">a receber</span>'));
+          return '<button class="row" data-partev="'+p.evento_id+'" style="margin-bottom:6px">' +
+            '<div class="info"><div class="nm" style="font-size:14px">'+esc(p.evento)+(p.arquivado?' <span style="color:var(--dim);font-weight:400">(arquivado)</span>':'')+'</div>' +
+            '<div class="sub" style="margin-top:3px">'+st+
+            (p.camiseta?'<span class="chip">camiseta '+esc(p.camiseta)+'</span>':'')+
+            (p.utv?'<span class="chip">UTV '+esc(p.utv)+'</span>':'')+
+            (pac!=null?'<span>'+brl(pago)+' de '+brl(pac)+'</span>':'')+'</div>' +
+            '</div></button>';
+        }).join("") : '<div style="font-size:13px;color:var(--dim);padding:4px 0">Nenhuma expedição vinculada. Vincule pela ficha do participante dentro do evento.</div>')+'</div>' +
+        '<label class="top" style="margin-top:20px">Histórico de interações</label>' +
+        '<div>'+(ints.length ? ints.map(function(p){
+          return '<div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);border-bottom:1px solid #1d1d1d;padding:6px 0">' +
+            '<span style="flex:1">'+(p.data?esc(p.data)+' · ':'')+(p.canal?esc(p.canal)+' · ':'')+esc(p.resumo)+
+            (p.criado_por?' <span style="color:var(--dim)">('+esc(p.criado_por)+')</span>':'')+'</span>' +
+            '<button class="delx" data-intdel="'+p.id+'" title="Remover interação">×</button></div>';
+        }).join("") : '<div style="font-size:13px;color:var(--dim);padding:4px 0">Nenhuma interação registrada.</div>')+'</div>' +
+        '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">' +
+          '<input id="in_data" class="mini" placeholder="Data" style="flex:0.7;min-width:70px">' +
+          '<input id="in_canal" class="mini" placeholder="Canal" style="flex:0.8;min-width:80px">' +
+          '<input id="in_resumo" class="mini" placeholder="O que foi conversado" style="flex:2;min-width:150px">' +
+          '<button class="btn2" id="in_add" style="padding:8px 14px">+</button>' +
+        '</div>'
+      : '') +
+      '<div class="actions">' +
+        (novo ? '<button class="btn2" data-close>Cancelar</button>' : '<button class="btn-danger" id="cr_del">Excluir</button>') +
+        '<button class="btn" id="cr_save">'+(novo?'Adicionar':'Salvar')+'</button>' +
+      '</div>'
+    );
+    $("cr_save").onclick = function(){
+      var body = {
+        nome: $("cr_nome").value.trim(), grupo: $("cr_grupo").value.trim(),
+        telefone: $("cr_tel").value.trim(), etapa: $("cr_etapa").value,
+        camiseta: $("cr_cam").value.trim(), cpf: $("cr_cpf").value.trim(),
+        valor_potencial: parseMoeda($("cr_valor").value),
+        cidade: $("cr_cidade").value.trim(), origem: $("cr_origem").value.trim(),
+        interesse: $("cr_int").value.trim(),
+        proxima_acao: $("cr_prox").value.trim(), proxima_data: $("cr_proxd").value.trim(),
+        observacoes: $("cr_obs").value.trim(), atualizado_por: NOME
+      };
+      if (!body.nome) return toast("O nome é obrigatório", true);
+      $("cr_save").disabled = true;
+      var p = novo ? api("/api/crm","POST",body) : api("/api/crm/"+id,"PATCH",body);
+      p.then(function(){ CRMLIST = null; fecharSheet(); toast(novo?"Contato adicionado":"Salvo"); telaCRM(); })
+       .catch(function(e){ $("cr_save").disabled=false; toast(e.message,true); });
+    };
+    var del = $("cr_del");
+    if (del) del.onclick = function(){
+      if (!confirm("Excluir "+c.nome+"? O histórico de interações também será removido.")) return;
+      api("/api/crm/"+id,"DELETE").then(function(){ CRMLIST = null; fecharSheet(); toast("Excluído"); telaCRM(); })
+        .catch(function(e){ toast(e.message,true); });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll("[data-partev]"), function(b){
+      b.onclick = function(){ fecharSheet(); location.hash = "#/e/"+b.getAttribute("data-partev")+"/participantes"; };
+    });
+    var ia = $("in_add");
+    if (ia) ia.onclick = function(){
+      var resumo = $("in_resumo").value.trim();
+      if (!resumo) return toast("Descreva a interação", true);
+      api("/api/crm/"+id+"/interacoes","POST",{
+        data:$("in_data").value.trim(), canal:$("in_canal").value.trim(), resumo:resumo, criado_por:NOME
+      }).then(function(){ toast("Interação registrada"); sheetContato(id); })
+        .catch(function(e){ toast(e.message,true); });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll("[data-intdel]"), function(b){
+      b.onclick = function(){
+        if (!confirm("Remover esta interação?")) return;
+        api("/api/crm-interacoes/"+b.getAttribute("data-intdel"),"DELETE")
+          .then(function(){ toast("Removida"); sheetContato(id); })
+          .catch(function(e){ toast(e.message,true); });
+      };
+    });
+    setTimeout(function(){ $("cr_nome").focus(); }, 50);
+  };
+  if (novo) render({nome:"",grupo:"",telefone:"",cpf:"",camiseta:"",cidade:"",origem:"",etapa:"lead",interesse:"",
+                    valor_potencial:null,proxima_acao:"",proxima_data:"",observacoes:""}, [], []);
+  else api("/api/crm/"+id).then(function(j){ render(j.contato, j.interacoes||[], j.participacoes||[]); })
+        .catch(function(e){ toast(e.message,true); });
+}
+
+/* ============================================================
+   Sheet / overlay
+   ============================================================ */
+function abrirSheet(html){
+  $("sheet").innerHTML = html;
+  $("overlay").classList.add("on");
+  Array.prototype.forEach.call(document.querySelectorAll("[data-close]"), function(b){
+    b.onclick = fecharSheet;
+  });
+}
+function fecharSheet(){ $("overlay").classList.remove("on"); $("sheet").innerHTML=""; }
+$("overlay").addEventListener("click", function(e){ if (e.target === this) fecharSheet(); });
+document.addEventListener("keydown", function(e){ if (e.key==="Escape") fecharSheet(); });
+
+function debounce(fn, ms){
+  var t; return function(){ var a=arguments, c=this;
+    clearTimeout(t); t=setTimeout(function(){ fn.apply(c,a); }, ms); };
+}
+
+/* ============================================================
+   Boot
+   ============================================================ */
+if (KEY){
+  $("lnome").value = NOME;
+  api("/api/me").then(function(me){
+    PAPEL = me.papel || "equipe";
+    $("app").classList.remove("hide"); route();
+  }).catch(function(){ /* logout já tratado no 401 */ 
+    $("login").classList.remove("hide");
+  });
+} else {
+  $("login").classList.remove("hide");
+  $("lnome").value = NOME;
+}
+</script>
+</body>
+</html>

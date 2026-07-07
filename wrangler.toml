@@ -1,0 +1,17 @@
+name = "eventos"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Permite importar o ui.html como texto dentro do worker
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+# Banco D1 onde ficam eventos e itens.
+# 1) Crie antes com:  npx wrangler d1 create eventos
+# 2) O comando imprime um database_id — cole no campo abaixo.
+[[d1_databases]]
+binding = "DB"
+database_name = "eventos"
+database_id = "c77cfaee-afe3-4a18-b1f1-a4164bdc9c75"
