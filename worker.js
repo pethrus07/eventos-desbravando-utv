@@ -69,6 +69,7 @@ function limparCenario(b) {
   const o = {};
   if ("nome" in b) o.nome = S(b.nome, 120);
   for (const c of ["pessoas","diarias","dias_trilha","refeicoes","eventos_qtd"]) if (c in b) o[c] = Math.max(0, I(b[c]) ?? 0);
+  if ("modelo" in b) o.modelo = B(b.modelo);
   return o;
 }
 function limparLinha(b) {
@@ -380,6 +381,14 @@ export default {
     }
 
     /* ================= SIMULADOR (admin) ================= */
+    if (path === "/api/cenarios/modelos" && method === "GET") {
+      if (!admin) return negado();
+      const { results } = await db.prepare(`
+        SELECT c.id, c.nome, c.evento_id, c.pessoas, c.diarias, c.dias_trilha, c.refeicoes, c.eventos_qtd, e.nome AS evento
+        FROM cenarios c JOIN eventos e ON e.id=c.evento_id
+        WHERE c.modelo=1 ORDER BY c.nome COLLATE NOCASE`).all();
+      return json({ modelos: results });
+    }
     if ((m = path.match(/^\/api\/eventos\/(\d+)\/cenarios$/))) {
       if (!admin) return negado();
       const eid = +m[1];
