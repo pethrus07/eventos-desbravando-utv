@@ -71,6 +71,7 @@ h1{font-size:clamp(30px,6.5vw,50px)}
 .chip.ok{border-color:#2e5c44;color:var(--ok)}
 .chip.warn{border-color:#6b5a22;color:var(--warn)}
 .chip.bad{border-color:#4a2323;color:var(--p1)}
+.aviso-falta{background:#2a2113;border:1px solid #6b5a22;color:var(--warn);border-radius:10px;padding:8px 11px;font-size:12.5px;margin:8px 0 2px}
 .chip .x{cursor:pointer;color:var(--dim);font-size:13px;line-height:1;padding:0 1px}
 .chip .x:hover{color:var(--p1)}
 .paybar{height:4px;background:#242424;border-radius:99px;overflow:hidden;margin-top:5px;width:100%}
@@ -978,6 +979,25 @@ function carregarParticipantes(){
   }).catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
 }
 
+/* ---------- pendências por pessoa (campos obrigatórios — fácil de ajustar aqui) ---------- */
+var OBRIG_PART = [
+  { rot:"CPF",      falta:function(c){ return !String(c.cpf||"").trim(); } },
+  { rot:"telefone", falta:function(c){ return !String(c.telefone||"").trim(); } },
+  { rot:"camisa",   falta:function(c){ return !String(c.camiseta||"").trim(); } },
+  { rot:"UTV",      falta:function(c){ return !String(c.utv||"").trim(); } },
+  { rot:"valor",    falta:function(c){ return c.pacote==null; } },
+  { rot:"contrato", falta:function(c){ return !c.contrato_assinado; } }
+];
+var OBRIG_CRM = [
+  { rot:"telefone", falta:function(c){ return !String(c.telefone||"").trim(); } },
+  { rot:"CPF",      falta:function(c){ return !String(c.cpf||"").trim(); } },
+  { rot:"camisa",   falta:function(c){ return !String(c.camiseta||"").trim(); } },
+  { rot:"cidade",   falta:function(c){ return !String(c.cidade||"").trim(); } }
+];
+function pendencias(obj, regras){ var r=[]; regras.forEach(function(x){ if(x.falta(obj)) r.push(x.rot); }); return r; }
+function chipFalta(obj, regras){ var f=pendencias(obj,regras); return f.length ? '<span class="chip bad">⚠ Falta: '+f.join(", ")+'</span>' : ''; }
+function avisoFalta(obj, regras){ var f=pendencias(obj,regras); return f.length ? '<div class="aviso-falta">⚠ Faltando nesta pessoa: <b>'+f.join(", ")+'</b></div>' : ''; }
+
 function renderParticipantes(){
   var adultos=0, criancas=0, receita=0, recebido=0, cam={}, utv4=0, utv2=0, cSim=0, cNao=0;
   CL.forEach(function(c){
@@ -1025,6 +1045,7 @@ function desenharListaClientes(q){
       var pago = c.pago||0, pac = c.pacote;
       var pct = pac ? Math.min(100, Math.round(pago/pac*100)) : 0;
       var chips = [];
+      var cfP = chipFalta(c, OBRIG_PART); if (cfP) chips.push(cfP);
       if (c.tipo==="crianca") chips.push('<span class="chip">criança</span>');
       if (c.camiseta) chips.push('<span class="chip">'+esc(c.camiseta)+'</span>');
       if (c.utv) chips.push('<span class="chip">UTV '+esc(c.utv)+'</span>');
@@ -1066,6 +1087,7 @@ function sheetCliente(id){
     CL.forEach(function(x){ if(x.grupo) grupos[x.grupo]=1; });
     abrirSheet(
       '<h2 class="anton">'+(novo?'Novo participante':'Editar participante')+'</h2>' +
+      (novo ? '' : avisoFalta(c, OBRIG_PART)) +
       '<label class="top">Nome *</label><input id="c_nome" maxlength="150" value="'+esc(c.nome)+'">' +
       '<div class="grid2">' +
         '<div><label class="top">Grupo / reserva</label><input id="c_grupo" list="dl_grupos" maxlength="80" value="'+esc(c.grupo)+'" placeholder="ex.: Zana"></div>' +
@@ -1712,6 +1734,7 @@ function renderCRM(){
 
   lista.forEach(function(c){
     var chips = ['<span class="chip '+(ETAPA_CLS[c.etapa]||"")+'">'+(ETAPA_TXT[c.etapa]||c.etapa)+'</span>'];
+    var cfC = chipFalta(c, OBRIG_CRM); if (cfC) chips.push(cfC);
     if (c.grupo && c.grupo!==c.nome) chips.push('<span class="chip">'+esc(c.grupo)+'</span>');
     if (c.telefone) chips.push('<span class="chip">'+esc(c.telefone)+'</span>');
     if (c.camiseta) chips.push('<span class="chip">camiseta '+esc(c.camiseta)+'</span>');
@@ -1747,6 +1770,7 @@ function sheetContato(id){
     abrirSheet(
       '<h2 class="anton">'+(novo?'Novo contato':'Editar contato')+'</h2>' +
       (!novo && c.atualizado_por ? '<div class="meta">Última alteração: '+esc(c.atualizado_por)+' · '+fmtData(c.atualizado_em)+'</div>' : '') +
+      (novo ? '' : avisoFalta(c, OBRIG_CRM)) +
       '<label class="top">Nome *</label><input id="cr_nome" maxlength="150" value="'+esc(c.nome)+'">' +
       '<div class="grid2">' +
         '<div><label class="top">Grupo / apelido</label><input id="cr_grupo" maxlength="80" value="'+esc(c.grupo)+'" placeholder="ex.: Zana"></div>' +
