@@ -1285,7 +1285,7 @@ function renderSimulador(){
     var r = calcCenario(c, linhas);
     var delta = realizado - r.total;
     h += '<button class="evcard" data-cen="'+c.id+'">' +
-      '<h2 class="anton" style="font-size:22px">'+esc(c.nome)+'</h2>' +
+      '<h2 class="anton" style="font-size:22px">'+esc(c.nome)+(c.modelo?' <span class="chip ok">★ modelo</span>':'')+'</h2>' +
       '<div class="meta" style="margin-top:6px">' +
         '<span>'+c.pessoas+' pessoas · '+c.diarias+' diárias · '+c.dias_trilha+' dias de trilha</span>' +
         '<span>Por pessoa: <span class="pct">'+brl(r.pp)+'</span></span>' +
@@ -1299,29 +1299,38 @@ function renderSimulador(){
     b.onclick = function(){ renderCenario(+b.getAttribute("data-cen")); };
   });
   $("s_add").onclick = function(){
-    var opts = SIM.cenarios.map(function(c){ return '<option value="'+c.id+'">'+esc(c.nome)+'</option>'; }).join("");
-    abrirSheet(
-      '<h2 class="anton">Novo cenário</h2>' +
-      '<label class="top">Nome</label><input id="sn_nome" maxlength="120" placeholder="ex.: Família (25)">' +
-      '<label class="top">Como começar</label>' +
-      '<select id="sn_modo"><option value="">Linhas padrão (preços zerados)</option>' +
-      (opts?'<optgroup label="Duplicar de">'+opts+'</optgroup>':'')+'</select>' +
-      '<div class="actions"><button class="btn2" data-close>Cancelar</button><button class="btn" id="sn_ok">Criar</button></div>'
-    );
-    $("sn_ok").onclick = function(){
-      var nome = $("sn_nome").value.trim();
-      if (!nome) return toast("Dê um nome ao cenário", true);
-      var b = { nome:nome, pessoas:20, diarias:3, dias_trilha:2, refeicoes:5, eventos_qtd:2 };
-      if ($("sn_modo").value){
-        b.copiar_de = +$("sn_modo").value;
-        var o = SIM.cenarios.find(function(c){ return c.id===b.copiar_de; });
-        if (o){ b.pessoas=o.pessoas; b.diarias=o.diarias; b.dias_trilha=o.dias_trilha; b.refeicoes=o.refeicoes; b.eventos_qtd=o.eventos_qtd; }
-      }
-      api("/api/eventos/"+EV.evento.id+"/cenarios","POST",b)
-        .then(function(j){ fecharSheet(); toast("Cenário criado"); carregarSimulador(j.id); })
-        .catch(function(e){ toast(e.message,true); });
-    };
-    setTimeout(function(){ $("sn_nome").focus(); }, 50);
+    api("/api/cenarios/modelos").then(function(mj){
+      var modelos = mj.modelos || [];
+      var dupOpts = SIM.cenarios.map(function(c){ return '<option value="e'+c.id+'">'+esc(c.nome)+'</option>'; }).join("");
+      var modOpts = modelos.map(function(m){ return '<option value="m'+m.id+'">'+esc(m.nome)+' · '+esc(m.evento)+'</option>'; }).join("");
+      abrirSheet(
+        '<h2 class="anton">Novo cenário</h2>' +
+        '<label class="top">Nome</label><input id="sn_nome" maxlength="120" placeholder="ex.: Família (25)">' +
+        '<label class="top">Como começar</label>' +
+        '<select id="sn_modo"><option value="">Linhas padrão (preços zerados)</option>' +
+        (dupOpts?'<optgroup label="Duplicar deste evento">'+dupOpts+'</optgroup>':'') +
+        (modOpts?'<optgroup label="A partir de um modelo salvo">'+modOpts+'</optgroup>':'') +
+        '</select>' +
+        '<div class="actions"><button class="btn2" data-close>Cancelar</button><button class="btn" id="sn_ok">Criar</button></div>'
+      );
+      $("sn_ok").onclick = function(){
+        var nome = $("sn_nome").value.trim();
+        if (!nome) return toast("Dê um nome ao cenário", true);
+        var b = { nome:nome, pessoas:20, diarias:3, dias_trilha:2, refeicoes:5, eventos_qtd:2 };
+        var v = $("sn_modo").value;
+        if (v){
+          var id = +v.slice(1);
+          b.copiar_de = id;
+          var src = v.charAt(0)==="m" ? modelos.find(function(x){ return x.id===id; })
+                                      : SIM.cenarios.find(function(x){ return x.id===id; });
+          if (src){ b.pessoas=src.pessoas; b.diarias=src.diarias; b.dias_trilha=src.dias_trilha; b.refeicoes=src.refeicoes; b.eventos_qtd=src.eventos_qtd; }
+        }
+        api("/api/eventos/"+EV.evento.id+"/cenarios","POST",b)
+          .then(function(j){ fecharSheet(); toast("Cenário criado"); carregarSimulador(j.id); })
+          .catch(function(e){ toast(e.message,true); });
+      };
+      setTimeout(function(){ $("sn_nome").focus(); }, 50);
+    }).catch(function(e){ toast(e.message,true); });
   };
 }
 
@@ -1335,7 +1344,7 @@ function renderCenario(cid){
 
   var params = [["pessoas","Pessoas"],["diarias","Diárias"],["dias_trilha","Dias de trilha"],["refeicoes","Refeições"],["eventos_qtd","Eventos"]];
   var h = '<button class="backln" id="s_volta">← Cenários</button>' +
-    '<h2 class="anton" style="font-size:24px;margin:2px 0 12px">'+esc(c.nome)+'</h2>' +
+    '<h2 class="anton" style="font-size:24px;margin:2px 0 12px">'+esc(c.nome)+(c.modelo?' <span class="chip ok" style="vertical-align:middle">★ modelo</span>':'')+'</h2>' +
     '<div class="kpis">' +
       '<div class="kpi"><small>Por pessoa</small><b>'+brl(r.pp)+'</b></div>' +
       '<div class="kpi"><small>Total previsto</small><b>'+brl(r.total)+'</b></div>' +
@@ -1364,11 +1373,17 @@ function renderCenario(cid){
   h += '</tbody></table>' +
     '<button class="addrow" id="s_addlin">+ Adicionar linha de custo</button>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">' +
+      '<button class="btn2" id="s_modelo">'+(c.modelo?'★ É modelo (remover)':'☆ Salvar como modelo')+'</button>' +
       '<button class="btn-danger" id="s_del">Excluir cenário</button>' +
     '</div>';
   $("main").innerHTML = h;
 
   $("s_volta").onclick = renderSimulador;
+  $("s_modelo").onclick = function(){
+    api("/api/cenarios/"+cid,"PATCH",{modelo: c.modelo?0:1})
+      .then(function(){ toast(c.modelo?"Removido dos modelos":"Salvo como modelo"); carregarSimulador(cid); })
+      .catch(function(e){ toast(e.message,true); });
+  };
   Array.prototype.forEach.call(document.querySelectorAll("[data-param]"), function(inp){
     inp.onchange = function(){
       var b = {}; b[inp.getAttribute("data-param")] = parseInt(inp.value,10)||0;

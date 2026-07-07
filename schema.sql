@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS cenarios (
   dias_trilha INTEGER NOT NULL DEFAULT 1,
   refeicoes   INTEGER NOT NULL DEFAULT 1,
   eventos_qtd INTEGER NOT NULL DEFAULT 1,
+  modelo      INTEGER NOT NULL DEFAULT 0,   -- 1 = cenário reutilizável como modelo em outras expedições
   criado_em   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_cen_evento ON cenarios(evento_id);
