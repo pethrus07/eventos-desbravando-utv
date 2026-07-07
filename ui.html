@@ -468,6 +468,7 @@ function renderEvento(aba){
       '<span><b>'+s.done+'</b> de <b>'+s.total+'</b> concluídos</span>' +
       '<span><span class="dot" style="background:var(--warn)"></span><b>'+s.and+'</b> em andamento</span>' +
       (PAPEL==="admin" ? '<span>Custos: <b>'+brl(EV.custo_total||0)+'</b></span>' : '') +
+      (PAPEL==="admin" && EV.pessoas ? '<span>👥 <b>'+EV.pessoas.total+'</b> ('+EV.pessoas.adultos+' ad · '+EV.pessoas.criancas+' cri)</span>' : '') +
     '</div>' +
     '<div class="tabs">'+tabsHtml+'</div>';
   $("voltar").onclick = function(){ location.hash = "#/"; };
@@ -998,21 +999,26 @@ function pendencias(obj, regras){ var r=[]; regras.forEach(function(x){ if(x.fal
 function chipFalta(obj, regras){ var f=pendencias(obj,regras); return f.length ? '<span class="chip bad">⚠ Falta: '+f.join(", ")+'</span>' : ''; }
 function avisoFalta(obj, regras){ var f=pendencias(obj,regras); return f.length ? '<div class="aviso-falta">⚠ Faltando nesta pessoa: <b>'+f.join(", ")+'</b></div>' : ''; }
 
+var PFILT = { q:"", tipo:"", pend:false };
 function renderParticipantes(){
-  var adultos=0, criancas=0, receita=0, recebido=0, cam={}, utv4=0, utv2=0, cSim=0, cNao=0;
+  var adultos=0, criancas=0, receita=0, recebido=0, cam={}, utv4=0, utv2=0, cSim=0, comPend=0;
   CL.forEach(function(c){
     if (c.tipo==="crianca") criancas++; else adultos++;
     if (c.pacote!=null) receita += c.pacote;
     recebido += c.pago || 0;
     if (c.camiseta) cam[c.camiseta] = (cam[c.camiseta]||0)+1;
     if (c.utv==="4 lugares") utv4++; if (c.utv==="2 lugares") utv2++;
-    if (c.contrato_assinado) cSim++; else cNao++;
+    if (c.contrato_assinado) cSim++;
+    if (pendencias(c, OBRIG_PART).length) comPend++;
   });
   var saldo = receita - recebido;
   var camTxt = Object.keys(cam).sort().map(function(k){ return k+": "+cam[k]; }).join(" · ") || "—";
   var html =
     '<div class="kpis">' +
-      '<div class="kpi"><small>Pessoas</small><b>'+CL.length+'</b><span style="font-size:11px;color:var(--dim)"> '+adultos+' ad · '+criancas+' cri</span></div>' +
+      '<div class="kpi"><small>Pessoas</small><b>'+CL.length+'</b></div>' +
+      '<div class="kpi"><small>Adultos</small><b>'+adultos+'</b></div>' +
+      '<div class="kpi"><small>Crianças</small><b>'+criancas+'</b></div>' +
+      '<div class="kpi"><small>Com pendências</small><b class="'+(comPend?'bad':'ok')+'">'+comPend+'</b></div>' +
       '<div class="kpi"><small>Receita</small><b>'+brl(receita)+'</b></div>' +
       '<div class="kpi"><small>Recebido</small><b class="'+(recebido>0?'ok':'')+'">'+brl(recebido)+'</b></div>' +
       '<div class="kpi"><small>A receber</small><b class="'+(saldo>0?'warn':'ok')+'">'+brl(saldo)+'</b></div>' +
@@ -1020,21 +1026,40 @@ function renderParticipantes(){
       '<div class="kpi"><small>UTVs</small><b>'+utv4+'×4 · '+utv2+'×2</b></div>' +
       '<div class="kpi" style="grid-column:1/-1"><small>Camisetas</small><b style="font-size:14px;font-family:\'Archivo\'">'+esc(camTxt)+'</b></div>' +
     '</div>' +
-    '<input id="p_q" placeholder="Buscar nome, grupo, CPF, telefone…" style="margin-bottom:12px">';
+    '<input id="p_q" placeholder="Buscar nome, grupo, CPF, telefone…" value="'+esc(PFILT.q)+'" style="margin-bottom:10px">' +
+    '<div class="tabs" style="margin-bottom:12px">' +
+      '<button class="tab'+(!PFILT.tipo&&!PFILT.pend?' on':'')+'" data-pf="all">Todos</button>' +
+      '<button class="tab'+(PFILT.tipo==="adulto"?' on':'')+'" data-pf="adulto">Adultos</button>' +
+      '<button class="tab'+(PFILT.tipo==="crianca"?' on':'')+'" data-pf="crianca">Crianças</button>' +
+      '<button class="tab'+(PFILT.pend?' on':'')+'" data-pf="pend">Com pendências ('+comPend+')</button>' +
+    '</div>';
 
   if (!CL.length) html += '<div class="empty">Nenhum participante. Adicione o primeiro abaixo.</div>';
   html += '<div id="p_lista"></div>' +
     '<button class="btn" id="p_add" style="width:100%;margin-top:14px">+ Adicionar participante</button>';
   $("main").innerHTML = html;
-  desenharListaClientes("");
-  $("p_q").oninput = debounce(function(){ desenharListaClientes(this.value.toLowerCase()); }, 200);
+  desenharListaClientes();
+  $("p_q").oninput = debounce(function(){ PFILT.q = this.value.toLowerCase(); desenharListaClientes(); }, 200);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-pf]"), function(b){
+    b.onclick = function(){
+      var v = b.getAttribute("data-pf");
+      if (v==="all"){ PFILT.tipo=""; PFILT.pend=false; }
+      else if (v==="pend"){ PFILT.pend=!PFILT.pend; }
+      else { PFILT.tipo = PFILT.tipo===v ? "" : v; }
+      renderParticipantes();
+    };
+  });
   $("p_add").onclick = function(){ sheetCliente(null); };
 }
 
-function desenharListaClientes(q){
+function desenharListaClientes(){
+  var q = PFILT.q;
   var grupos = {};
   CL.forEach(function(c){
     if (q && (c.nome+" "+c.grupo+" "+c.cpf+" "+c.telefone).toLowerCase().indexOf(q)<0) return;
+    if (PFILT.tipo==="adulto" && c.tipo==="crianca") return;
+    if (PFILT.tipo==="crianca" && c.tipo!=="crianca") return;
+    if (PFILT.pend && !pendencias(c, OBRIG_PART).length) return;
     var g = c.grupo || "Sem grupo";
     (grupos[g]=grupos[g]||[]).push(c);
   });
@@ -1680,7 +1705,7 @@ function sheetTarefa(id){
    MINI CRM (admin)
    ============================================================ */
 var CRM = [];
-var CRMFILT = { q:"", etapa:"" };
+var CRMFILT = { q:"", etapa:"", pend:false };
 var ETAPAS = [["lead","Lead"],["contato","Em contato"],["proposta","Proposta"],["confirmado","Confirmado"],["pos_evento","Pós-evento"],["perdido","Perdido"]];
 var ETAPA_TXT = {}; ETAPAS.forEach(function(e){ ETAPA_TXT[e[0]] = e[1]; });
 var ETAPA_CLS = { lead:"", contato:"", proposta:"warn", confirmado:"ok", pos_evento:"ok", perdido:"bad" };
@@ -1701,14 +1726,16 @@ function telaCRM(){
 }
 
 function renderCRM(){
-  var porEtapa = {}, valorAtivo = 0;
+  var porEtapa = {}, valorAtivo = 0, comPend = 0;
   CRM.forEach(function(c){
     porEtapa[c.etapa] = (porEtapa[c.etapa]||0)+1;
     if (c.etapa!=="perdido" && c.valor_potencial) valorAtivo += c.valor_potencial;
+    if (pendencias(c, OBRIG_CRM).length) comPend++;
   });
   var q = CRMFILT.q.toLowerCase();
   var lista = CRM.filter(function(c){
     if (CRMFILT.etapa && c.etapa !== CRMFILT.etapa) return false;
+    if (CRMFILT.pend && !pendencias(c, OBRIG_CRM).length) return false;
     if (q && (c.nome+" "+c.grupo+" "+c.telefone+" "+c.interesse+" "+c.cidade+" "+c.observacoes).toLowerCase().indexOf(q)<0) return false;
     return true;
   });
@@ -1719,6 +1746,7 @@ function renderCRM(){
       '<div class="kpi"><small>Confirmados</small><b class="ok">'+(porEtapa.confirmado||0)+'</b></div>' +
       '<div class="kpi"><small>Em negociação</small><b class="warn">'+((porEtapa.lead||0)+(porEtapa.contato||0)+(porEtapa.proposta||0))+'</b></div>' +
       '<div class="kpi"><small>Valor em carteira</small><b>'+brl(valorAtivo)+'</b></div>' +
+      '<div class="kpi"><small>Com pendências</small><b class="'+(comPend?'bad':'ok')+'">'+comPend+'</b></div>' +
     '</div>' +
     '<div class="tabs">' +
       '<button class="tab'+(CRMFILT.etapa===""?' on':'')+'" data-etapa="">Todos ('+CRM.length+')</button>' +
@@ -1726,6 +1754,7 @@ function renderCRM(){
         var n = porEtapa[e[0]]||0; if(!n) return "";
         return '<button class="tab'+(CRMFILT.etapa===e[0]?' on':'')+'" data-etapa="'+e[0]+'">'+e[1]+' ('+n+')</button>';
       }).join("") +
+      '<button class="tab'+(CRMFILT.pend?' on':'')+'" data-crmpf="pend">⚠ Pendências ('+comPend+')</button>' +
     '</div>' +
     '<input id="crm_q" placeholder="Buscar nome, grupo, telefone, expedição…" value="'+esc(CRMFILT.q)+'" style="margin-bottom:12px">';
 
@@ -1754,6 +1783,8 @@ function renderCRM(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-etapa]"), function(b){
     b.onclick = function(){ CRMFILT.etapa = b.getAttribute("data-etapa"); renderCRM(); };
   });
+  var crmPf = document.querySelector("[data-crmpf]");
+  if (crmPf) crmPf.onclick = function(){ CRMFILT.pend = !CRMFILT.pend; renderCRM(); };
   $("crm_q").oninput = debounce(function(){ CRMFILT.q = this.value; renderCRM(); }, 200);
   Array.prototype.forEach.call(document.querySelectorAll("[data-crm]"), function(r){
     var abrir = function(){ sheetContato(+r.getAttribute("data-crm")); };
