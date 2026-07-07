@@ -72,6 +72,7 @@ h1{font-size:clamp(30px,6.5vw,50px)}
 .chip.warn{border-color:#6b5a22;color:var(--warn)}
 .chip.bad{border-color:#4a2323;color:var(--p1)}
 .aviso-falta{background:#2a2113;border:1px solid #6b5a22;color:var(--warn);border-radius:10px;padding:8px 11px;font-size:12.5px;margin:8px 0 2px}
+.aviso-erro{background:#2a1414;border:1px solid #6b2222;color:var(--p1);border-radius:10px;padding:9px 12px;font-size:13px;margin:2px 0 14px;font-weight:600}
 .chip .x{cursor:pointer;color:var(--dim);font-size:13px;line-height:1;padding:0 1px}
 .chip .x:hover{color:var(--p1)}
 .paybar{height:4px;background:#242424;border-radius:99px;overflow:hidden;margin-top:5px;width:100%}
@@ -469,6 +470,7 @@ function renderEvento(aba){
       '<span><span class="dot" style="background:var(--warn)"></span><b>'+s.and+'</b> em andamento</span>' +
       (PAPEL==="admin" ? '<span>Custos: <b>'+brl(EV.custo_total||0)+'</b></span>' : '') +
       (PAPEL==="admin" && EV.pessoas ? '<span>👥 <b>'+EV.pessoas.total+'</b> ('+EV.pessoas.adultos+' ad · '+EV.pessoas.criancas+' cri)</span>' : '') +
+      (PAPEL==="admin" && EV.pessoas && (EV.pessoas.utv4+EV.pessoas.utv2) > capacidadeUTV() ? '<span style="color:var(--p1);font-weight:700">⚠ transporte +'+((EV.pessoas.utv4+EV.pessoas.utv2)-capacidadeUTV())+' UTV</span>' : '') +
     '</div>' +
     '<div class="tabs">'+tabsHtml+'</div>';
   $("voltar").onclick = function(){ location.hash = "#/"; };
@@ -999,6 +1001,18 @@ function pendencias(obj, regras){ var r=[]; regras.forEach(function(x){ if(x.fal
 function chipFalta(obj, regras){ var f=pendencias(obj,regras); return f.length ? '<span class="chip bad">⚠ Falta: '+f.join(", ")+'</span>' : ''; }
 function avisoFalta(obj, regras){ var f=pendencias(obj,regras); return f.length ? '<div class="aviso-falta">⚠ Faltando nesta pessoa: <b>'+f.join(", ")+'</b></div>' : ''; }
 
+/* ---------- capacidade de transporte (cegonhas) — ajuste a frota aqui ----------
+   Frota: cegonha4 = cegonhas que levam 4 UTVs; cegonha2 = cegonhas que levam 2 UTVs.
+   Base 4×4 + 7×2 = 30 UTVs. Regra de troca: +1 cegonha de 4 ⇒ −2 de 2 (2·c4 + c2 ≤ 15). */
+var FROTA = { cegonha4: 4, cegonha2: 7 };
+function capacidadeUTV(){ return FROTA.cegonha4 * 4 + FROTA.cegonha2 * 2; } // = 30
+function avisoTransporte(nUTVs){
+  var cap = capacidadeUTV();
+  if (nUTVs <= cap) return '';
+  return '<div class="aviso-erro">⚠ Transporte: ' + nUTVs + ' UTVs necessários e a frota comporta ' + cap +
+    '. Excede em <b>' + (nUTVs - cap) + ' UTV(s)</b>.</div>';
+}
+
 var PFILT = { q:"", tipo:"", pend:false };
 function renderParticipantes(){
   var adultos=0, criancas=0, receita=0, recebido=0, cam={}, utv4=0, utv2=0, cSim=0, comPend=0;
@@ -1023,9 +1037,10 @@ function renderParticipantes(){
       '<div class="kpi"><small>Recebido</small><b class="'+(recebido>0?'ok':'')+'">'+brl(recebido)+'</b></div>' +
       '<div class="kpi"><small>A receber</small><b class="'+(saldo>0?'warn':'ok')+'">'+brl(saldo)+'</b></div>' +
       '<div class="kpi"><small>Contratos assinados</small><b>'+cSim+' / '+CL.length+'</b></div>' +
-      '<div class="kpi"><small>UTVs</small><b>'+utv4+'×4 · '+utv2+'×2</b></div>' +
+      '<div class="kpi"><small>UTVs</small><b class="'+((utv4+utv2)>capacidadeUTV()?'bad':'')+'">'+(utv4+utv2)+' / '+capacidadeUTV()+'</b><span style="font-size:11px;color:var(--dim)"> '+utv4+'×4L · '+utv2+'×2L</span></div>' +
       '<div class="kpi" style="grid-column:1/-1"><small>Camisetas</small><b style="font-size:14px;font-family:\'Archivo\'">'+esc(camTxt)+'</b></div>' +
     '</div>' +
+    avisoTransporte(utv4+utv2) +
     '<input id="p_q" placeholder="Buscar nome, grupo, CPF, telefone…" value="'+esc(PFILT.q)+'" style="margin-bottom:10px">' +
     '<div class="tabs" style="margin-bottom:12px">' +
       '<button class="tab'+(!PFILT.tipo&&!PFILT.pend?' on':'')+'" data-pf="all">Todos</button>' +
