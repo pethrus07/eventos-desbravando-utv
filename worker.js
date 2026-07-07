@@ -113,6 +113,27 @@ function limparContato(b) {
   return o;
 }
 
+const CUSTO_STATUS = new Set(["pago", "andamento", "pendente"]);
+
+function limparCusto(b) {
+  const o = {};
+  if ("ordem" in b) o.ordem = I(b.ordem);
+  if ("item" in b) o.item = S(b.item, 200);
+  if ("categoria" in b) o.categoria = S(b.categoria, 120);
+  if ("quantidade" in b) o.quantidade = N(b.quantidade) ?? 1;
+  if ("valor" in b) o.valor = N(b.valor);
+  if ("fornecedor_id" in b) o.fornecedor_id = I(b.fornecedor_id);
+  if ("status" in b && CUSTO_STATUS.has(b.status)) o.status = b.status;
+  if ("observacoes" in b) o.observacoes = S(b.observacoes, 600);
+  return o;
+}
+function limparFornecedor(b) {
+  const o = {};
+  for (const c of ["nome", "categoria", "contato", "telefone", "cidade"]) if (c in b) o[c] = S(b[c], 160);
+  if ("observacoes" in b) o.observacoes = S(b.observacoes, 600);
+  return o;
+}
+
 async function upd(db, tabela, id, campos, extra = "") {
   const chaves = Object.keys(campos);
   if (!chaves.length) return false;
@@ -159,7 +180,7 @@ export default {
                COUNT(i.id) AS total,
                SUM(CASE WHEN i.status='concluido' THEN 1 ELSE 0 END) AS concluidos,
                SUM(CASE WHEN i.status='andamento' THEN 1 ELSE 0 END) AS andamento,
-               COALESCE(SUM(i.valor),0) AS valor_total
+               (SELECT COALESCE(SUM(cu.valor),0) FROM custos cu WHERE cu.evento_id=e.id) AS valor_total
         FROM eventos e LEFT JOIN itens i ON i.evento_id=e.id
         GROUP BY e.id ORDER BY e.arquivado ASC, e.id DESC`).all();
       return json({ eventos: results });
@@ -217,7 +238,7 @@ export default {
         await db.prepare("DELETE FROM cliente_notas WHERE cliente_id IN (SELECT id FROM clientes WHERE evento_id=?)").bind(id).run();
         await db.prepare("DELETE FROM alocacoes WHERE quarto_id IN (SELECT id FROM quartos WHERE evento_id=?)").bind(id).run();
         await db.prepare("DELETE FROM cenario_linhas WHERE cenario_id IN (SELECT id FROM cenarios WHERE evento_id=?)").bind(id).run();
-        for (const t of ["itens","clientes","quartos","cenarios"])
+        for (const t of ["itens","clientes","quartos","cenarios","custos"])
           await db.prepare(`DELETE FROM ${t} WHERE evento_id=?`).bind(id).run();
         await db.prepare("DELETE FROM eventos WHERE id=?").bind(id).run();
         return json({ ok: true });
@@ -231,7 +252,12 @@ export default {
         const ev = await db.prepare("SELECT * FROM eventos WHERE id=?").bind(eid).first();
         if (!ev) return json({ erro: "evento não encontrado" }, 404);
         const { results } = await db.prepare("SELECT * FROM itens WHERE evento_id=? ORDER BY ordem, id").bind(eid).all();
-        return json({ evento: ev, itens: results });
+        let custo_total = 0;
+        if (admin) {
+          const ct = await db.prepare("SELECT COALESCE(SUM(valor),0) AS t FROM custos WHERE evento_id=?").bind(eid).first();
+          custo_total = ct ? ct.t : 0;
+        }
+        return json({ evento: ev, itens: results, custo_total });
       }
       if (method === "POST") {
         const b = await request.json().catch(() => ({}));
@@ -586,6 +612,123 @@ export default {
       if (!admin) return negado();
       await db.prepare("DELETE FROM crm_interacoes WHERE id=?").bind(+m[1]).run();
       return json({ ok: true });
+    }
+
+    /* ================= FORNECEDORES (admin · globais) ================= */
+    if (path === "/api/fornecedores" && method === "GET") {
+      if (!admin) return negado();
+      const { results } = await db.prepare(`
+        SELECT f.*,
+               (SELECT COUNT(*) FROM custos c WHERE c.fornecedor_id=f.id) AS itens,
+               (SELECT COALESCE(SUM(c.valor),0) FROM custos c WHERE c.fornecedor_id=f.id) AS total
+        FROM fornecedores f ORDER BY f.nome COLLATE NOCASE`).all();
+      return json({ fornecedores: results });
+    }
+    if (path === "/api/fornecedores" && method === "POST") {
+      if (!admin) return negado();
+      const b = await request.json().catch(() => ({}));
+      const f = limparFornecedor(b);
+      if (!f.nome) return json({ erro: "informe o nome do fornecedor" }, 400);
+      const r = await db.prepare(`
+        INSERT INTO fornecedores (nome, categoria, contato, telefone, cidade, observacoes, atualizado_por)
+        VALUES (?,?,?,?,?,?,?)`).bind(
+        f.nome, f.categoria ?? "", f.contato ?? "", f.telefone ?? "", f.cidade ?? "",
+        f.observacoes ?? "", S(b.atualizado_por, 60)).run();
+      return json({ ok: true, id: r.meta.last_row_id });
+    }
+    if ((m = path.match(/^\/api\/fornecedores\/(\d+)$/))) {
+      if (!admin) return negado();
+      const id = +m[1];
+      if (method === "PATCH") {
+        const b = await request.json().catch(() => ({}));
+        if (!await upd(db, "fornecedores", id, limparFornecedor(b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por,60).replace(/'/g,"''")}'`))
+          return json({ erro: "nada para atualizar" }, 400);
+        return json({ ok: true });
+      }
+      if (method === "DELETE") {
+        await db.prepare("UPDATE custos SET fornecedor_id=NULL WHERE fornecedor_id=?").bind(id).run();
+        await db.prepare("DELETE FROM fornecedores WHERE id=?").bind(id).run();
+        return json({ ok: true });
+      }
+    }
+
+    /* ================= CUSTOS (admin · financeiro) ================= */
+    if ((m = path.match(/^\/api\/eventos\/(\d+)\/custos\/importar$/)) && method === "POST") {
+      if (!admin) return negado();
+      const eid = +m[1];
+      const b = await request.json().catch(() => ({}));
+      const cenId = I(b.cenario_id);
+      const cen = await db.prepare("SELECT * FROM cenarios WHERE id=? AND evento_id=?").bind(cenId, eid).first();
+      if (!cen) return json({ erro: "cenário não encontrado neste evento" }, 404);
+      const { results: linhas } = await db.prepare(
+        "SELECT * FROM cenario_linhas WHERE cenario_id=? ORDER BY ordem, id").bind(cenId).all();
+      const mult = { nenhum: 1, diarias: cen.diarias, dias_trilha: cen.dias_trilha, refeicoes: cen.refeicoes, eventos: cen.eventos_qtd };
+      const pessoas = cen.pessoas || 1;
+      const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM custos WHERE evento_id=?").bind(eid).first();
+      let ord = mx ? mx.mo : 0;
+      let n = 0;
+      for (const l of linhas) {
+        const f = mult[l.mult] || 1;
+        const total = l.tipo === "fixo" ? l.preco * f : l.media * l.preco * f * pessoas;
+        const qtd = l.tipo === "fixo" ? 1 : l.media * f * pessoas;
+        ord++;
+        await db.prepare(
+          "INSERT INTO custos (evento_id, ordem, item, categoria, quantidade, valor, status) VALUES (?,?,?,?,?,?, 'pendente')")
+          .bind(eid, ord, l.item, "", qtd, total).run();
+        n++;
+      }
+      return json({ ok: true, n });
+    }
+    if ((m = path.match(/^\/api\/eventos\/(\d+)\/custos\/reordenar$/)) && method === "POST") {
+      if (!admin) return negado();
+      const eid = +m[1];
+      const b = await request.json().catch(() => ({}));
+      const ids = Array.isArray(b.ids) ? b.ids : [];
+      for (let i = 0; i < ids.length; i++) {
+        await db.prepare("UPDATE custos SET ordem=? WHERE id=? AND evento_id=?").bind(i + 1, I(ids[i]), eid).run();
+      }
+      return json({ ok: true });
+    }
+    if ((m = path.match(/^\/api\/eventos\/(\d+)\/custos$/))) {
+      if (!admin) return negado();
+      const eid = +m[1];
+      if (method === "GET") {
+        const { results } = await db.prepare(`
+          SELECT c.*, f.nome AS fornecedor_nome
+          FROM custos c LEFT JOIN fornecedores f ON f.id=c.fornecedor_id
+          WHERE c.evento_id=? ORDER BY c.ordem, c.id`).bind(eid).all();
+        return json({ custos: results });
+      }
+      if (method === "POST") {
+        const b = await request.json().catch(() => ({}));
+        const c = limparCusto(b);
+        if (!c.item) return json({ erro: "informe o item de custo" }, 400);
+        let ordem = c.ordem;
+        if (ordem == null) {
+          const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM custos WHERE evento_id=?").bind(eid).first();
+          ordem = (mx ? mx.mo : 0) + 1;
+        }
+        const r = await db.prepare(`
+          INSERT INTO custos (evento_id, ordem, item, categoria, quantidade, valor, fornecedor_id, status, observacoes, atualizado_por)
+          VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(
+          eid, ordem, c.item, c.categoria ?? "", c.quantidade ?? 1, c.valor ?? null,
+          c.fornecedor_id ?? null, c.status ?? "pendente", c.observacoes ?? "", S(b.atualizado_por, 60)).run();
+        return json({ ok: true, id: r.meta.last_row_id });
+      }
+    }
+    if ((m = path.match(/^\/api\/custos\/(\d+)$/))) {
+      if (!admin) return negado();
+      const id = +m[1];
+      if (method === "PATCH") {
+        const b = await request.json().catch(() => ({}));
+        if (!await upd(db, "custos", id, limparCusto(b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por,60).replace(/'/g,"''")}'`))
+          return json({ erro: "nada para atualizar" }, 400);
+        return json({ ok: true });
+      }
+      if (method === "DELETE") {
+        await db.prepare("DELETE FROM custos WHERE id=?").bind(id).run();
+        return json({ ok: true });
+      }
     }
 
     return json({ erro: "não encontrado" }, 404);
