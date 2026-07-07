@@ -199,8 +199,21 @@ tr.total td{color:var(--txt);font-weight:700;border-top:1px solid var(--line)}
 <script>
 "use strict";
 /* ============================================================
-   Estado e utilidades
+   FRONT — SPA de arquivo único (sem build, sem framework)
+
+   O Worker serve este HTML como texto e ele roda direto no
+   navegador. Feito pra celular primeiro (a operação usa no campo).
+
+   - Roteamento por hash: #/, #/e/:id/:aba, #/tarefas… (ver rotear()).
+   - Conversa com a API em /api/* mandando a chave no header
+     x-app-key; a resposta define o papel (admin | equipe).
+   - Estado mora nas globais abaixo. Cada tela tem uma função
+     "render…"/"tela…" que remonta o HTML e religa os eventos —
+     simples e previsível, sem estado escondido.
    ============================================================ */
+/* ------------------------------------------------------------
+   Estado e utilidades
+   ------------------------------------------------------------ */
 var KEY  = localStorage.getItem("ev_key")  || "";
 var NOME = localStorage.getItem("ev_nome") || "";
 var PAPEL = "equipe";           // admin | equipe (definido no login via /api/me)

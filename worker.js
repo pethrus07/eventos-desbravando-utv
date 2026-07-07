@@ -1,16 +1,21 @@
 /* ============================================================
-   CONTROLE DE EVENTOS · Desbravando UTV — v2
-   Cloudflare Worker + D1
+   CONTROLE DE EVENTOS · Desbravando UTV — v3.4
+   Cloudflare Worker + D1 (SQLite serverless)
 
-   Módulos: Checklist · Participantes+Financeiro · Simulador ·
-            Hospedagem
+   Um só arquivo responde tudo: serve o front (ui.html) na raiz e
+   expõe a API em /api/*. Sem framework — roteamento na mão por
+   regex de path + método.
+
+   Módulos: Checklist · Participantes + Financeiro · Simulador de
+            custos · Hospedagem · Tarefas gerais · Mini-CRM ·
+            Custos + Fornecedores
 
    Acesso em dois níveis (chave única compartilhada por nível):
      APP_KEY  (secret) → papel "admin": tudo, inclusive dados
-                          pessoais e financeiro
+                          pessoais, financeiro, custos e CRM
      TEAM_KEY (secret, opcional) → papel "equipe": checklist,
-                          custos e hospedagem (sem CPF/financeiro)
-   A chave vai no header "x-app-key".
+                          hospedagem e tarefas (sem CPF/financeiro)
+   A chave vai no header "x-app-key" (ver papel()).
    ============================================================ */
 
 import UI_HTML from "./ui.html";
@@ -139,6 +144,10 @@ function limparFornecedor(b) {
   return o;
 }
 
+/* UPDATE genérico: monta o "SET col=?" a partir das chaves do objeto
+   já saneado e faz bind na ordem. `extra` é um trecho fixo pra colar
+   no fim do SET (ex.: atualizado_em/atualizado_por). Retorna false
+   quando não há nada pra atualizar. */
 async function upd(db, tabela, id, campos, extra = "") {
   const chaves = Object.keys(campos);
   if (!chaves.length) return false;
