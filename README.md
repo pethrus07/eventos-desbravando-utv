@@ -6,6 +6,8 @@
 ![front](https://img.shields.io/badge/front-SPA%20sem%20framework-F7DF1E)
 ![deps](https://img.shields.io/badge/dependências-0-brightgreen)
 
+**Projeto real, em produção — não é demo nem exercício de portfólio.** É usado no dia a dia da **Desbravando UTV**, uma operação de expedições de UTV com atuação nacional que movimenta milhões de reais.
+
 > Sistema de gestão para uma operação **real** de expedições de UTV: substituiu um emaranhado de planilhas por um app único que a equipe abre **no celular, em campo**. Roda inteiro em um **Cloudflare Worker + D1** (SQLite serverless), no plano gratuito — nada de servidor pra manter.
 
 ---
