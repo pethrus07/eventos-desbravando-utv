@@ -8,6 +8,8 @@
 
 **Projeto real, em produção — não é demo nem exercício de portfólio.** É usado no dia a dia da **Desbravando UTV**, uma operação de expedições de UTV com atuação nacional que movimenta milhões de reais.
 
+**Desbravando UTV:** [site oficial](https://desbravandoutv.com) · Instagram [@desbravando_utv](https://www.instagram.com/desbravando_utv/)
+
 > Sistema de gestão para uma operação **real** de expedições de UTV: substituiu um emaranhado de planilhas por um app único que a equipe abre **no celular, em campo**. Roda inteiro em um **Cloudflare Worker + D1** (SQLite serverless), no plano gratuito — nada de servidor pra manter.
 
 ---
