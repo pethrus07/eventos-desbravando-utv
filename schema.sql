@@ -138,13 +138,26 @@ CREATE TABLE IF NOT EXISTS tarefas (
   titulo         TEXT NOT NULL,
   setor          TEXT NOT NULL DEFAULT '',
   status         TEXT NOT NULL DEFAULT 'afazer',  -- afazer | andamento | concluido
-  prioridade     INTEGER,                          -- 1 a 4, ou NULL
+  prioridade     INTEGER,                          -- 1 a 40, ou NULL
   data_limite    TEXT NOT NULL DEFAULT '',
   responsavel    TEXT NOT NULL DEFAULT '',
+  ordem          INTEGER,                          -- v3.6: ordem manual (arrastar)
+  horario        TEXT NOT NULL DEFAULT '',         -- v3.6: "14h", "08:30"…
   observacoes    TEXT NOT NULL DEFAULT '',
   atualizado_em  TEXT NOT NULL DEFAULT (datetime('now')),
   atualizado_por TEXT NOT NULL DEFAULT ''
 );
+
+-- v3.6: subtarefas simples de uma tarefa geral (título + concluído)
+CREATE TABLE IF NOT EXISTS subtarefas (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  tarefa_id  INTEGER NOT NULL,
+  ordem      INTEGER,
+  titulo     TEXT NOT NULL,
+  concluido  INTEGER NOT NULL DEFAULT 0,
+  criado_em  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_subtarefas_tarefa ON subtarefas(tarefa_id);
 
 -- ============ v3: Mini CRM ============
 CREATE TABLE IF NOT EXISTS crm_contatos (
