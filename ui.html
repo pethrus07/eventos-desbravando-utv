@@ -658,7 +658,7 @@ function rowItem(i, arrastavel){
     }).join("") + '</div>' : '';
   return '<div class="itemwrap" data-wrap="'+i.id+'">' +
     '<div class="row st-'+i.status+'" data-edit="'+i.id+'" role="button" tabindex="0">' +
-    (arrastavel ? '<span class="draghandle" title="Arrastar para reordenar" aria-hidden="true">⠿</span>' : '') +
+    (arrastavel ? '<span class="draghandle" title="Arrastar para reordenar" aria-hidden="true">⋮⋮</span>' : '') +
     '<button class="stbtn" data-st="'+i.id+'" title="'+STATUS_TXT[i.status]+' — toque para mudar" aria-label="Mudar status: '+STATUS_TXT[i.status]+'">'+check+'</button>' +
     '<div class="info"><div class="nm">'+esc(i.item)+'</div>' +
     (sub.length?'<div class="sub"><span>'+sub.join("</span><span>")+'</span></div>':'') +
