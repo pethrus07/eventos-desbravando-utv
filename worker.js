@@ -53,10 +53,18 @@ function limparItem(b) {
   const o = {};
   if ("ordem" in b) o.ordem = I(b.ordem);
   for (const c of ["dia","item","setor","data_limite","responsavel","fornecedor","quantidade"]) if (c in b) o[c] = S(b[c], 300);
+  if ("horario" in b) o.horario = S(b.horario, 40);
   if ("observacoes" in b) o.observacoes = S(b.observacoes, 600);
   if ("status" in b && ITEM_STATUS.has(b.status)) o.status = b.status;
   if ("prioridade" in b) o.prioridade = I(b.prioridade);
   if ("valor" in b) o.valor = N(b.valor);
+  return o;
+}
+function limparSubitem(b) {
+  const o = {};
+  if ("titulo" in b) o.titulo = S(b.titulo, 200);
+  if ("concluido" in b) o.concluido = B(b.concluido);
+  if ("ordem" in b) o.ordem = I(b.ordem);
   return o;
 }
 function limparCliente(b) {
@@ -266,6 +274,15 @@ export default {
         const ev = await db.prepare("SELECT * FROM eventos WHERE id=?").bind(eid).first();
         if (!ev) return json({ erro: "evento não encontrado" }, 404);
         const { results } = await db.prepare("SELECT * FROM itens WHERE evento_id=? ORDER BY ordem, id").bind(eid).all();
+        // v3.5: anexa as subtarefas de cada item
+        {
+          const rs = await db.prepare(
+            "SELECT s.* FROM subitens s JOIN itens i ON i.id=s.item_id WHERE i.evento_id=? ORDER BY s.ordem, s.id"
+          ).bind(eid).all();
+          const porItem = {};
+          for (const s of (rs.results || [])) (porItem[s.item_id] = porItem[s.item_id] || []).push(s);
+          for (const it of results) it.subitens = porItem[it.id] || [];
+        }
         let custo_total = 0, pessoas = null;
         if (admin) {
           const ct = await db.prepare("SELECT COALESCE(SUM(valor),0) AS t FROM custos WHERE evento_id=?").bind(eid).first();
@@ -285,11 +302,11 @@ export default {
           if (!c.item) continue;
           const r = await db.prepare(`
             INSERT INTO itens (evento_id, ordem, dia, item, setor, status, prioridade, data_limite,
-                               responsavel, fornecedor, quantidade, valor, observacoes, atualizado_por)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+                               responsavel, fornecedor, quantidade, valor, horario, observacoes, atualizado_por)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
             eid, c.ordem ?? null, c.dia ?? "", c.item, c.setor ?? "", c.status ?? "afazer",
             c.prioridade ?? null, c.data_limite ?? "", c.responsavel ?? "", c.fornecedor ?? "",
-            c.quantidade ?? "", c.valor ?? null, c.observacoes ?? "", por).run();
+            c.quantidade ?? "", c.valor ?? null, c.horario ?? "", c.observacoes ?? "", por).run();
           ids.push(r.meta.last_row_id);
         }
         if (!ids.length) return json({ erro: "nenhum item válido" }, 400);
@@ -306,7 +323,52 @@ export default {
         const item = await db.prepare("SELECT * FROM itens WHERE id=?").bind(id).first();
         return item ? json({ ok: true, item }) : json({ erro: "não encontrado" }, 404);
       }
-      if (method === "DELETE") { await db.prepare("DELETE FROM itens WHERE id=?").bind(id).run(); return json({ ok: true }); }
+      if (method === "DELETE") {
+        await db.prepare("DELETE FROM subitens WHERE item_id=?").bind(id).run();
+        await db.prepare("DELETE FROM itens WHERE id=?").bind(id).run();
+        return json({ ok: true });
+      }
+    }
+
+    /* v3.5: reordenar itens do checklist (arrastar) — equipe e admin */
+    if ((m = path.match(/^\/api\/eventos\/(\d+)\/itens\/reordenar$/)) && method === "POST") {
+      const eid = +m[1];
+      const b = await request.json().catch(() => ({}));
+      const ids = Array.isArray(b.ids) ? b.ids : [];
+      for (let i = 0; i < ids.length; i++) {
+        await db.prepare("UPDATE itens SET ordem=? WHERE id=? AND evento_id=?").bind(i + 1, I(ids[i]), eid).run();
+      }
+      return json({ ok: true });
+    }
+
+    /* v3.5: subtarefas de um item */
+    if ((m = path.match(/^\/api\/itens\/(\d+)\/subitens$/))) {
+      const iid = +m[1];
+      if (method === "GET") {
+        const { results } = await db.prepare("SELECT * FROM subitens WHERE item_id=? ORDER BY ordem, id").bind(iid).all();
+        return json({ subitens: results });
+      }
+      if (method === "POST") {
+        const b = await request.json().catch(() => ({}));
+        const c = limparSubitem(b);
+        if (!c.titulo) return json({ erro: "título obrigatório" }, 400);
+        const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM subitens WHERE item_id=?").bind(iid).first();
+        const r = await db.prepare("INSERT INTO subitens (item_id, ordem, titulo, concluido) VALUES (?,?,?,?)")
+          .bind(iid, (mx ? mx.mo : 0) + 1, c.titulo, c.concluido ?? 0).run();
+        const sub = await db.prepare("SELECT * FROM subitens WHERE id=?").bind(r.meta.last_row_id).first();
+        return json({ ok: true, subitem: sub });
+      }
+    }
+    if ((m = path.match(/^\/api\/subitens\/(\d+)$/))) {
+      const id = +m[1];
+      if (method === "PATCH") {
+        const b = await request.json().catch(() => ({}));
+        const c = limparSubitem(b);
+        if (!await upd(db, "subitens", id, c)) return json({ erro: "nada para atualizar" }, 400);
+        const sub = await db.prepare("SELECT * FROM subitens WHERE id=?").bind(id).first();
+        return sub ? json({ ok: true, subitem: sub }) : json({ erro: "não encontrado" }, 404);
+      }
+      if (method === "DELETE") { await db.prepare("DELETE FROM subitens WHERE id=?").bind(id).run(); return json({ ok: true }); }
     }
 
     /* ================= PARTICIPANTES (admin) ================= */
