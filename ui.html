@@ -131,6 +131,26 @@ select.stsel{font-weight:700}
 .pbadge.p1{border-color:var(--p1);color:var(--p1)}
 .addrow{width:100%;background:transparent;border:1px dashed var(--line);border-radius:12px;padding:11px;color:var(--dim);font-size:14px}
 .addrow:hover{color:var(--txt);border-color:#666}
+/* v3.5: cabeçalho do dia com ações + reordenar/subtarefas */
+.dayhead .dayactions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.daysort{flex:none;background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:8px;padding:3px 9px;font-size:12px;white-space:nowrap}
+.daysort:hover{border-color:#666;color:var(--txt)}
+.itemwrap{margin-bottom:8px}
+.itemwrap .row{margin-bottom:0}
+.itemwrap.dragging{opacity:.55}
+.row .draghandle{margin:-4px 0 -4px -2px}
+.subs{margin:2px 0 0 42px;display:flex;flex-direction:column;gap:1px}
+.subrow{display:flex;align-items:center;gap:8px;background:transparent;border:none;color:var(--mut);font-size:13px;text-align:left;padding:5px 2px;width:100%;line-height:1.3}
+.subrow .subchk{flex:none;width:18px;height:18px;border-radius:5px;border:1.5px solid var(--dim);display:flex;align-items:center;justify-content:center;font-size:11px;color:#000;transition:all .12s}
+.subrow.done .subchk{background:var(--ok);border-color:var(--ok)}
+.subrow.done .subtxt{text-decoration:line-through;color:var(--dim)}
+.subcnt{color:var(--mut);font-weight:600}
+.row .sub .hr{color:var(--warn);font-weight:600}
+/* editor de subtarefas no formulário */
+.subedit{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.subedit .sline{display:flex;gap:8px;align-items:center}
+.subedit .sline input{flex:1}
+.sdel{flex:none;background:transparent;border:1px solid #4a2323;color:var(--p1);border-radius:9px;padding:9px 12px;font-size:14px;line-height:1}
 
 /* ---- custos ---- */
 .money{font-size:clamp(38px,10vw,64px);margin:6px 0 2px}
@@ -516,6 +536,7 @@ function renderChecklist(){
   var setores = uniques("setor").sort();
   var resps = uniques("responsavel").sort();
   var temFiltro = FILT.q||FILT.dia||FILT.setor||FILT.status||FILT.prio||FILT.resp;
+  var arrastavel = !temFiltro;   /* reordenar só faz sentido com a lista completa */
 
   function opts(list, sel){
     return list.map(function(v){
@@ -523,7 +544,21 @@ function renderChecklist(){
     }).join("");
   }
 
+  /* prioridades realmente em uso (1 a 40) */
+  var prios = {};
+  EV.itens.forEach(function(i){ if (i.prioridade!=null) prios[i.prioridade]=1; });
+  var prioList = Object.keys(prios).map(Number).sort(function(a,b){ return a-b; });
+
+  /* painel de indicadores (mesmo formato da tela Tarefas) */
+  var g = stats(EV.itens);
+  var afazer = g.total - g.done - g.and;
   var html =
+    '<div class="kpis">' +
+      '<div class="kpi"><small>Itens</small><b>'+g.total+'</b></div>' +
+      '<div class="kpi"><small>Concluídos</small><b class="ok">'+g.done+' ('+g.pct+'%)</b></div>' +
+      '<div class="kpi"><small>Em andamento</small><b class="warn">'+g.and+'</b></div>' +
+      '<div class="kpi"><small>A fazer</small><b class="'+(afazer?'bad':'')+'">'+afazer+'</b></div>' +
+    '</div>' +
     '<div class="filters">' +
       '<input class="full" id="f_q" placeholder="Buscar item, fornecedor, observação…" value="'+esc(FILT.q)+'">' +
       '<select id="f_dia"><option value="">Todos os dias</option>'+opts(dias,FILT.dia)+'</select>' +
@@ -533,7 +568,7 @@ function renderChecklist(){
           return '<option value="'+st+'"'+(FILT.status===st?' selected':'')+'>'+STATUS_TXT[st]+'</option>'; }).join("") +
       '</select>' +
       '<select id="f_prio"><option value="">Toda prioridade</option>' +
-        [1,2,3,4].map(function(p){ return '<option value="'+p+'"'+(FILT.prio===String(p)?' selected':'')+'>P'+p+'</option>'; }).join("") +
+        prioList.map(function(p){ return '<option value="'+p+'"'+(FILT.prio===String(p)?' selected':'')+'>P'+p+'</option>'; }).join("") +
       '</select>' +
       (resps.length>1 ? '<select id="f_resp" class="full"><option value="">Todos os responsáveis</option>'+opts(resps,FILT.resp)+'</select>' : '') +
     '</div>' +
@@ -556,10 +591,15 @@ function renderChecklist(){
     var its = grupos[d], gs = stats(its);
     html += '<section class="dayblock">' +
       '<div class="dayhead"><h3 class="anton">'+esc(d)+'</h3>' +
-      '<span class="cnt">'+gs.done+' / '+gs.total+(gs.valor?' · '+brl(gs.valor):'')+'</span></div>' +
-      '<div class="bar'+(gs.pct===100?' done':'')+'"><i style="width:'+gs.pct+'%"></i></div>';
-    its.forEach(function(i){ html += rowItem(i); });
-    html += '<button class="addrow" data-adddia="'+esc(d==="Sem dia"?"":d)+'">+ Adicionar item em '+esc(d)+'</button>' +
+      '<div class="dayactions">' +
+        (its.length>1 ? '<button class="daysort" data-sortdia="'+esc(d)+'">↕ por prioridade</button>' : '') +
+        '<span class="cnt">'+gs.done+' / '+gs.total+(gs.valor?' · '+brl(gs.valor):'')+'</span>' +
+      '</div></div>' +
+      '<div class="bar'+(gs.pct===100?' done':'')+'"><i style="width:'+gs.pct+'%"></i></div>' +
+      '<div class="items" data-dia="'+esc(d)+'">';
+    its.forEach(function(i){ html += rowItem(i, arrastavel); });
+    html += '</div>' +
+      '<button class="addrow" data-adddia="'+esc(d==="Sem dia"?"":d)+'">+ Adicionar item em '+esc(d)+'</button>' +
       '</section>';
   });
 
@@ -588,24 +628,117 @@ function renderChecklist(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-adddia]"), function(b){
     b.onclick = function(){ sheetItem(null, b.getAttribute("data-adddia")); };
   });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-subtog]"), function(b){
+    b.onclick = function(ev){ ev.stopPropagation(); toggleSub(+b.getAttribute("data-subtog")); };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-sortdia]"), function(b){
+    b.onclick = function(ev){ ev.stopPropagation(); ordenarDiaPorPrioridade(b.getAttribute("data-sortdia")); };
+  });
   $("add_geral").onclick = function(){ sheetItem(null, ""); };
+  if (arrastavel) ligarDragItens();
 }
 
-function rowItem(i){
+function rowItem(i, arrastavel){
   var sub = [];
+  if (i.horario) sub.push('<span class="hr">'+esc(i.horario)+'</span>');
   if (i.setor) sub.push(esc(i.setor));
   if (i.responsavel) sub.push(esc(i.responsavel));
   if (i.data_limite) sub.push("até "+esc(i.data_limite));
   if (i.quantidade) sub.push("qtd "+esc(i.quantidade));
-  if (i.valor!=null) sub.push('<span class="vl">'+brl(i.valor)+'</span>');
+  var subs = i.subitens || [];
+  if (subs.length){
+    var feitas = 0; subs.forEach(function(s){ if (s.concluido) feitas++; });
+    sub.push('<span class="subcnt">'+feitas+'/'+subs.length+' subtarefas</span>');
+  }
   var check = i.status==="concluido" ? "✓" : "";
-  return '<div class="row st-'+i.status+'" data-edit="'+i.id+'" role="button" tabindex="0">' +
+  var subsHtml = subs.length ? '<div class="subs">' + subs.map(function(s){
+      return '<button class="subrow'+(s.concluido?' done':'')+'" data-subtog="'+s.id+'">' +
+        '<span class="subchk">'+(s.concluido?'✓':'')+'</span>' +
+        '<span class="subtxt">'+esc(s.titulo)+'</span></button>';
+    }).join("") + '</div>' : '';
+  return '<div class="itemwrap" data-wrap="'+i.id+'">' +
+    '<div class="row st-'+i.status+'" data-edit="'+i.id+'" role="button" tabindex="0">' +
+    (arrastavel ? '<span class="draghandle" title="Arrastar para reordenar" aria-hidden="true">⠿</span>' : '') +
     '<button class="stbtn" data-st="'+i.id+'" title="'+STATUS_TXT[i.status]+' — toque para mudar" aria-label="Mudar status: '+STATUS_TXT[i.status]+'">'+check+'</button>' +
     '<div class="info"><div class="nm">'+esc(i.item)+'</div>' +
     (sub.length?'<div class="sub"><span>'+sub.join("</span><span>")+'</span></div>':'') +
     '</div>' +
     (i.prioridade ? '<span class="pbadge'+(i.prioridade===1?' p1':'')+'">P'+i.prioridade+'</span>' : '') +
+    '</div>' +
+    subsHtml +
     '</div>';
+}
+
+/* v3.5: alterna a conclusão de uma subtarefa (otimista) */
+function toggleSub(sid){
+  var sub=null;
+  EV.itens.forEach(function(i){ (i.subitens||[]).forEach(function(s){ if(s.id===sid) sub=s; }); });
+  if (!sub) return;
+  var antes = sub.concluido;
+  sub.concluido = antes ? 0 : 1; renderChecklist();
+  api("/api/subitens/"+sid, "PATCH", { concluido: sub.concluido })
+    .catch(function(){ sub.concluido = antes; renderChecklist();
+      toast("Sem conexão — a subtarefa não foi salva. Tente de novo.", true); });
+}
+
+/* v3.5: grava a nova ordem dos itens (otimista) e persiste */
+function salvarOrdemItens(ids){
+  ids.forEach(function(id, idx){ var it = EV.itens.find(function(x){ return x.id===id; }); if (it) it.ordem = idx+1; });
+  EV.itens.sort(function(a,b){ return (a.ordem||1e9)-(b.ordem||1e9) || a.id-b.id; });
+  return api("/api/eventos/"+EV.evento.id+"/itens/reordenar", "POST", { ids: ids })
+    .catch(function(){ toast("Não deu pra salvar a ordem. Recarregando…", true); recarregar(); });
+}
+
+/* v3.5: reordena um dia por prioridade (P1 primeiro; sem prioridade por último) */
+function ordenarDiaPorPrioridade(d){
+  var grupos = {};
+  EV.itens.forEach(function(i){ var k=String(i.dia||"").trim()||"Sem dia"; (grupos[k]=grupos[k]||[]).push(i); });
+  if (grupos[d]) grupos[d].sort(function(a,b){
+    var pa=a.prioridade==null?1e9:a.prioridade, pb=b.prioridade==null?1e9:b.prioridade;
+    return pa-pb || (a.ordem||1e9)-(b.ordem||1e9) || a.id-b.id;
+  });
+  var ids=[];
+  Object.keys(grupos).sort(function(a,b){ return ordDia(a)-ordDia(b); }).forEach(function(k){
+    grupos[k].forEach(function(i){ ids.push(i.id); });
+  });
+  salvarOrdemItens(ids); renderChecklist();
+}
+
+/* v3.5: arrastar itens dentro de um dia (mesmo padrão dos custos) */
+function ligarDragItens(){
+  Array.prototype.forEach.call(document.querySelectorAll(".items"), function(container){
+    Array.prototype.forEach.call(container.querySelectorAll(".draghandle"), function(handle){
+      handle.onclick = function(e){ e.stopPropagation(); };
+      handle.addEventListener("pointerdown", function(ev){
+        ev.preventDefault();
+        var wrap = handle.parentNode.parentNode;   /* .draghandle > .row > .itemwrap */
+        if (!wrap || !wrap.classList.contains("itemwrap")) return;
+        wrap.classList.add("dragging");
+        try { handle.setPointerCapture(ev.pointerId); } catch(_){}
+        function onMove(e){
+          var after = null;
+          var rows = Array.prototype.slice.call(container.querySelectorAll(".itemwrap:not(.dragging)"));
+          for (var i=0;i<rows.length;i++){
+            var rect = rows[i].getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height/2){ after = rows[i]; break; }
+          }
+          if (after) container.insertBefore(wrap, after); else container.appendChild(wrap);
+        }
+        function onUp(){
+          try { handle.releasePointerCapture(ev.pointerId); } catch(_){}
+          handle.removeEventListener("pointermove", onMove);
+          handle.removeEventListener("pointerup", onUp);
+          wrap.classList.remove("dragging");
+          var ids = Array.prototype.map.call(
+            document.querySelectorAll(".items .itemwrap"),
+            function(w){ return +w.getAttribute("data-wrap"); });
+          salvarOrdemItens(ids);
+        }
+        handle.addEventListener("pointermove", onMove);
+        handle.addEventListener("pointerup", onUp);
+      });
+    });
+  });
 }
 
 function cicloStatus(id){
@@ -626,7 +759,13 @@ function sheetItem(id, diaSugerido){
   var i = id ? EV.itens.find(function(x){ return x.id===id; }) : null;
   var novo = !i;
   i = i || { dia: diaSugerido||"", item:"", setor:"", status:"afazer", prioridade:"",
-             data_limite:"", responsavel:"", fornecedor:"", quantidade:"", valor:null, observacoes:"" };
+             data_limite:"", responsavel:"", fornecedor:"", quantidade:"", valor:null,
+             horario:"", observacoes:"", subitens:[] };
+
+  /* modelo local das subtarefas (reconciliado no salvar) */
+  var subs = (i.subitens||[]).map(function(s){
+    return { id:s.id, titulo:s.titulo, concluido:s.concluido, _orig:s.titulo, _del:false };
+  });
 
   abrirSheet(
     '<h2 class="anton">'+(novo?'Novo item':'Editar item')+'</h2>' +
@@ -635,15 +774,14 @@ function sheetItem(id, diaSugerido){
     '<input id="it_item" maxlength="300" value="'+esc(i.item)+'" placeholder="ex.: Cerveja heineken">' +
     '<div class="grid2">' +
       '<div><label class="top" for="it_dia">Dia</label><input id="it_dia" list="dl_dias" maxlength="30" value="'+esc(i.dia)+'" placeholder="Pré, 26/08, Pós…"></div>' +
+      '<div><label class="top" for="it_hora">Horário</label><input id="it_hora" list="dl_horas" maxlength="40" value="'+esc(i.horario||"")+'" placeholder="ex.: 14h, 08:30"></div>' +
       '<div><label class="top" for="it_setor">Setor</label><input id="it_setor" list="dl_setores" maxlength="80" value="'+esc(i.setor)+'" placeholder="ex.: Bebidas trilha"></div>' +
       '<div><label class="top" for="it_status">Status</label><select id="it_status">' +
         ['afazer','andamento','concluido'].map(function(st){
           return '<option value="'+st+'"'+(i.status===st?' selected':'')+'>'+STATUS_TXT[st]+'</option>'; }).join("") +
       '</select></div>' +
-      '<div><label class="top" for="it_prio">Prioridade</label><select id="it_prio">' +
-        '<option value="">—</option>' +
-        [1,2,3,4].map(function(p){ return '<option value="'+p+'"'+(i.prioridade===p?' selected':'')+'>P'+p+'</option>'; }).join("") +
-      '</select></div>' +
+      '<div><label class="top" for="it_prio">Prioridade (1–40)</label>' +
+        '<input id="it_prio" type="number" min="1" max="40" step="1" value="'+(i.prioridade!=null&&i.prioridade!==""?esc(String(i.prioridade)):"")+'" placeholder="ex.: 1"></div>' +
       '<div><label class="top" for="it_data">Data limite</label><input id="it_data" maxlength="20" value="'+esc(i.data_limite)+'" placeholder="ex.: 03/07"></div>' +
       '<div><label class="top" for="it_resp">Responsável</label><input id="it_resp" list="dl_resps" maxlength="60" value="'+esc(i.responsavel)+'" placeholder="ex.: Ana Julia"></div>' +
       '<div><label class="top" for="it_forn">Fornecedor</label><input id="it_forn" maxlength="120" value="'+esc(i.fornecedor)+'"></div>' +
@@ -651,9 +789,16 @@ function sheetItem(id, diaSugerido){
     '</div>' +
     '<label class="top" for="it_valor">Valor (R$)</label>' +
     '<input id="it_valor" inputmode="decimal" value="'+(i.valor!=null?esc(String(i.valor).replace(".",",")):"")+'" placeholder="ex.: 350,00">' +
+    '<label class="top">Subtarefas</label>' +
+    '<div class="subedit" id="it_subs"></div>' +
+    '<div class="sline" style="margin-top:6px">' +
+      '<input id="it_subnew" maxlength="200" placeholder="+ Nova subtarefa">' +
+      '<button class="btn2" type="button" id="it_subadd">Adicionar</button>' +
+    '</div>' +
     '<label class="top" for="it_obs">Observações</label>' +
     '<textarea id="it_obs" maxlength="600">'+esc(i.observacoes)+'</textarea>' +
     '<datalist id="dl_dias">'+uniques("dia").map(function(v){return '<option value="'+esc(v)+'">';}).join("")+'</datalist>' +
+    '<datalist id="dl_horas">'+uniques("horario").map(function(v){return '<option value="'+esc(v)+'">';}).join("")+'</datalist>' +
     '<datalist id="dl_setores">'+uniques("setor").map(function(v){return '<option value="'+esc(v)+'">';}).join("")+'</datalist>' +
     '<datalist id="dl_resps">'+uniques("responsavel").map(function(v){return '<option value="'+esc(v)+'">';}).join("")+'</datalist>' +
     '<div class="actions">' +
@@ -663,13 +808,40 @@ function sheetItem(id, diaSugerido){
     '</div>'
   );
 
+  /* ----- editor de subtarefas ----- */
+  function pintarSubs(){
+    var cont = $("it_subs"); if (!cont) return;
+    var vivos = subs.filter(function(s){ return !s._del; });
+    cont.innerHTML = vivos.length ? vivos.map(function(s){
+      var idx = subs.indexOf(s);
+      return '<div class="sline"><input data-subidx="'+idx+'" maxlength="200" value="'+esc(s.titulo)+'">' +
+        '<button class="sdel" type="button" data-subdel="'+idx+'" title="Remover" aria-label="Remover subtarefa">✕</button></div>';
+    }).join("") : '<div class="meta">Nenhuma subtarefa ainda.</div>';
+    Array.prototype.forEach.call(cont.querySelectorAll("[data-subidx]"), function(inp){
+      inp.oninput = function(){ subs[+inp.getAttribute("data-subidx")].titulo = inp.value; };
+    });
+    Array.prototype.forEach.call(cont.querySelectorAll("[data-subdel]"), function(b){
+      b.onclick = function(){ subs[+b.getAttribute("data-subdel")]._del = true; pintarSubs(); };
+    });
+  }
+  function addSub(){
+    var v = $("it_subnew").value.trim(); if (!v) return;
+    subs.push({ titulo:v, concluido:0, _orig:null, _del:false });
+    $("it_subnew").value = ""; pintarSubs(); $("it_subnew").focus();
+  }
+  pintarSubs();
+  $("it_subadd").onclick = addSub;
+  $("it_subnew").addEventListener("keydown", function(e){ if (e.key==="Enter"){ e.preventDefault(); addSub(); } });
+
   $("it_save").onclick = function(){
+    var pv = parseInt($("it_prio").value, 10);
     var body = {
       item: $("it_item").value.trim(),
       dia: $("it_dia").value.trim(),
+      horario: $("it_hora").value.trim(),
       setor: $("it_setor").value.trim(),
       status: $("it_status").value,
-      prioridade: $("it_prio").value || null,
+      prioridade: isFinite(pv) ? Math.max(1, Math.min(40, pv)) : null,
       data_limite: $("it_data").value.trim(),
       responsavel: $("it_resp").value.trim(),
       fornecedor: $("it_forn").value.trim(),
@@ -680,10 +852,20 @@ function sheetItem(id, diaSugerido){
     };
     if (!body.item) return toast("O campo Item é obrigatório", true);
     $("it_save").disabled = true;
-    var p = novo
-      ? api("/api/eventos/"+EV.evento.id+"/itens","POST", body)
-      : api("/api/itens/"+id, "PATCH", body);
-    p.then(function(){ fecharSheet(); toast(novo?"Item adicionado":"Salvo"); return recarregar(); })
+    var salvarItem = novo
+      ? api("/api/eventos/"+EV.evento.id+"/itens","POST", body).then(function(r){ return (r.ids && r.ids[0]) || null; })
+      : api("/api/itens/"+id, "PATCH", body).then(function(){ return id; });
+    salvarItem.then(function(itemId){
+      var ops = [];
+      subs.forEach(function(s){
+        var t = (s.titulo||"").trim();
+        if (s.id && s._del){ ops.push(api("/api/subitens/"+s.id,"DELETE")); return; }
+        if (s._del || !t) return;
+        if (!s.id){ if (itemId) ops.push(api("/api/itens/"+itemId+"/subitens","POST",{titulo:t})); return; }
+        if (t !== s._orig){ ops.push(api("/api/subitens/"+s.id,"PATCH",{titulo:t})); }
+      });
+      return Promise.all(ops);
+    }).then(function(){ fecharSheet(); toast(novo?"Item adicionado":"Salvo"); return recarregar(); })
      .catch(function(e){ $("it_save").disabled=false; toast(e.message||"Sem conexão — tente de novo", true); });
   };
 

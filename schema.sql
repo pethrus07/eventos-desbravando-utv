@@ -26,12 +26,24 @@ CREATE TABLE IF NOT EXISTS itens (
   fornecedor     TEXT NOT NULL DEFAULT '',
   quantidade     TEXT NOT NULL DEFAULT '',
   valor          REAL,                           -- em reais
+  horario        TEXT NOT NULL DEFAULT '',       -- v3.5: "14h", "08:30"…
   observacoes    TEXT NOT NULL DEFAULT '',
   atualizado_em  TEXT NOT NULL DEFAULT (datetime('now')),
   atualizado_por TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_itens_evento ON itens(evento_id);
+
+-- v3.5: subtarefas simples de um item do checklist (título + concluído)
+CREATE TABLE IF NOT EXISTS subitens (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_id   INTEGER NOT NULL,
+  ordem     INTEGER,
+  titulo    TEXT NOT NULL,
+  concluido INTEGER NOT NULL DEFAULT 0,
+  criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_subitens_item ON subitens(item_id);
 
 -- ============ v2: Participantes + Financeiro ============
 CREATE TABLE IF NOT EXISTS clientes (
