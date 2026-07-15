@@ -113,9 +113,11 @@ function limparTarefa(b) {
   const o = {};
   if ("titulo" in b) o.titulo = S(b.titulo, 300);
   for (const c of ["setor","data_limite","responsavel"]) if (c in b) o[c] = S(b[c], 120);
+  if ("horario" in b) o.horario = S(b.horario, 40);
   if ("observacoes" in b) o.observacoes = S(b.observacoes, 600);
   if ("status" in b && ITEM_STATUS.has(b.status)) o.status = b.status;
   if ("prioridade" in b) o.prioridade = I(b.prioridade);
+  if ("ordem" in b) o.ordem = I(b.ordem);
   return o;
 }
 function limparContato(b) {
@@ -601,18 +603,34 @@ export default {
     /* ================= TAREFAS GERAIS (ambos os papéis) ================= */
     if (path === "/api/tarefas" && method === "GET") {
       const { results } = await db.prepare(
-        "SELECT * FROM tarefas ORDER BY CASE status WHEN 'concluido' THEN 1 ELSE 0 END, COALESCE(prioridade, 9), id").all();
+        "SELECT * FROM tarefas ORDER BY CASE status WHEN 'concluido' THEN 1 ELSE 0 END, ordem, COALESCE(prioridade, 999), id").all();
+      // v3.6: anexa as subtarefas de cada tarefa
+      {
+        const rs = await db.prepare("SELECT * FROM subtarefas ORDER BY ordem, id").all();
+        const porTarefa = {};
+        for (const s of (rs.results || [])) (porTarefa[s.tarefa_id] = porTarefa[s.tarefa_id] || []).push(s);
+        for (const t of results) t.subtarefas = porTarefa[t.id] || [];
+      }
       return json({ tarefas: results });
+    }
+    if (path === "/api/tarefas/reordenar" && method === "POST") {
+      const b = await request.json().catch(() => ({}));
+      const ids = Array.isArray(b.ids) ? b.ids : [];
+      for (let i = 0; i < ids.length; i++) {
+        await db.prepare("UPDATE tarefas SET ordem=? WHERE id=?").bind(i + 1, I(ids[i])).run();
+      }
+      return json({ ok: true });
     }
     if (path === "/api/tarefas" && method === "POST") {
       const b = await request.json().catch(() => ({}));
       const t = limparTarefa(b);
       if (!t.titulo) return json({ erro: "informe o título da tarefa" }, 400);
       const r = await db.prepare(`
-        INSERT INTO tarefas (titulo, setor, status, prioridade, data_limite, responsavel, observacoes, atualizado_por)
-        VALUES (?,?,?,?,?,?,?,?)`).bind(
+        INSERT INTO tarefas (titulo, setor, status, prioridade, data_limite, responsavel, ordem, horario, observacoes, atualizado_por)
+        VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(
         t.titulo, t.setor ?? "", t.status ?? "afazer", t.prioridade ?? null,
-        t.data_limite ?? "", t.responsavel ?? "", t.observacoes ?? "", S(b.atualizado_por, 60)).run();
+        t.data_limite ?? "", t.responsavel ?? "", t.ordem ?? null, t.horario ?? "",
+        t.observacoes ?? "", S(b.atualizado_por, 60)).run();
       return json({ ok: true, id: r.meta.last_row_id });
     }
     if ((m = path.match(/^\/api\/tarefas\/(\d+)$/))) {
@@ -625,7 +643,40 @@ export default {
         const tarefa = await db.prepare("SELECT * FROM tarefas WHERE id=?").bind(id).first();
         return tarefa ? json({ ok: true, tarefa }) : json({ erro: "não encontrado" }, 404);
       }
-      if (method === "DELETE") { await db.prepare("DELETE FROM tarefas WHERE id=?").bind(id).run(); return json({ ok: true }); }
+      if (method === "DELETE") {
+        await db.prepare("DELETE FROM subtarefas WHERE tarefa_id=?").bind(id).run();
+        await db.prepare("DELETE FROM tarefas WHERE id=?").bind(id).run();
+        return json({ ok: true });
+      }
+    }
+    /* v3.6: subtarefas de uma tarefa geral */
+    if ((m = path.match(/^\/api\/tarefas\/(\d+)\/subtarefas$/))) {
+      const tid = +m[1];
+      if (method === "GET") {
+        const { results } = await db.prepare("SELECT * FROM subtarefas WHERE tarefa_id=? ORDER BY ordem, id").bind(tid).all();
+        return json({ subtarefas: results });
+      }
+      if (method === "POST") {
+        const b = await request.json().catch(() => ({}));
+        const c = limparSubitem(b);
+        if (!c.titulo) return json({ erro: "título obrigatório" }, 400);
+        const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM subtarefas WHERE tarefa_id=?").bind(tid).first();
+        const r = await db.prepare("INSERT INTO subtarefas (tarefa_id, ordem, titulo, concluido) VALUES (?,?,?,?)")
+          .bind(tid, (mx ? mx.mo : 0) + 1, c.titulo, c.concluido ?? 0).run();
+        const sub = await db.prepare("SELECT * FROM subtarefas WHERE id=?").bind(r.meta.last_row_id).first();
+        return json({ ok: true, subtarefa: sub });
+      }
+    }
+    if ((m = path.match(/^\/api\/subtarefas\/(\d+)$/))) {
+      const id = +m[1];
+      if (method === "PATCH") {
+        const b = await request.json().catch(() => ({}));
+        const c = limparSubitem(b);
+        if (!await upd(db, "subtarefas", id, c)) return json({ erro: "nada para atualizar" }, 400);
+        const sub = await db.prepare("SELECT * FROM subtarefas WHERE id=?").bind(id).first();
+        return sub ? json({ ok: true, subtarefa: sub }) : json({ erro: "não encontrado" }, 404);
+      }
+      if (method === "DELETE") { await db.prepare("DELETE FROM subtarefas WHERE id=?").bind(id).run(); return json({ ok: true }); }
     }
 
     /* ================= MINI CRM (admin) ================= */

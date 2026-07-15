@@ -146,6 +146,7 @@ select.stsel{font-weight:700}
 .subrow.done .subtxt{text-decoration:line-through;color:var(--dim)}
 .subcnt{color:var(--mut);font-weight:600}
 .row .sub .hr{color:var(--warn);font-weight:600}
+.listbar{text-align:right;margin:-8px 0 12px}
 /* editor de subtarefas no formulário */
 .subedit{display:flex;flex-direction:column;gap:6px;margin-top:8px}
 .subedit .sline{display:flex;gap:8px;align-items:center}
@@ -1850,6 +1851,12 @@ function renderTarefas(){
     return true;
   });
   var temFiltro = TFILT.q||TFILT.status||TFILT.prio||TFILT.resp||TFILT.setor;
+  var arrastavel = !temFiltro;
+
+  /* prioridades realmente em uso (1 a 40) */
+  var prios = {};
+  TA.forEach(function(t){ if (t.prioridade!=null) prios[t.prioridade]=1; });
+  var prioList = Object.keys(prios).map(Number).sort(function(a,b){ return a-b; });
 
   var html =
     '<div class="kpis">' +
@@ -1865,32 +1872,21 @@ function renderTarefas(){
           return '<option value="'+st+'"'+(TFILT.status===st?' selected':'')+'>'+STATUS_TXT[st]+'</option>'; }).join("") +
       '</select>' +
       '<select id="t_prio"><option value="">Toda prioridade</option>' +
-        [0,1,2,3,4].map(function(p){ return '<option value="'+p+'"'+(TFILT.prio===String(p)?' selected':'')+'>P'+p+'</option>'; }).join("") +
+        prioList.map(function(p){ return '<option value="'+p+'"'+(TFILT.prio===String(p)?' selected':'')+'>P'+p+'</option>'; }).join("") +
       '</select>' +
       (resps.length>1 ? '<select id="t_resp"><option value="">Todos os responsáveis</option>'+opts(resps,TFILT.resp)+'</select>' : '') +
       (setores.length>1 ? '<select id="t_setor"><option value="">Todos os setores</option>'+opts(setores,TFILT.setor)+'</select>' : '') +
     '</div>' +
     (temFiltro ? '<div class="fclear"><button class="link" id="t_clear">Limpar filtros</button></div>' : '') +
-    '<button class="btn" id="t_add" style="width:100%;margin:2px 0 16px">+ Nova tarefa</button>';
+    '<button class="btn" id="t_add" style="width:100%;margin:2px 0 12px">+ Nova tarefa</button>' +
+    (TA.length>1 ? '<div class="listbar"><button class="daysort" id="t_sort">↕ por prioridade</button></div>' : '');
 
   if (!TA.length) html += '<div class="empty">Nenhuma tarefa ainda. Adicione a primeira abaixo.</div>';
   else if (!lista.length) html += '<div class="empty">Nenhuma tarefa com esses filtros.</div>';
 
-  lista.forEach(function(t){
-    var sub = [];
-    if (t.setor) sub.push(esc(t.setor));
-    if (t.responsavel) sub.push(esc(t.responsavel));
-    if (t.data_limite) sub.push((t.data_limite.toLowerCase()==="hoje"?'<span style="color:var(--warn);font-weight:600">Hoje</span>':"até "+esc(t.data_limite)));
-    if (t.observacoes) sub.push(esc(t.observacoes.length>60 ? t.observacoes.slice(0,60)+"…" : t.observacoes));
-    var check = t.status==="concluido" ? "✓" : "";
-    html += '<div class="row st-'+t.status+'" data-tedit="'+t.id+'" role="button" tabindex="0">' +
-      '<button class="stbtn" data-tst="'+t.id+'" title="'+STATUS_TXT[t.status]+' — toque para mudar" aria-label="Mudar status: '+STATUS_TXT[t.status]+'">'+check+'</button>' +
-      '<div class="info"><div class="nm">'+esc(t.titulo)+'</div>' +
-      (sub.length?'<div class="sub"><span>'+sub.join("</span><span>")+'</span></div>':'') +
-      '</div>' +
-      (t.prioridade!=null ? '<span class="pbadge'+(t.prioridade<=1?' p1':'')+'">P'+t.prioridade+'</span>' : '') +
-      '</div>';
-  });
+  html += '<div class="items">';
+  lista.forEach(function(t){ html += rowTarefa(t, arrastavel); });
+  html += '</div>';
   $("main").innerHTML = html;
 
   $("t_q").oninput = debounce(function(){ TFILT.q = this.value; renderTarefas(); }, 250);
@@ -1908,7 +1904,114 @@ function renderTarefas(){
     r.onclick = abrir;
     r.onkeydown = function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); abrir(); } };
   });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-subtogt]"), function(b){
+    b.onclick = function(ev){ ev.stopPropagation(); toggleSubtarefa(+b.getAttribute("data-subtogt")); };
+  });
+  var ts = $("t_sort");
+  if (ts) ts.onclick = function(){ ordenarTarefasPorPrioridade(); };
   $("t_add").onclick = function(){ sheetTarefa(null); };
+  if (arrastavel) ligarDragTarefas();
+}
+
+function rowTarefa(t, arrastavel){
+  var sub = [];
+  if (t.horario) sub.push('<span class="hr">'+esc(t.horario)+'</span>');
+  if (t.setor) sub.push(esc(t.setor));
+  if (t.responsavel) sub.push(esc(t.responsavel));
+  if (t.data_limite) sub.push(t.data_limite.toLowerCase()==="hoje"?'<span style="color:var(--warn);font-weight:600">Hoje</span>':"até "+esc(t.data_limite));
+  if (t.observacoes) sub.push(esc(t.observacoes.length>60 ? t.observacoes.slice(0,60)+"…" : t.observacoes));
+  var subs = t.subtarefas || [];
+  if (subs.length){
+    var feitas = 0; subs.forEach(function(s){ if (s.concluido) feitas++; });
+    sub.push('<span class="subcnt">'+feitas+'/'+subs.length+' subtarefas</span>');
+  }
+  var check = t.status==="concluido" ? "✓" : "";
+  var subsHtml = subs.length ? '<div class="subs">' + subs.map(function(s){
+      return '<button class="subrow'+(s.concluido?' done':'')+'" data-subtogt="'+s.id+'">' +
+        '<span class="subchk">'+(s.concluido?'✓':'')+'</span>' +
+        '<span class="subtxt">'+esc(s.titulo)+'</span></button>';
+    }).join("") + '</div>' : '';
+  return '<div class="itemwrap" data-wrap="'+t.id+'">' +
+    '<div class="row st-'+t.status+'" data-tedit="'+t.id+'" role="button" tabindex="0">' +
+    (arrastavel ? '<span class="draghandle" title="Arrastar para reordenar" aria-hidden="true">⋮⋮</span>' : '') +
+    '<button class="stbtn" data-tst="'+t.id+'" title="'+STATUS_TXT[t.status]+' — toque para mudar" aria-label="Mudar status: '+STATUS_TXT[t.status]+'">'+check+'</button>' +
+    '<div class="info"><div class="nm">'+esc(t.titulo)+'</div>' +
+    (sub.length?'<div class="sub"><span>'+sub.join("</span><span>")+'</span></div>':'') +
+    '</div>' +
+    (t.prioridade!=null ? '<span class="pbadge'+(t.prioridade<=1?' p1':'')+'">P'+t.prioridade+'</span>' : '') +
+    '</div>' +
+    subsHtml +
+    '</div>';
+}
+
+/* v3.6: alterna a conclusão de uma subtarefa de tarefa geral (otimista) */
+function toggleSubtarefa(sid){
+  var sub=null;
+  TA.forEach(function(t){ (t.subtarefas||[]).forEach(function(s){ if(s.id===sid) sub=s; }); });
+  if (!sub) return;
+  var antes = sub.concluido;
+  sub.concluido = antes ? 0 : 1; renderTarefas();
+  api("/api/subtarefas/"+sid, "PATCH", { concluido: sub.concluido })
+    .catch(function(){ sub.concluido = antes; renderTarefas();
+      toast("Sem conexão — a subtarefa não foi salva. Tente de novo.", true); });
+}
+
+/* v3.6: grava a nova ordem das tarefas (otimista) e persiste */
+function salvarOrdemTarefas(ids){
+  ids.forEach(function(id, idx){ var t = TA.find(function(x){ return x.id===id; }); if (t) t.ordem = idx+1; });
+  TA.sort(function(a,b){
+    var ca=a.status==="concluido"?1:0, cb=b.status==="concluido"?1:0;
+    return ca-cb || (a.ordem||1e9)-(b.ordem||1e9) || a.id-b.id;
+  });
+  return api("/api/tarefas/reordenar", "POST", { ids: ids })
+    .catch(function(){ toast("Não deu pra salvar a ordem. Recarregando…", true);
+      api("/api/tarefas").then(function(j){ TA=j.tarefas||[]; renderTarefas(); }); });
+}
+
+/* v3.6: reordena as tarefas por prioridade (P1 primeiro; sem prioridade por último) */
+function ordenarTarefasPorPrioridade(){
+  var arr = TA.slice().sort(function(a,b){
+    var pa=a.prioridade==null?1e9:a.prioridade, pb=b.prioridade==null?1e9:b.prioridade;
+    return pa-pb || (a.ordem||1e9)-(b.ordem||1e9) || a.id-b.id;
+  });
+  salvarOrdemTarefas(arr.map(function(t){ return t.id; }));
+  renderTarefas();
+}
+
+/* v3.6: arrastar tarefas na lista (mesmo padrão do checklist) */
+function ligarDragTarefas(){
+  var container = document.querySelector(".items");
+  if (!container) return;
+  Array.prototype.forEach.call(container.querySelectorAll(".draghandle"), function(handle){
+    handle.onclick = function(e){ e.stopPropagation(); };
+    handle.addEventListener("pointerdown", function(ev){
+      ev.preventDefault();
+      var wrap = handle.parentNode.parentNode;
+      if (!wrap || !wrap.classList.contains("itemwrap")) return;
+      wrap.classList.add("dragging");
+      try { handle.setPointerCapture(ev.pointerId); } catch(_){}
+      function onMove(e){
+        var after = null;
+        var rows = Array.prototype.slice.call(container.querySelectorAll(".itemwrap:not(.dragging)"));
+        for (var i=0;i<rows.length;i++){
+          var rect = rows[i].getBoundingClientRect();
+          if (e.clientY < rect.top + rect.height/2){ after = rows[i]; break; }
+        }
+        if (after) container.insertBefore(wrap, after); else container.appendChild(wrap);
+      }
+      function onUp(){
+        try { handle.releasePointerCapture(ev.pointerId); } catch(_){}
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        wrap.classList.remove("dragging");
+        var ids = Array.prototype.map.call(container.querySelectorAll(".itemwrap"),
+          function(w){ return +w.getAttribute("data-wrap"); });
+        salvarOrdemTarefas(ids);
+      }
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+    });
+  });
 }
 
 function cicloTarefa(id){
@@ -1935,7 +2038,13 @@ function selectFixo(id, lista, atual){
 function sheetTarefa(id){
   var t = id ? TA.find(function(x){ return x.id===id; }) : null;
   var novo = !t;
-  t = t || { titulo:"", setor:"", status:"afazer", prioridade:"", data_limite:"", responsavel:"", observacoes:"" };
+  t = t || { titulo:"", setor:"", status:"afazer", prioridade:"", data_limite:"", responsavel:"", horario:"", observacoes:"", subtarefas:[] };
+
+  /* modelo local das subtarefas (reconciliado no salvar) */
+  var subs = (t.subtarefas||[]).map(function(s){
+    return { id:s.id, titulo:s.titulo, concluido:s.concluido, _orig:s.titulo, _del:false };
+  });
+
   abrirSheet(
     '<h2 class="anton">'+(novo?'Nova tarefa':'Editar tarefa')+'</h2>' +
     (!novo && t.atualizado_por ? '<div class="meta">Última alteração: '+esc(t.atualizado_por)+' · '+fmtData(t.atualizado_em)+'</div>' : '') +
@@ -1948,30 +2057,75 @@ function sheetTarefa(id){
         ['afazer','andamento','concluido'].map(function(st){
           return '<option value="'+st+'"'+(t.status===st?' selected':'')+'>'+STATUS_TXT[st]+'</option>'; }).join("") +
       '</select></div>' +
-      '<div><label class="top">Prioridade</label><select id="tf_prio"><option value="">—</option>' +
-        [0,1,2,3,4].map(function(p){ return '<option value="'+p+'"'+(t.prioridade===p?' selected':'')+'>P'+p+'</option>'; }).join("") +
-      '</select></div>' +
+      '<div><label class="top" for="tf_prio">Prioridade (1–40)</label>' +
+        '<input id="tf_prio" type="number" min="1" max="40" step="1" value="'+(t.prioridade!=null&&t.prioridade!==""?esc(String(t.prioridade)):"")+'" placeholder="ex.: 1"></div>' +
+      '<div><label class="top" for="tf_dl">Data limite</label><input id="tf_dl" maxlength="20" value="'+esc(t.data_limite)+'" placeholder="Hoje, 05/07…"></div>' +
+      '<div><label class="top" for="tf_hora">Horário</label><input id="tf_hora" list="dl_thoras" maxlength="40" value="'+esc(t.horario||"")+'" placeholder="ex.: 14h, 08:30"></div>' +
     '</div>' +
-    '<label class="top">Data limite</label>' +
-    '<input id="tf_dl" maxlength="20" value="'+esc(t.data_limite)+'" placeholder="Hoje, 05/07…">' +
+    '<label class="top">Subtarefas</label>' +
+    '<div class="subedit" id="tf_subs"></div>' +
+    '<div class="sline" style="margin-top:6px">' +
+      '<input id="tf_subnew" maxlength="200" placeholder="+ Nova subtarefa">' +
+      '<button class="btn2" type="button" id="tf_subadd">Adicionar</button>' +
+    '</div>' +
     '<label class="top">Observações</label>' +
     '<textarea id="tf_obs" maxlength="600">'+esc(t.observacoes)+'</textarea>' +
+    '<datalist id="dl_thoras">'+tUniques("horario").map(function(v){return '<option value="'+esc(v)+'">';}).join("")+'</datalist>' +
     '<div class="actions">' +
       (novo ? '<button class="btn2" data-close>Cancelar</button>' : '<button class="btn-danger" id="tf_del">Excluir</button>') +
       '<button class="btn" id="tf_save">'+(novo?'Adicionar':'Salvar')+'</button>' +
     '</div>'
   );
+
+  /* ----- editor de subtarefas ----- */
+  function pintarSubs(){
+    var cont = $("tf_subs"); if (!cont) return;
+    var vivos = subs.filter(function(s){ return !s._del; });
+    cont.innerHTML = vivos.length ? vivos.map(function(s){
+      var idx = subs.indexOf(s);
+      return '<div class="sline"><input data-subidx="'+idx+'" maxlength="200" value="'+esc(s.titulo)+'">' +
+        '<button class="sdel" type="button" data-subdel="'+idx+'" title="Remover" aria-label="Remover subtarefa">✕</button></div>';
+    }).join("") : '<div class="meta">Nenhuma subtarefa ainda.</div>';
+    Array.prototype.forEach.call(cont.querySelectorAll("[data-subidx]"), function(inp){
+      inp.oninput = function(){ subs[+inp.getAttribute("data-subidx")].titulo = inp.value; };
+    });
+    Array.prototype.forEach.call(cont.querySelectorAll("[data-subdel]"), function(b){
+      b.onclick = function(){ subs[+b.getAttribute("data-subdel")]._del = true; pintarSubs(); };
+    });
+  }
+  function addSub(){
+    var v = $("tf_subnew").value.trim(); if (!v) return;
+    subs.push({ titulo:v, concluido:0, _orig:null, _del:false });
+    $("tf_subnew").value = ""; pintarSubs(); $("tf_subnew").focus();
+  }
+  pintarSubs();
+  $("tf_subadd").onclick = addSub;
+  $("tf_subnew").addEventListener("keydown", function(e){ if (e.key==="Enter"){ e.preventDefault(); addSub(); } });
+
   $("tf_save").onclick = function(){
+    var pv = parseInt($("tf_prio").value, 10);
     var body = {
       titulo: $("tf_tit").value.trim(), setor: $("tf_setor").value.trim(),
-      status: $("tf_st").value, prioridade: $("tf_prio").value===""?null:+$("tf_prio").value,
+      status: $("tf_st").value, prioridade: isFinite(pv) ? Math.max(1, Math.min(40, pv)) : null,
       data_limite: $("tf_dl").value.trim(), responsavel: $("tf_resp").value.trim(),
-      observacoes: $("tf_obs").value.trim(), atualizado_por: NOME
+      horario: $("tf_hora").value.trim(), observacoes: $("tf_obs").value.trim(), atualizado_por: NOME
     };
     if (!body.titulo) return toast("O título é obrigatório", true);
     $("tf_save").disabled = true;
-    var p = novo ? api("/api/tarefas","POST",body) : api("/api/tarefas/"+id,"PATCH",body);
-    p.then(function(){ fecharSheet(); toast(novo?"Tarefa adicionada":"Salvo");
+    var salvarT = novo
+      ? api("/api/tarefas","POST",body).then(function(r){ return r.id || null; })
+      : api("/api/tarefas/"+id,"PATCH",body).then(function(){ return id; });
+    salvarT.then(function(tid){
+      var ops = [];
+      subs.forEach(function(s){
+        var tt = (s.titulo||"").trim();
+        if (s.id && s._del){ ops.push(api("/api/subtarefas/"+s.id,"DELETE")); return; }
+        if (s._del || !tt) return;
+        if (!s.id){ if (tid) ops.push(api("/api/tarefas/"+tid+"/subtarefas","POST",{titulo:tt})); return; }
+        if (tt !== s._orig){ ops.push(api("/api/subtarefas/"+s.id,"PATCH",{titulo:tt})); }
+      });
+      return Promise.all(ops);
+    }).then(function(){ fecharSheet(); toast(novo?"Tarefa adicionada":"Salvo");
       return api("/api/tarefas").then(function(j){ TA=j.tarefas||[]; renderTarefas(); }); })
      .catch(function(e){ $("tf_save").disabled=false; toast(e.message,true); });
   };
