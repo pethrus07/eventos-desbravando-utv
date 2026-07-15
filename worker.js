@@ -183,7 +183,7 @@ export default {
 
     if (method === "OPTIONS") return new Response(null, { headers: CORS });
     if (path === "/" && method === "GET")
-      return new Response(UI_HTML, { headers: { "content-type": "text/html; charset=utf-8" } });
+      return new Response(UI_HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
     if (!path.startsWith("/api/")) return json({ erro: "não encontrado" }, 404);
 
     const quem = papel(request, env);
