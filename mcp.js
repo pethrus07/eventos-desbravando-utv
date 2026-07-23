@@ -87,6 +87,31 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { item_id: { type: "integer" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] } }, required: ["item_id", "status"] } },
   { name: "concluir_subitem_checklist", role: "both", description: "Marca/desmarca uma subtarefa de um item do checklist.",
     inputSchema: { type: "object", properties: { subitem_id: { type: "integer" }, concluido: { type: "boolean" } }, required: ["subitem_id", "concluido"] } },
+  { name: "criar_item_checklist", role: "both", description: "Adiciona um item ao checklist de uma expedição.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, item: { type: "string" }, dia: { type: "string" }, setor: { type: "string" }, responsavel: { type: "string" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] }, horario: { type: "string" }, fornecedor: { type: "string" }, quantidade: { type: "string" }, observacoes: { type: "string" } }, required: ["evento_id", "item"] } },
+  { name: "editar_item_checklist", role: "both", description: "Edita campos de um item do checklist (item, dia, setor, responsável, status, horário, fornecedor, quantidade, observações; valor só admin).",
+    inputSchema: { type: "object", properties: { item_id: { type: "integer" }, item: { type: "string" }, dia: { type: "string" }, setor: { type: "string" }, responsavel: { type: "string" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] }, horario: { type: "string" }, fornecedor: { type: "string" }, quantidade: { type: "string" }, observacoes: { type: "string" }, valor: { type: "number" } }, required: ["item_id"] } },
+  { name: "excluir_item_checklist", role: "both", description: "Exclui um item do checklist (e suas subtarefas).",
+    inputSchema: { type: "object", properties: { item_id: { type: "integer" } }, required: ["item_id"] } },
+  { name: "criar_subitem_checklist", role: "both", description: "Adiciona uma subtarefa a um item do checklist.",
+    inputSchema: { type: "object", properties: { item_id: { type: "integer" }, titulo: { type: "string" } }, required: ["item_id", "titulo"] } },
+  { name: "excluir_subitem_checklist", role: "both", description: "Exclui uma subtarefa de um item do checklist.",
+    inputSchema: { type: "object", properties: { subitem_id: { type: "integer" } }, required: ["subitem_id"] } },
+  // ----- Tarefas gerais (fora das expedições) -----
+  { name: "listar_tarefas", role: "both", description: "Lista as tarefas gerais (não ligadas a uma expedição), com subtarefas.",
+    inputSchema: { type: "object", properties: {} } },
+  { name: "criar_tarefa", role: "both", description: "Cria uma tarefa geral.",
+    inputSchema: { type: "object", properties: { titulo: { type: "string" }, setor: { type: "string" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] }, prioridade: { type: "integer" }, data_limite: { type: "string" }, responsavel: { type: "string" }, horario: { type: "string" }, observacoes: { type: "string" } }, required: ["titulo"] } },
+  { name: "editar_tarefa", role: "both", description: "Edita uma tarefa geral (título, setor, status, prioridade, prazo, responsável, horário, observações).",
+    inputSchema: { type: "object", properties: { tarefa_id: { type: "integer" }, titulo: { type: "string" }, setor: { type: "string" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] }, prioridade: { type: "integer" }, data_limite: { type: "string" }, responsavel: { type: "string" }, horario: { type: "string" }, observacoes: { type: "string" } }, required: ["tarefa_id"] } },
+  { name: "excluir_tarefa", role: "both", description: "Exclui uma tarefa geral (e suas subtarefas).",
+    inputSchema: { type: "object", properties: { tarefa_id: { type: "integer" } }, required: ["tarefa_id"] } },
+  { name: "criar_subtarefa", role: "both", description: "Adiciona uma subtarefa a uma tarefa geral.",
+    inputSchema: { type: "object", properties: { tarefa_id: { type: "integer" }, titulo: { type: "string" } }, required: ["tarefa_id", "titulo"] } },
+  { name: "marcar_subtarefa", role: "both", description: "Marca/desmarca uma subtarefa de uma tarefa geral.",
+    inputSchema: { type: "object", properties: { subtarefa_id: { type: "integer" }, concluido: { type: "boolean" } }, required: ["subtarefa_id", "concluido"] } },
+  { name: "excluir_subtarefa", role: "both", description: "Exclui uma subtarefa de uma tarefa geral.",
+    inputSchema: { type: "object", properties: { subtarefa_id: { type: "integer" } }, required: ["subtarefa_id"] } },
   // ----- Ciclo Operacional (módulo novo; hoje preenchido só no Playbook) -----
   { name: "listar_itens_ciclo", role: "both", description: "Itens do módulo NOVO (Ciclo de 6 fases) de uma expedição e o status das fases. Filtra por etapa.",
     inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, etapa: { type: "string", enum: [...ETAPA_SLUGS] } }, required: ["evento_id"] } },
@@ -105,6 +130,10 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { tarefa_id: { type: "integer" }, h_realizado: { type: "string", description: "HH:MM" }, reajustar: { type: "boolean" } }, required: ["tarefa_id", "h_realizado"] } },
   { name: "concluir_subtarefa_campo", role: "both", description: "Marca/desmarca uma subtarefa (check) de uma tarefa de campo.",
     inputSchema: { type: "object", properties: { sub_id: { type: "integer" }, concluido: { type: "boolean" } }, required: ["sub_id", "concluido"] } },
+  { name: "criar_dia_campo", role: "both", description: "Cria um dia na Operação em Campo de uma expedição.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, rotulo: { type: "string" }, data: { type: "string" } }, required: ["evento_id", "rotulo"] } },
+  { name: "criar_tarefa_campo", role: "both", description: "Cria uma tarefa cronológica num dia da Operação em Campo.",
+    inputSchema: { type: "object", properties: { dia_id: { type: "integer" }, nome: { type: "string" }, h_planejado: { type: "string" }, tipo: { type: "string", enum: ["ajustavel", "fixa"] }, responsavel: { type: "string" } }, required: ["dia_id", "nome"] } },
   // ----- Dados sensíveis (só chave ADMIN) -----
   { name: "listar_participantes", role: "admin", description: "[admin] Participantes de uma expedição, com dados pessoais: nome, CPF, telefone, grupo, tipo, UTV, camiseta, contrato e pacote.",
     inputSchema: { type: "object", properties: { evento_id: { type: "integer" } }, required: ["evento_id"] } },
@@ -297,6 +326,101 @@ async function runTool(name, args, env, papel) {
       const r = await db.prepare("UPDATE campo_subtarefas SET concluido=? WHERE id=?").bind(args.concluido ? 1 : 0, parseInt(args.sub_id, 10)).run();
       return { ok: (r.meta.changes || 0) > 0 };
     }
+    // ---- Checklist CRUD ----
+    case "criar_item_checklist": {
+      const item = String(args.item || "").slice(0, 300).trim(); if (!item) throw new Error("informe o item");
+      const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM itens WHERE evento_id=?").bind(eid).first();
+      const st = ["afazer", "andamento", "concluido"].includes(args.status) ? args.status : "afazer";
+      const r = await db.prepare("INSERT INTO itens (evento_id, ordem, dia, item, setor, status, responsavel, horario, fornecedor, quantidade, observacoes, atualizado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?, 'Claude')")
+        .bind(eid, (mx ? mx.mo : 0) + 1, String(args.dia || ""), item, String(args.setor || ""), st, String(args.responsavel || ""), String(args.horario || ""), String(args.fornecedor || ""), String(args.quantidade || ""), String(args.observacoes || "")).run();
+      return { ok: true, item_id: r.meta.last_row_id };
+    }
+    case "editar_item_checklist": {
+      const o = {};
+      for (const c of ["item", "dia", "setor", "responsavel", "horario", "fornecedor", "quantidade", "observacoes"]) if (c in args) o[c] = String(args[c] || "").slice(0, 600);
+      if ("status" in args && ["afazer", "andamento", "concluido"].includes(args.status)) o.status = args.status;
+      if (admin && "valor" in args) o.valor = args.valor == null ? null : Number(args.valor);
+      const keys = Object.keys(o); if (!keys.length) throw new Error("nada para atualizar");
+      const r = await db.prepare(`UPDATE itens SET ${keys.map(k => k + "=?").join(", ")}, atualizado_em=datetime('now'), atualizado_por='Claude' WHERE id=?`).bind(...keys.map(k => o[k]), parseInt(args.item_id, 10)).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    case "excluir_item_checklist": {
+      const id = parseInt(args.item_id, 10);
+      await db.prepare("DELETE FROM subitens WHERE item_id=?").bind(id).run();
+      const r = await db.prepare("DELETE FROM itens WHERE id=?").bind(id).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    case "criar_subitem_checklist": {
+      const t = String(args.titulo || "").slice(0, 200).trim(); if (!t) throw new Error("informe o título");
+      const iid = parseInt(args.item_id, 10);
+      const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM subitens WHERE item_id=?").bind(iid).first();
+      const r = await db.prepare("INSERT INTO subitens (item_id, ordem, titulo, concluido) VALUES (?,?,?,0)").bind(iid, (mx ? mx.mo : 0) + 1, t).run();
+      return { ok: true, subitem_id: r.meta.last_row_id };
+    }
+    case "excluir_subitem_checklist": {
+      const r = await db.prepare("DELETE FROM subitens WHERE id=?").bind(parseInt(args.subitem_id, 10)).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    // ---- Tarefas gerais ----
+    case "listar_tarefas": {
+      const { results } = await db.prepare("SELECT * FROM tarefas ORDER BY CASE status WHEN 'concluido' THEN 1 ELSE 0 END, ordem, COALESCE(prioridade,999), id").all();
+      const { results: subs } = await db.prepare("SELECT * FROM subtarefas ORDER BY ordem, id").all();
+      const sp = {}; for (const s of (subs || [])) (sp[s.tarefa_id] = sp[s.tarefa_id] || []).push({ id: s.id, titulo: s.titulo, concluido: !!s.concluido });
+      return (results || []).map(t => ({ id: t.id, titulo: t.titulo, setor: t.setor, status: t.status, prioridade: t.prioridade, data_limite: t.data_limite, responsavel: t.responsavel, horario: t.horario, observacoes: t.observacoes, subtarefas: sp[t.id] || [] }));
+    }
+    case "criar_tarefa": {
+      const tit = String(args.titulo || "").slice(0, 300).trim(); if (!tit) throw new Error("informe o título");
+      const st = ["afazer", "andamento", "concluido"].includes(args.status) ? args.status : "afazer";
+      const r = await db.prepare("INSERT INTO tarefas (titulo, setor, status, prioridade, data_limite, responsavel, horario, observacoes, atualizado_por) VALUES (?,?,?,?,?,?,?,?, 'Claude')")
+        .bind(tit, String(args.setor || ""), st, args.prioridade != null ? parseInt(args.prioridade, 10) : null, String(args.data_limite || ""), String(args.responsavel || ""), String(args.horario || ""), String(args.observacoes || "")).run();
+      return { ok: true, tarefa_id: r.meta.last_row_id };
+    }
+    case "editar_tarefa": {
+      const o = {};
+      for (const c of ["titulo", "setor", "data_limite", "responsavel", "horario", "observacoes"]) if (c in args) o[c] = String(args[c] || "").slice(0, 600);
+      if ("status" in args && ["afazer", "andamento", "concluido"].includes(args.status)) o.status = args.status;
+      if ("prioridade" in args) o.prioridade = args.prioridade == null ? null : parseInt(args.prioridade, 10);
+      const keys = Object.keys(o); if (!keys.length) throw new Error("nada para atualizar");
+      const r = await db.prepare(`UPDATE tarefas SET ${keys.map(k => k + "=?").join(", ")}, atualizado_em=datetime('now'), atualizado_por='Claude' WHERE id=?`).bind(...keys.map(k => o[k]), parseInt(args.tarefa_id, 10)).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    case "excluir_tarefa": {
+      const id = parseInt(args.tarefa_id, 10);
+      await db.prepare("DELETE FROM subtarefas WHERE tarefa_id=?").bind(id).run();
+      const r = await db.prepare("DELETE FROM tarefas WHERE id=?").bind(id).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    case "criar_subtarefa": {
+      const t = String(args.titulo || "").slice(0, 200).trim(); if (!t) throw new Error("informe o título");
+      const tid = parseInt(args.tarefa_id, 10);
+      const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM subtarefas WHERE tarefa_id=?").bind(tid).first();
+      const r = await db.prepare("INSERT INTO subtarefas (tarefa_id, ordem, titulo, concluido) VALUES (?,?,?,0)").bind(tid, (mx ? mx.mo : 0) + 1, t).run();
+      return { ok: true, subtarefa_id: r.meta.last_row_id };
+    }
+    case "marcar_subtarefa": {
+      const r = await db.prepare("UPDATE subtarefas SET concluido=? WHERE id=?").bind(args.concluido ? 1 : 0, parseInt(args.subtarefa_id, 10)).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    case "excluir_subtarefa": {
+      const r = await db.prepare("DELETE FROM subtarefas WHERE id=?").bind(parseInt(args.subtarefa_id, 10)).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    // ---- Operação em Campo: criar ----
+    case "criar_dia_campo": {
+      const rot = String(args.rotulo || "").slice(0, 160).trim(); if (!rot) throw new Error("informe o rótulo");
+      const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM campo_dias WHERE evento_id=?").bind(eid).first();
+      const r = await db.prepare("INSERT INTO campo_dias (evento_id, rotulo, data, ordem) VALUES (?,?,?,?)").bind(eid, rot, String(args.data || ""), (mx ? mx.mo : 0) + 1).run();
+      return { ok: true, dia_id: r.meta.last_row_id };
+    }
+    case "criar_tarefa_campo": {
+      const nome = String(args.nome || "").slice(0, 200).trim(); if (!nome) throw new Error("informe o nome");
+      const did = parseInt(args.dia_id, 10);
+      const tipo = ["ajustavel", "fixa"].includes(args.tipo) ? args.tipo : "ajustavel";
+      const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM campo_tarefas WHERE dia_id=?").bind(did).first();
+      const r = await db.prepare("INSERT INTO campo_tarefas (dia_id, nome, h_planejado, tipo, status, ordem, responsavel, atualizado_por) VALUES (?,?,?,?, 'afazer', ?, ?, 'Claude')")
+        .bind(did, nome, String(args.h_planejado || ""), tipo, (mx ? mx.mo : 0) + 1, String(args.responsavel || "")).run();
+      return { ok: true, tarefa_id: r.meta.last_row_id };
+    }
     default: throw new Error("ferramenta desconhecida: " + name);
   }
 }
@@ -353,7 +477,7 @@ export async function handleMcp(request, env) {
   const origin = url.origin;
   const db = env.DB;
 
-  const isMcpPath = path === "/mcp" || path === "/oauth/register" || path === "/oauth/authorize" ||
+  const isMcpPath = path === "/mcp" || path === "/api/mcp" || path === "/oauth/register" || path === "/oauth/authorize" ||
     path === "/oauth/token" || path === "/.well-known/oauth-protected-resource" ||
     path === "/.well-known/oauth-authorization-server";
   if (!isMcpPath) return null;
@@ -457,14 +581,18 @@ export async function handleMcp(request, env) {
     return oauthErr("unsupported_grant_type", "grant_type não suportado");
   }
 
-  /* ---- Endpoint MCP ---- */
-  if (path === "/mcp") {
+  /* ---- Endpoint MCP (/mcp e alias /api/mcp) ---- */
+  if (path === "/mcp" || path === "/api/mcp") {
     if (request.method === "GET")
       return new Response(JSON.stringify({ erro: "use POST (Streamable HTTP)" }), { status: 405, headers: jsonHdr });
+    // Aceita as DUAS autenticações: OAuth (claude.ai web) OU x-app-key/Bearer com a chave do app (Claude Code)
     const auth = request.headers.get("authorization") || "";
-    const tok = auth.replace(/^Bearer\s+/i, "");
-    const claims = await readToken(tok, env);
-    if (!auth || !claims || claims.typ !== "access") {
+    const bearer = auth.replace(/^Bearer\s+/i, "");
+    const claims = await readToken(bearer, env);
+    let papel = (claims && claims.typ === "access") ? claims.papel : null;
+    if (!papel) papel = papelDaChave(request.headers.get("x-app-key") || "", env);
+    if (!papel) papel = papelDaChave(bearer, env);
+    if (!papel) {
       return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "não autorizado" }, id: null }), {
         status: 401,
         headers: { ...jsonHdr, "WWW-Authenticate": `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"` },
@@ -482,22 +610,22 @@ export async function handleMcp(request, env) {
           protocolVersion: (msg.params && msg.params.protocolVersion) || "2025-06-18",
           capabilities: { tools: {} },
           serverInfo: { name: "Desbravando · Operações", version: "1.0.0" },
-          instructions: "Sistema de gestão das expedições de UTV da Desbravando. IMPORTANTE: a operação real de cada expedição vive no CHECKLIST — use 'ver_checklist' para ver/operar o que a equipe faz no dia a dia. Há também um módulo novo (Ciclo de 6 fases por item + Operação em Campo por dias), hoje preenchido só no template 'Playbook'. Sempre comece por 'listar_expedicoes' para achar o evento_id. Com a chave admin há acesso total, inclusive participantes (CPF), custos, fornecedores e CRM; com a chave de equipe, só a operação (checklist/ciclo/campo), sem dados pessoais.",
+          instructions: "Sistema de gestão das expedições de UTV da Desbravando. IMPORTANTE: a operação real de cada expedição vive no CHECKLIST — use 'ver_checklist' (e criar/editar/excluir item) para o que a equipe faz no dia a dia. Também há 'listar_tarefas' (tarefas gerais, fora das expedições), um módulo novo de Ciclo (6 fases por item) + Operação em Campo (dias/tarefas), hoje preenchido só no template 'Playbook'. Sempre comece por 'listar_expedicoes' para achar o evento_id. Com a chave admin há acesso total, inclusive participantes (CPF), custos, fornecedores e CRM; com a chave de equipe, só a operação, sem dados pessoais.",
         });
       }
       if (msg.method === "notifications/initialized" || (typeof msg.method === "string" && msg.method.startsWith("notifications/")))
         return new Response(null, { status: 202, headers: CORS });
       if (msg.method === "ping") return reply({});
-      if (msg.method === "tools/list") return reply({ tools: toolsParaPapel(claims.papel) });
+      if (msg.method === "tools/list") return reply({ tools: toolsParaPapel(papel) });
       if (msg.method === "tools/call") {
         const nome = msg.params && msg.params.name;
         const args = (msg.params && msg.params.arguments) || {};
         const tool = TOOLS.find(t => t.name === nome);
         if (!tool) return fail(-32602, "ferramenta desconhecida");
-        if (tool.role === "admin" && claims.papel !== "admin")
+        if (tool.role === "admin" && papel !== "admin")
           return reply({ content: [{ type: "text", text: "Esta informação (dados pessoais/financeiro) exige a chave admin. A conexão atual é de equipe." }], isError: true });
         try {
-          const out = await runTool(nome, args, env, claims.papel);
+          const out = await runTool(nome, args, env, papel);
           return reply({ content: [{ type: "text", text: JSON.stringify(out, null, 2) }] });
         } catch (e) {
           return reply({ content: [{ type: "text", text: "Erro: " + (e.message || String(e)) }], isError: true });
