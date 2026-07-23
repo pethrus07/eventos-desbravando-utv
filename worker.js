@@ -19,6 +19,7 @@
    ============================================================ */
 
 import UI_HTML from "./ui.html";
+import { handleMcp } from "./mcp.js";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -239,6 +240,10 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
+
+    // v4.2: conector MCP + OAuth (/mcp, /oauth/*, /.well-known/*) — auth própria
+    const mcpRes = await handleMcp(request, env);
+    if (mcpRes) return mcpRes;
 
     if (method === "OPTIONS") return new Response(null, { headers: CORS });
     if (path === "/" && method === "GET")
