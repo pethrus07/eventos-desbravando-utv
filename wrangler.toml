@@ -15,3 +15,18 @@ fallthrough = true
 binding = "DB"
 database_name = "eventos"
 database_id = "c77cfaee-afe3-4a18-b1f1-a4164bdc9c75"
+
+# ------------------------------------------------------------
+# STAGING — ambiente de testes, separado da produção.
+# Worker "eventos-staging" + banco próprio (sem dados reais).
+# O Claude do dono trabalha aqui (branch dev); nada aqui toca a produção.
+#   Deploy:  npx wrangler deploy --env staging
+#   Banco:   npx wrangler d1 execute eventos-staging --remote --file=schema.sql
+# ------------------------------------------------------------
+[env.staging]
+name = "eventos-staging"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "eventos-staging"
+database_id = "c9653583-1a3f-48c5-aab3-ac8960009d68"
