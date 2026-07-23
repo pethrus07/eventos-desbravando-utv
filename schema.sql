@@ -320,3 +320,19 @@ CREATE TABLE IF NOT EXISTS campo_subtarefas (
   criado_em TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_campo_sub_tarefa ON campo_subtarefas(tarefa_id);
+
+-- ============ v4.2: Conector MCP (OAuth 2.1 para claude.ai) ============
+CREATE TABLE IF NOT EXISTS mcp_clients (
+  client_id     TEXT PRIMARY KEY,
+  redirect_uris TEXT NOT NULL DEFAULT '[]',
+  nome          TEXT NOT NULL DEFAULT '',
+  criado_em     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS mcp_codes (
+  code           TEXT PRIMARY KEY,
+  client_id      TEXT NOT NULL,
+  redirect_uri   TEXT NOT NULL,
+  code_challenge TEXT NOT NULL DEFAULT '',
+  papel          TEXT NOT NULL DEFAULT 'equipe',
+  expira_em      INTEGER NOT NULL
+);
