@@ -235,3 +235,88 @@ CREATE TABLE IF NOT EXISTS custos (
 );
 CREATE INDEX IF NOT EXISTS idx_custos_evento ON custos(evento_id);
 CREATE INDEX IF NOT EXISTS idx_custos_forn   ON custos(fornecedor_id);
+
+-- ============ v4.1: Sistema Operacional (Ciclo + Operação em Campo) ============
+-- Camada hierárquica: Expedição → 7 Etapas → Itens → 6 Fases → Microtarefas
+-- + Operação em Campo por Dias → Tarefas cronológicas → Subtarefas
+
+-- Item concreto de uma etapa (Hotel, Bebidas, Camiseta…); só Nome+Categoria
+CREATE TABLE IF NOT EXISTS op_itens (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  evento_id      INTEGER NOT NULL,
+  etapa          TEXT NOT NULL DEFAULT '',   -- validacao|marketing|vendas|contratacoes|pre_expedicao|operacao_campo|fechamento
+  categoria      TEXT NOT NULL DEFAULT '',   -- Hotel, Bebidas, Almoço, Camiseta…
+  nome           TEXT NOT NULL,
+  ordem          INTEGER,
+  homologado     INTEGER NOT NULL DEFAULT 0, -- parceiro já homologado (pode pular fases)
+  observacoes    TEXT NOT NULL DEFAULT '',
+  criado_em      TEXT NOT NULL DEFAULT (datetime('now')),
+  atualizado_em  TEXT NOT NULL DEFAULT (datetime('now')),
+  atualizado_por TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_op_itens_evento ON op_itens(evento_id);
+
+-- 6 fases fixas de cada item (criadas automaticamente ao salvar o item)
+CREATE TABLE IF NOT EXISTS op_fases (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_id        INTEGER NOT NULL,
+  tipo           TEXT NOT NULL,              -- pesquisa|negociacao|contratacao|confirmacao|execucao|avaliacao
+  ordem          INTEGER NOT NULL,           -- 1..6
+  status         TEXT NOT NULL DEFAULT 'afazer', -- afazer|andamento|concluido|nao_utilizada
+  atualizado_em  TEXT NOT NULL DEFAULT (datetime('now')),
+  atualizado_por TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_op_fases_item ON op_fases(item_id);
+
+-- Microtarefas de cada fase (data/horario/responsavel/tipo só na fase Execução)
+CREATE TABLE IF NOT EXISTS op_microtarefas (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  fase_id     INTEGER NOT NULL,
+  titulo      TEXT NOT NULL,
+  concluido   INTEGER NOT NULL DEFAULT 0,
+  ordem       INTEGER,
+  data        TEXT NOT NULL DEFAULT '',      -- 'YYYY-MM-DD' ou rótulo do dia
+  horario     TEXT NOT NULL DEFAULT '',      -- horário previsto: "08:00"
+  responsavel TEXT NOT NULL DEFAULT '',
+  tipo        TEXT NOT NULL DEFAULT 'fixa',  -- ajustavel|fixa (agenda)
+  criado_em   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_op_micro_fase ON op_microtarefas(fase_id);
+
+-- Operação em Campo: dias da expedição
+CREATE TABLE IF NOT EXISTS campo_dias (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  evento_id INTEGER NOT NULL,
+  rotulo    TEXT NOT NULL,                   -- "Dia 1 — Chegada e boas-vindas"
+  data      TEXT NOT NULL DEFAULT '',
+  ordem     INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_campo_dias_evento ON campo_dias(evento_id);
+
+-- Tarefa cronológica de um dia (Ajustável cascateia reajuste; Fixa não)
+CREATE TABLE IF NOT EXISTS campo_tarefas (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  dia_id         INTEGER NOT NULL,
+  nome           TEXT NOT NULL,
+  h_planejado    TEXT NOT NULL DEFAULT '',
+  h_realizado    TEXT NOT NULL DEFAULT '',
+  responsavel    TEXT NOT NULL DEFAULT '',
+  tipo           TEXT NOT NULL DEFAULT 'ajustavel', -- ajustavel|fixa
+  status         TEXT NOT NULL DEFAULT 'afazer',    -- afazer|andamento|concluido
+  ordem          INTEGER,
+  observacoes    TEXT NOT NULL DEFAULT '',
+  atualizado_em  TEXT NOT NULL DEFAULT (datetime('now')),
+  atualizado_por TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_campo_tarefas_dia ON campo_tarefas(dia_id);
+
+-- Subtarefas de check de uma tarefa de campo
+CREATE TABLE IF NOT EXISTS campo_subtarefas (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  tarefa_id INTEGER NOT NULL,
+  titulo    TEXT NOT NULL,
+  concluido INTEGER NOT NULL DEFAULT 0,
+  ordem     INTEGER,
+  criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_campo_sub_tarefa ON campo_subtarefas(tarefa_id);

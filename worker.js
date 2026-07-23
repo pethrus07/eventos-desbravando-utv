@@ -154,6 +154,63 @@ function limparFornecedor(b) {
   return o;
 }
 
+/* ---------- v4.1: Sistema Operacional ---------- */
+const FASE_TIPOS = ["pesquisa", "negociacao", "contratacao", "confirmacao", "execucao", "avaliacao"];
+const FASE_STATUS = new Set(["afazer", "andamento", "concluido", "nao_utilizada"]);
+const CAMPO_TIPOS = new Set(["ajustavel", "fixa"]);
+const ETAPA_SLUGS = new Set(["validacao","marketing","vendas","contratacoes","pre_expedicao","operacao_campo","fechamento"]);
+
+function limparOpItem(b) {
+  const o = {};
+  if ("etapa" in b && ETAPA_SLUGS.has(b.etapa)) o.etapa = b.etapa;
+  if ("categoria" in b) o.categoria = S(b.categoria, 120);
+  if ("nome" in b) o.nome = S(b.nome, 200);
+  if ("ordem" in b) o.ordem = I(b.ordem);
+  if ("homologado" in b) o.homologado = B(b.homologado);
+  if ("observacoes" in b) o.observacoes = S(b.observacoes, 600);
+  return o;
+}
+function limparMicro(b) {
+  const o = {};
+  if ("titulo" in b) o.titulo = S(b.titulo, 300);
+  if ("concluido" in b) o.concluido = B(b.concluido);
+  if ("ordem" in b) o.ordem = I(b.ordem);
+  if ("data" in b) o.data = S(b.data, 20);
+  if ("horario" in b) o.horario = S(b.horario, 40);
+  if ("responsavel" in b) o.responsavel = S(b.responsavel, 120);
+  if ("tipo" in b && CAMPO_TIPOS.has(b.tipo)) o.tipo = b.tipo;
+  return o;
+}
+function limparCampoDia(b) {
+  const o = {};
+  if ("rotulo" in b) o.rotulo = S(b.rotulo, 160);
+  if ("data" in b) o.data = S(b.data, 20);
+  if ("ordem" in b) o.ordem = I(b.ordem);
+  return o;
+}
+function limparCampoTarefa(b) {
+  const o = {};
+  if ("nome" in b) o.nome = S(b.nome, 200);
+  if ("h_planejado" in b) o.h_planejado = S(b.h_planejado, 20);
+  if ("h_realizado" in b) o.h_realizado = S(b.h_realizado, 20);
+  if ("responsavel" in b) o.responsavel = S(b.responsavel, 120);
+  if ("tipo" in b && CAMPO_TIPOS.has(b.tipo)) o.tipo = b.tipo;
+  if ("status" in b && ITEM_STATUS.has(b.status)) o.status = b.status;
+  if ("ordem" in b) o.ordem = I(b.ordem);
+  if ("observacoes" in b) o.observacoes = S(b.observacoes, 600);
+  return o;
+}
+// "08:30" → minutos; null se inválido
+function hhmmMin(s) {
+  const mm = String(s || "").match(/^(\d{1,2}):(\d{2})$/);
+  if (!mm) return null;
+  return (+mm[1]) * 60 + (+mm[2]);
+}
+function minHhmm(t) {
+  t = ((t % 1440) + 1440) % 1440;
+  return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0");
+}
+
 /* UPDATE genérico: monta o "SET col=?" a partir das chaves do objeto
    já saneado e faz bind na ordem. `extra` é um trecho fixo pra colar
    no fim do SET (ex.: atualizado_em/atualizado_por). Retorna false
@@ -204,7 +261,8 @@ export default {
                COUNT(i.id) AS total,
                SUM(CASE WHEN i.status='concluido' THEN 1 ELSE 0 END) AS concluidos,
                SUM(CASE WHEN i.status='andamento' THEN 1 ELSE 0 END) AS andamento,
-               (SELECT COALESCE(SUM(cu.valor),0) FROM custos cu WHERE cu.evento_id=e.id) AS valor_total
+               (SELECT COALESCE(SUM(cu.valor),0) FROM custos cu WHERE cu.evento_id=e.id) AS valor_total,
+               (SELECT COUNT(*) FROM op_itens o WHERE o.evento_id=e.id) AS op_total
         FROM eventos e LEFT JOIN itens i ON i.evento_id=e.id
         GROUP BY e.id ORDER BY e.arquivado ASC, e.id DESC`).all();
       return json({ eventos: results });
@@ -241,6 +299,42 @@ export default {
             SELECT ?, ordem, item, tipo, media, preco, mult FROM cenario_linhas WHERE cenario_id=?`)
             .bind(rc.meta.last_row_id, c.id).run();
         }
+        /* v4.1: clona o Sistema Operacional (itens → fases → microtarefas).
+           Remapeia ids pela `ordem` (única por evento): copia itens preservando
+           ordem, recria as 6 fases e casa as microtarefas por (ordem do item + tipo da fase). */
+        await db.prepare(`
+          INSERT INTO op_itens (evento_id, etapa, categoria, nome, ordem, homologado, observacoes)
+          SELECT ?, etapa, categoria, nome, ordem, homologado, observacoes
+          FROM op_itens WHERE evento_id=? ORDER BY ordem, id`).bind(novo, origem).run();
+        for (let i = 0; i < FASE_TIPOS.length; i++)
+          await db.prepare("INSERT INTO op_fases (item_id, tipo, ordem, status) SELECT id, ?, ?, 'afazer' FROM op_itens WHERE evento_id=?")
+            .bind(FASE_TIPOS[i], i + 1, novo).run();
+        await db.prepare(`
+          INSERT INTO op_microtarefas (fase_id, titulo, concluido, ordem, data, horario, responsavel, tipo)
+          SELECT nf.id, sm.titulo, 0, sm.ordem, sm.data, sm.horario, sm.responsavel, sm.tipo
+          FROM op_microtarefas sm
+          JOIN op_fases sf ON sf.id=sm.fase_id
+          JOIN op_itens si ON si.id=sf.item_id AND si.evento_id=?
+          JOIN op_itens ni ON ni.evento_id=? AND ni.ordem=si.ordem
+          JOIN op_fases nf ON nf.item_id=ni.id AND nf.tipo=sf.tipo`).bind(origem, novo).run();
+        /* v4.1: clona a Operação em Campo (dias → tarefas → subtarefas), zerando o realizado */
+        await db.prepare(`
+          INSERT INTO campo_dias (evento_id, rotulo, data, ordem)
+          SELECT ?, rotulo, data, ordem FROM campo_dias WHERE evento_id=? ORDER BY ordem, id`).bind(novo, origem).run();
+        await db.prepare(`
+          INSERT INTO campo_tarefas (dia_id, nome, h_planejado, h_realizado, responsavel, tipo, status, ordem, observacoes)
+          SELECT nd.id, st.nome, st.h_planejado, '', st.responsavel, st.tipo, 'afazer', st.ordem, st.observacoes
+          FROM campo_tarefas st
+          JOIN campo_dias sd ON sd.id=st.dia_id AND sd.evento_id=?
+          JOIN campo_dias nd ON nd.evento_id=? AND nd.ordem=sd.ordem`).bind(origem, novo).run();
+        await db.prepare(`
+          INSERT INTO campo_subtarefas (tarefa_id, titulo, concluido, ordem)
+          SELECT nt.id, ss.titulo, 0, ss.ordem
+          FROM campo_subtarefas ss
+          JOIN campo_tarefas st ON st.id=ss.tarefa_id
+          JOIN campo_dias sd ON sd.id=st.dia_id AND sd.evento_id=?
+          JOIN campo_dias nd ON nd.evento_id=? AND nd.ordem=sd.ordem
+          JOIN campo_tarefas nt ON nt.dia_id=nd.id AND nt.ordem=st.ordem`).bind(origem, novo).run();
       }
       return json({ ok: true, id: novo });
     }
@@ -262,7 +356,12 @@ export default {
         await db.prepare("DELETE FROM cliente_notas WHERE cliente_id IN (SELECT id FROM clientes WHERE evento_id=?)").bind(id).run();
         await db.prepare("DELETE FROM alocacoes WHERE quarto_id IN (SELECT id FROM quartos WHERE evento_id=?)").bind(id).run();
         await db.prepare("DELETE FROM cenario_linhas WHERE cenario_id IN (SELECT id FROM cenarios WHERE evento_id=?)").bind(id).run();
-        for (const t of ["itens","clientes","quartos","cenarios","custos"])
+        // v4.1: limpa o Sistema Operacional (filhos primeiro)
+        await db.prepare("DELETE FROM op_microtarefas WHERE fase_id IN (SELECT id FROM op_fases WHERE item_id IN (SELECT id FROM op_itens WHERE evento_id=?))").bind(id).run();
+        await db.prepare("DELETE FROM op_fases WHERE item_id IN (SELECT id FROM op_itens WHERE evento_id=?)").bind(id).run();
+        await db.prepare("DELETE FROM campo_subtarefas WHERE tarefa_id IN (SELECT id FROM campo_tarefas WHERE dia_id IN (SELECT id FROM campo_dias WHERE evento_id=?))").bind(id).run();
+        await db.prepare("DELETE FROM campo_tarefas WHERE dia_id IN (SELECT id FROM campo_dias WHERE evento_id=?)").bind(id).run();
+        for (const t of ["itens","clientes","quartos","cenarios","custos","op_itens","campo_dias"])
           await db.prepare(`DELETE FROM ${t} WHERE evento_id=?`).bind(id).run();
         await db.prepare("DELETE FROM eventos WHERE id=?").bind(id).run();
         return json({ ok: true });
@@ -870,6 +969,253 @@ export default {
         await db.prepare("DELETE FROM custos WHERE id=?").bind(id).run();
         return json({ ok: true });
       }
+    }
+
+    /* ================= SISTEMA OPERACIONAL · Ciclo (op_*) — ambos os papéis ================= */
+    // Árvore completa: itens → fases → microtarefas
+    if ((m = path.match(/^\/api\/eventos\/(\d+)\/op$/)) && method === "GET") {
+      const eid = +m[1];
+      const { results: itens } = await db.prepare(
+        "SELECT * FROM op_itens WHERE evento_id=? ORDER BY ordem, id").bind(eid).all();
+      const { results: fases } = await db.prepare(
+        "SELECT f.* FROM op_fases f JOIN op_itens i ON i.id=f.item_id WHERE i.evento_id=? ORDER BY f.ordem, f.id").bind(eid).all();
+      const { results: micros } = await db.prepare(
+        "SELECT m.* FROM op_microtarefas m JOIN op_fases f ON f.id=m.fase_id JOIN op_itens i ON i.id=f.item_id WHERE i.evento_id=? ORDER BY m.ordem, m.id").bind(eid).all();
+      const mp = {}; for (const x of micros) (mp[x.fase_id] = mp[x.fase_id] || []).push(x);
+      const fp = {}; for (const f of fases) { f.micros = mp[f.id] || []; (fp[f.item_id] = fp[f.item_id] || []).push(f); }
+      for (const it of itens) it.fases = fp[it.id] || [];
+      return json({ itens });
+    }
+    // Criar item → cria automaticamente as 6 fases
+    if ((m = path.match(/^\/api\/eventos\/(\d+)\/op\/itens$/)) && method === "POST") {
+      const eid = +m[1];
+      const b = await request.json().catch(() => ({}));
+      const c = limparOpItem(b);
+      if (!c.nome) return json({ erro: "informe o nome do item" }, 400);
+      let ordem = c.ordem;
+      if (ordem == null) {
+        const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM op_itens WHERE evento_id=?").bind(eid).first();
+        ordem = (mx ? mx.mo : 0) + 1;
+      }
+      const r = await db.prepare(`
+        INSERT INTO op_itens (evento_id, etapa, categoria, nome, ordem, homologado, observacoes, atualizado_por)
+        VALUES (?,?,?,?,?,?,?,?)`).bind(
+        eid, c.etapa ?? "", c.categoria ?? "", c.nome, ordem, c.homologado ?? 0, c.observacoes ?? "", S(b.atualizado_por, 60)).run();
+      const iid = r.meta.last_row_id;
+      for (let i = 0; i < FASE_TIPOS.length; i++)
+        await db.prepare("INSERT INTO op_fases (item_id, tipo, ordem, status) VALUES (?,?,?, 'afazer')").bind(iid, FASE_TIPOS[i], i + 1).run();
+      return json({ ok: true, id: iid });
+    }
+    // Reordenar itens de uma etapa (arrastar)
+    if ((m = path.match(/^\/api\/eventos\/(\d+)\/op\/reordenar$/)) && method === "POST") {
+      const eid = +m[1];
+      const b = await request.json().catch(() => ({}));
+      const ids = Array.isArray(b.ids) ? b.ids : [];
+      for (let i = 0; i < ids.length; i++)
+        await db.prepare("UPDATE op_itens SET ordem=? WHERE id=? AND evento_id=?").bind(i + 1, I(ids[i]), eid).run();
+      return json({ ok: true });
+    }
+    if ((m = path.match(/^\/api\/op-itens\/(\d+)$/))) {
+      const id = +m[1];
+      if (method === "PATCH") {
+        const b = await request.json().catch(() => ({}));
+        if (!await upd(db, "op_itens", id, limparOpItem(b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por,60).replace(/'/g,"''")}'`))
+          return json({ erro: "nada para atualizar" }, 400);
+        return json({ ok: true });
+      }
+      if (method === "DELETE") {
+        await db.prepare("DELETE FROM op_microtarefas WHERE fase_id IN (SELECT id FROM op_fases WHERE item_id=?)").bind(id).run();
+        await db.prepare("DELETE FROM op_fases WHERE item_id=?").bind(id).run();
+        await db.prepare("DELETE FROM op_itens WHERE id=?").bind(id).run();
+        return json({ ok: true });
+      }
+    }
+    if ((m = path.match(/^\/api\/op-fases\/(\d+)$/)) && method === "PATCH") {
+      const id = +m[1];
+      const b = await request.json().catch(() => ({}));
+      const o = {};
+      if ("status" in b && FASE_STATUS.has(b.status)) o.status = b.status;
+      if (!await upd(db, "op_fases", id, o, `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por,60).replace(/'/g,"''")}'`))
+        return json({ erro: "nada para atualizar" }, 400);
+      return json({ ok: true });
+    }
+    if ((m = path.match(/^\/api\/op-fases\/(\d+)\/micros$/)) && method === "POST") {
+      const fid = +m[1];
+      const b = await request.json().catch(() => ({}));
+      const c = limparMicro(b);
+      if (!c.titulo) return json({ erro: "título obrigatório" }, 400);
+      const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM op_microtarefas WHERE fase_id=?").bind(fid).first();
+      const r = await db.prepare(`
+        INSERT INTO op_microtarefas (fase_id, titulo, concluido, ordem, data, horario, responsavel, tipo)
+        VALUES (?,?,?,?,?,?,?,?)`).bind(
+        fid, c.titulo, c.concluido ?? 0, (mx ? mx.mo : 0) + 1, c.data ?? "", c.horario ?? "", c.responsavel ?? "", c.tipo ?? "fixa").run();
+      const micro = await db.prepare("SELECT * FROM op_microtarefas WHERE id=?").bind(r.meta.last_row_id).first();
+      return json({ ok: true, micro });
+    }
+    if ((m = path.match(/^\/api\/op-micros\/(\d+)$/))) {
+      const id = +m[1];
+      if (method === "PATCH") {
+        const b = await request.json().catch(() => ({}));
+        if (!await upd(db, "op_microtarefas", id, limparMicro(b))) return json({ erro: "nada para atualizar" }, 400);
+        const micro = await db.prepare("SELECT * FROM op_microtarefas WHERE id=?").bind(id).first();
+        return micro ? json({ ok: true, micro }) : json({ erro: "não encontrado" }, 404);
+      }
+      if (method === "DELETE") { await db.prepare("DELETE FROM op_microtarefas WHERE id=?").bind(id).run(); return json({ ok: true }); }
+    }
+
+    /* ================= SISTEMA OPERACIONAL · Operação em Campo (campo_*) — ambos ================= */
+    if ((m = path.match(/^\/api\/eventos\/(\d+)\/campo$/)) && method === "GET") {
+      const eid = +m[1];
+      const { results: dias } = await db.prepare("SELECT * FROM campo_dias WHERE evento_id=? ORDER BY ordem, id").bind(eid).all();
+      const { results: tarefas } = await db.prepare(
+        "SELECT t.* FROM campo_tarefas t JOIN campo_dias d ON d.id=t.dia_id WHERE d.evento_id=? ORDER BY t.ordem, t.id").bind(eid).all();
+      const { results: subs } = await db.prepare(
+        "SELECT s.* FROM campo_subtarefas s JOIN campo_tarefas t ON t.id=s.tarefa_id JOIN campo_dias d ON d.id=t.dia_id WHERE d.evento_id=? ORDER BY s.ordem, s.id").bind(eid).all();
+      const sp = {}; for (const s of subs) (sp[s.tarefa_id] = sp[s.tarefa_id] || []).push(s);
+      const tp = {}; for (const t of tarefas) { t.subs = sp[t.id] || []; (tp[t.dia_id] = tp[t.dia_id] || []).push(t); }
+      for (const d of dias) d.tarefas = tp[d.id] || [];
+      return json({ dias });
+    }
+    if ((m = path.match(/^\/api\/eventos\/(\d+)\/campo\/dias$/)) && method === "POST") {
+      const eid = +m[1];
+      const b = await request.json().catch(() => ({}));
+      const c = limparCampoDia(b);
+      if (!c.rotulo) return json({ erro: "informe o rótulo do dia" }, 400);
+      let ordem = c.ordem;
+      if (ordem == null) {
+        const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM campo_dias WHERE evento_id=?").bind(eid).first();
+        ordem = (mx ? mx.mo : 0) + 1;
+      }
+      const r = await db.prepare("INSERT INTO campo_dias (evento_id, rotulo, data, ordem) VALUES (?,?,?,?)")
+        .bind(eid, c.rotulo, c.data ?? "", ordem).run();
+      return json({ ok: true, id: r.meta.last_row_id });
+    }
+    if ((m = path.match(/^\/api\/campo-dias\/(\d+)$/))) {
+      const id = +m[1];
+      if (method === "PATCH") {
+        const b = await request.json().catch(() => ({}));
+        if (!await upd(db, "campo_dias", id, limparCampoDia(b))) return json({ erro: "nada para atualizar" }, 400);
+        return json({ ok: true });
+      }
+      if (method === "DELETE") {
+        await db.prepare("DELETE FROM campo_subtarefas WHERE tarefa_id IN (SELECT id FROM campo_tarefas WHERE dia_id=?)").bind(id).run();
+        await db.prepare("DELETE FROM campo_tarefas WHERE dia_id=?").bind(id).run();
+        await db.prepare("DELETE FROM campo_dias WHERE id=?").bind(id).run();
+        return json({ ok: true });
+      }
+    }
+    if ((m = path.match(/^\/api\/campo-dias\/(\d+)\/tarefas$/)) && method === "POST") {
+      const did = +m[1];
+      const b = await request.json().catch(() => ({}));
+      const c = limparCampoTarefa(b);
+      if (!c.nome) return json({ erro: "informe o nome da tarefa" }, 400);
+      let ordem = c.ordem;
+      if (ordem == null) {
+        const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM campo_tarefas WHERE dia_id=?").bind(did).first();
+        ordem = (mx ? mx.mo : 0) + 1;
+      }
+      const r = await db.prepare(`
+        INSERT INTO campo_tarefas (dia_id, nome, h_planejado, h_realizado, responsavel, tipo, status, ordem, observacoes, atualizado_por)
+        VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(
+        did, c.nome, c.h_planejado ?? "", c.h_realizado ?? "", c.responsavel ?? "", c.tipo ?? "ajustavel",
+        c.status ?? "afazer", ordem, c.observacoes ?? "", S(b.atualizado_por, 60)).run();
+      return json({ ok: true, id: r.meta.last_row_id });
+    }
+    if ((m = path.match(/^\/api\/campo-tarefas\/(\d+)$/))) {
+      const id = +m[1];
+      if (method === "PATCH") {
+        const b = await request.json().catch(() => ({}));
+        if (!await upd(db, "campo_tarefas", id, limparCampoTarefa(b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por,60).replace(/'/g,"''")}'`))
+          return json({ erro: "nada para atualizar" }, 400);
+        const tarefa = await db.prepare("SELECT * FROM campo_tarefas WHERE id=?").bind(id).first();
+        return tarefa ? json({ ok: true, tarefa }) : json({ erro: "não encontrado" }, 404);
+      }
+      if (method === "DELETE") {
+        await db.prepare("DELETE FROM campo_subtarefas WHERE tarefa_id=?").bind(id).run();
+        await db.prepare("DELETE FROM campo_tarefas WHERE id=?").bind(id).run();
+        return json({ ok: true });
+      }
+    }
+    // Registrar horário realizado + (opcional) reajustar em cascata as próximas Ajustáveis
+    if ((m = path.match(/^\/api\/campo-tarefas\/(\d+)\/reajustar$/)) && method === "POST") {
+      const id = +m[1];
+      const b = await request.json().catch(() => ({}));
+      const t = await db.prepare(
+        "SELECT t.*, d.evento_id AS eid FROM campo_tarefas t JOIN campo_dias d ON d.id=t.dia_id WHERE t.id=?").bind(id).first();
+      if (!t) return json({ erro: "tarefa não encontrada" }, 404);
+      const hr = S(b.h_realizado, 20);
+      await db.prepare(
+        "UPDATE campo_tarefas SET h_realizado=?, status='concluido', atualizado_em=datetime('now'), atualizado_por=? WHERE id=?")
+        .bind(hr, S(b.atualizado_por, 60), id).run();
+      let reajustadas = 0;
+      const pm = hhmmMin(t.h_planejado), rm = hhmmMin(hr);
+      if (b.aplicar && pm != null && rm != null && rm !== pm) {
+        const delta = rm - pm;
+        const { results } = await db.prepare(
+          "SELECT t.id, t.tipo, t.h_planejado FROM campo_tarefas t JOIN campo_dias d ON d.id=t.dia_id WHERE d.evento_id=? ORDER BY d.ordem, t.ordem, t.id").bind(t.eid).all();
+        let passou = false;
+        for (const r of results) {
+          if (r.id === id) { passou = true; continue; }
+          if (!passou || r.tipo !== "ajustavel") continue;
+          const bm = hhmmMin(r.h_planejado);
+          if (bm == null) continue;
+          await db.prepare("UPDATE campo_tarefas SET h_planejado=?, atualizado_em=datetime('now') WHERE id=?")
+            .bind(minHhmm(bm + delta), r.id).run();
+          reajustadas++;
+        }
+      }
+      return json({ ok: true, reajustadas });
+    }
+    if ((m = path.match(/^\/api\/campo-tarefas\/(\d+)\/subtarefas$/)) && method === "POST") {
+      const tid = +m[1];
+      const b = await request.json().catch(() => ({}));
+      const c = limparSubitem(b);
+      if (!c.titulo) return json({ erro: "título obrigatório" }, 400);
+      const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM campo_subtarefas WHERE tarefa_id=?").bind(tid).first();
+      const r = await db.prepare("INSERT INTO campo_subtarefas (tarefa_id, ordem, titulo, concluido) VALUES (?,?,?,?)")
+        .bind(tid, (mx ? mx.mo : 0) + 1, c.titulo, c.concluido ?? 0).run();
+      const sub = await db.prepare("SELECT * FROM campo_subtarefas WHERE id=?").bind(r.meta.last_row_id).first();
+      return json({ ok: true, subtarefa: sub });
+    }
+    if ((m = path.match(/^\/api\/campo-subtarefas\/(\d+)$/))) {
+      const id = +m[1];
+      if (method === "PATCH") {
+        const b = await request.json().catch(() => ({}));
+        if (!await upd(db, "campo_subtarefas", id, limparSubitem(b))) return json({ erro: "nada para atualizar" }, 400);
+        const sub = await db.prepare("SELECT * FROM campo_subtarefas WHERE id=?").bind(id).first();
+        return sub ? json({ ok: true, subtarefa: sub }) : json({ erro: "não encontrado" }, 404);
+      }
+      if (method === "DELETE") { await db.prepare("DELETE FROM campo_subtarefas WHERE id=?").bind(id).run(); return json({ ok: true }); }
+    }
+
+    /* Agenda operacional: funde microtarefas de Execução (com horário) + tarefas de Campo,
+       agrupadas por dia e ordenadas por horário. */
+    if ((m = path.match(/^\/api\/eventos\/(\d+)\/agenda$/)) && method === "GET") {
+      const eid = +m[1];
+      const { results: ct } = await db.prepare(`
+        SELECT t.id, t.nome, t.h_planejado AS horario, t.h_realizado, t.responsavel, t.tipo, t.status,
+               d.rotulo AS dia, d.ordem AS dia_ordem
+        FROM campo_tarefas t JOIN campo_dias d ON d.id=t.dia_id
+        WHERE d.evento_id=?`).bind(eid).all();
+      const { results: mi } = await db.prepare(`
+        SELECT m.id, m.titulo AS nome, m.horario, m.responsavel, m.tipo, m.concluido, m.data AS dia,
+               i.nome AS item, i.categoria
+        FROM op_microtarefas m
+        JOIN op_fases f ON f.id=m.fase_id AND f.tipo='execucao'
+        JOIN op_itens i ON i.id=f.item_id
+        WHERE i.evento_id=? AND m.horario<>''`).bind(eid).all();
+      const entradas = [];
+      for (const t of ct) entradas.push({
+        origem: "campo", id: t.id, dia: t.dia, dia_ordem: t.dia_ordem, horario: t.horario,
+        h_realizado: t.h_realizado, nome: t.nome, tipo: t.tipo, status: t.status, responsavel: t.responsavel });
+      for (const x of mi) entradas.push({
+        origem: "item", id: x.id, dia: x.dia || "Sem dia", dia_ordem: 9999, horario: x.horario,
+        nome: x.nome, tipo: x.tipo, status: x.concluido ? "concluido" : "afazer",
+        responsavel: x.responsavel, item: x.item, categoria: x.categoria });
+      entradas.sort((a, b) =>
+        (a.dia_ordem - b.dia_ordem) || String(a.dia).localeCompare(String(b.dia)) ||
+        String(a.horario).localeCompare(String(b.horario)));
+      return json({ entradas });
     }
 
     return json({ erro: "não encontrado" }, 404);

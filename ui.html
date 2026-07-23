@@ -187,6 +187,67 @@ tr.total td{color:var(--txt);font-weight:700;border-top:1px solid var(--line)}
 .hide{display:none!important}
 .backln{display:inline-flex;align-items:center;gap:6px;background:none;border:none;color:var(--dim);font-size:14px;padding:14px 0 4px}
 .backln:hover{color:#FFF}
+
+/* ---- v4.1: Sistema Operacional (ciclo) ---- */
+.etapa{border:1px solid var(--line);border-radius:14px;margin-bottom:10px;background:var(--card2);overflow:hidden}
+.etapa>summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;align-items:center;gap:12px}
+.etapa>summary::-webkit-details-marker{display:none}
+.etapa .caret{color:var(--dim);transition:transform .2s;flex:none;font-size:12px}
+.etapa[open]>summary .caret{transform:rotate(90deg)}
+.etapa .ename{font-family:'Anton',sans-serif;font-size:16px;text-transform:uppercase;letter-spacing:-.3px;flex:1;min-width:0}
+.etapa .ecount{font-size:11px;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums}
+.etapabody{padding:2px 14px 14px}
+.opitem{border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:var(--card)}
+.opitem>summary{list-style:none;cursor:pointer;padding:11px 13px;display:flex;align-items:center;gap:10px}
+.opitem>summary::-webkit-details-marker{display:none}
+.opitem .inm{font-weight:600;font-size:15px;flex:1;min-width:0;overflow-wrap:anywhere}
+.opbody{padding:2px 13px 12px}
+.fasepills{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+.fpill{font-size:9px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;border:1px solid var(--line);border-radius:99px;padding:2px 7px;color:var(--dim)}
+.fpill.andamento{border-color:#6b5a22;color:var(--warn)}
+.fpill.concluido{border-color:#2e5c44;color:var(--ok);background:#12251a}
+.fpill.nao_utilizada{opacity:.4;text-decoration:line-through}
+.fasebloco{border-top:1px solid #1d1d1d;padding:9px 0 3px}
+.fasebloco:first-child{border-top:none}
+.faseh{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.faseh .fn{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--mut);font-weight:700;flex:1}
+.faseh select.stsel{width:auto;min-width:118px;padding:5px 26px 5px 9px;font-size:12px;font-weight:700}
+.faseh.st-concluido select.stsel{color:var(--ok)} .faseh.st-andamento select.stsel{color:var(--warn)}
+.faseh.st-nao_utilizada select.stsel{color:var(--dim)}
+.microrow{display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:14px;color:var(--mut);width:100%;text-align:left;line-height:1.3}
+.microchk{flex:none;width:18px;height:18px;border-radius:5px;border:1.5px solid var(--dim);display:flex;align-items:center;justify-content:center;font-size:11px;color:#000;transition:all .12s;background:none;cursor:pointer}
+.microrow.done .microchk{background:var(--ok);border-color:var(--ok)}
+.microrow.done .mtxt{text-decoration:line-through;color:var(--dim)}
+.mtxt{flex:1;overflow-wrap:anywhere;cursor:pointer}
+.mtime{font-size:11px;color:var(--warn);font-weight:700;white-space:nowrap}
+.mtime .tp{color:#7fb3e6;font-weight:700}
+.mtime .tp.fixa{color:#e0a45c}
+.mdel{flex:none;color:var(--dim);font-size:16px;background:none;border:none;padding:0 4px;cursor:pointer}
+.mdel:hover{color:var(--p1)}
+.microadd{width:100%;background:transparent;border:1px dashed var(--line);border-radius:9px;padding:7px;color:var(--dim);font-size:13px;margin-top:4px}
+.microadd:hover{color:var(--txt);border-color:#666}
+.ipgear{flex:none;background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:8px;padding:2px 8px;font-size:13px}
+.ipgear:hover{border-color:#666;color:var(--txt)}
+.homtag{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;border:1px solid #2e5c44;color:var(--ok);border-radius:99px;padding:1px 6px}
+
+/* ---- v4.1: Operação em Campo + Agenda ---- */
+.ctarefa{display:flex;align-items:flex-start;gap:11px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.ctarefa.st-concluido{opacity:.62}
+.htime{flex:none;width:58px;text-align:center}
+.htime b{font-family:'Anton',sans-serif;font-size:19px;letter-spacing:0;display:block;line-height:1}
+.htime small{font-size:9.5px;color:var(--dim);letter-spacing:.3px}
+.htime .real{color:var(--ok);font-size:12px;font-weight:700;font-family:'Archivo'}
+.cinfo{flex:1;min-width:0}
+.cinfo .cn{font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.cinfo .csub{font-size:12px;color:var(--dim);display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:3px;align-items:center}
+.tipotag{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;border-radius:99px;padding:1px 7px;border:1px solid var(--line);color:var(--dim)}
+.tipotag.fixa{border-color:#4a3a23;color:#e0a45c}
+.tipotag.ajustavel{border-color:#2b4a6b;color:#7fb3e6}
+.agrow{display:flex;align-items:center;gap:11px;padding:8px 4px;border-bottom:1px solid #1d1d1d}
+.agrow .agt{flex:none;width:52px;font-family:'Anton',sans-serif;font-size:17px}
+.agrow.st-concluido{opacity:.55}
+.agrow .agn{flex:1;min-width:0;font-size:14px;overflow-wrap:anywhere}
+.agrow .agmeta{font-size:11px;color:var(--dim)}
 </style>
 </head>
 <body>
@@ -243,6 +304,10 @@ var EV = null;                  // evento aberto {evento, itens}
 var CL = null;                  // participantes do evento aberto
 var SIM = null;                 // {cenarios, linhas}
 var HO = null;                  // {quartos, alocacoes, participantes}
+var OP = null;                  // v4.1: itens do ciclo operacional (árvore)
+var CAMPO = null;               // v4.1: dias da operação em campo (árvore)
+var AGENDA = null;              // v4.1: agenda cronológica (entradas)
+var OPEN_ET = {}, OPEN_IT = {}; // estado aberto/fechado do acordeão (por etapa/item)
 var FILT = { q:"", dia:"", setor:"", status:"", prio:"", resp:"" };
 var pollTimer = null;
 
@@ -321,7 +386,7 @@ function route(){
   clearInterval(pollTimer); pollTimer = null;
 
   var h = location.hash || "#/";
-  var m = h.match(/^#\/e\/(\d+)(?:\/(custos|participantes|simulador|hospedagem))?$/);
+  var m = h.match(/^#\/e\/(\d+)(?:\/(custos|participantes|simulador|hospedagem|operacao|campo|agenda))?$/);
   if (m) return telaEvento(+m[1], m[2] || "");
   if (h === "#/tarefas") return telaTarefas();
   if (h === "#/crm") return telaCRM();
@@ -391,8 +456,9 @@ function cardEvento(e){
 }
 
 function modalNovoEvento(){
-  var opts = eventos.filter(function(e){return e.total>0;}).map(function(e){
-    return '<option value="'+e.id+'">'+esc(e.nome)+' ('+e.total+' itens)</option>';
+  var opts = eventos.filter(function(e){return e.total>0 || e.op_total>0;}).map(function(e){
+    var n = (e.op_total>0) ? (e.op_total+' itens op.') : (e.total+' itens');
+    return '<option value="'+e.id+'">'+esc(e.nome)+' ('+n+')</option>';
   }).join("");
   abrirSheet(
     '<h2 class="anton">Novo evento</h2>' +
@@ -488,7 +554,7 @@ function itensFiltrados(){
 
 function renderEvento(aba){
   var ev = EV.evento, s = stats(EV.itens);
-  var TABS = [["","Checklist"]];
+  var TABS = [["","Checklist"],["operacao","Operação"],["campo","Campo"],["agenda","Agenda"]];
   if (PAPEL === "admin") TABS.push(["custos","Custos"],["participantes","Participantes"],["simulador","Simulador"]);
   TABS.push(["hospedagem","Hospedagem"]);
   var tabsHtml = TABS.map(function(t){
@@ -518,10 +584,14 @@ function renderEvento(aba){
       location.hash = "#/e/"+ev.id+(t?"/"+t:"");
     };
   });
+  $("main").onclick = null; $("main").onchange = null;  // limpa handlers delegados de abas anteriores
   if (aba === "custos") carregarCustos();
   else if (aba === "participantes") carregarParticipantes();
   else if (aba === "simulador") carregarSimulador();
   else if (aba === "hospedagem") carregarHospedagem();
+  else if (aba === "operacao") carregarOperacao();
+  else if (aba === "campo") carregarCampo();
+  else if (aba === "agenda") carregarAgenda();
   else renderChecklist();
 }
 
@@ -883,7 +953,7 @@ function sheetItem(id, diaSugerido){
 function recarregar(){
   return api("/api/eventos/"+EV.evento.id+"/itens").then(function(j){
     EV = j;
-    var m = location.hash.match(/^#\/e\/\d+(?:\/(custos|participantes|simulador|hospedagem))?$/);
+    var m = location.hash.match(/^#\/e\/\d+(?:\/(custos|participantes|simulador|hospedagem|operacao|campo|agenda))?$/);
     renderEvento((m && m[1]) || "");
   });
 }
@@ -1803,6 +1873,421 @@ function sheetQuarto(id){
    ============================================================ */
 var TA = [];
 var TFILT = { q:"", status:"", prio:"", resp:"", setor:"" };
+
+/* ============================================================
+   v4.1 · SISTEMA OPERACIONAL — Ciclo Operacional (op_*)
+   Etapa → Item (Nome+Categoria) → 6 Fases → Microtarefas.
+   A árvore é renderizada como acordeão; mutações refazem a busca
+   preservando o estado aberto/fechado (OPEN_ET / OPEN_IT).
+   ============================================================ */
+var ETAPAS = [
+  ["validacao","Validação"], ["marketing","Marketing"], ["vendas","Vendas"],
+  ["contratacoes","Contratações"], ["pre_expedicao","Evento Pré-Expedição"],
+  ["operacao_campo","Operação em Campo"], ["fechamento","Fechamento"]
+];
+var ETAPA_TXT = {}; ETAPAS.forEach(function(e){ ETAPA_TXT[e[0]] = e[1]; });
+var FASES_INFO = [
+  ["pesquisa","Pesquisa"], ["negociacao","Negociação"], ["contratacao","Contratação"],
+  ["confirmacao","Confirmação"], ["execucao","Execução / Entrega"], ["avaliacao","Avaliação"]
+];
+var FASE_TXT = {}; FASES_INFO.forEach(function(f){ FASE_TXT[f[0]] = f[1]; });
+var FST_TXT = { afazer:"A fazer", andamento:"Em andamento", concluido:"Concluído", nao_utilizada:"Não utilizada" };
+
+function carregarOperacao(){
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+  api("/api/eventos/"+EV.evento.id+"/op").then(function(j){ OP = j.itens || []; renderOperacao(); })
+    .catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
+}
+function recarregarOperacao(){
+  return api("/api/eventos/"+EV.evento.id+"/op").then(function(j){ OP = j.itens || []; renderOperacao(); })
+    .catch(function(e){ toast(e.message, true); });
+}
+function snapOpen(){
+  var host = $("main");
+  Array.prototype.forEach.call(host.querySelectorAll("details.etapa"), function(d){ OPEN_ET[d.getAttribute("data-et")] = d.open; });
+  Array.prototype.forEach.call(host.querySelectorAll("details.opitem"), function(d){ OPEN_IT[d.getAttribute("data-id")] = d.open; });
+}
+function faseDone(f){ return f.status === "concluido" || f.status === "nao_utilizada"; }
+function findItem(id){ for (var a=0;a<OP.length;a++) if (OP[a].id===id) return OP[a]; return null; }
+function findFase(id){ for (var a=0;a<OP.length;a++){ var fs=OP[a].fases||[]; for(var b=0;b<fs.length;b++) if(fs[b].id===id) return {item:OP[a],fase:fs[b]}; } return null; }
+function findMicro(id){ for (var a=0;a<OP.length;a++){ var fs=OP[a].fases||[]; for(var b=0;b<fs.length;b++){ var ms=fs[b].micros||[]; for(var c=0;c<ms.length;c++) if(ms[c].id===id) return {item:OP[a],fase:fs[b],micro:ms[c]}; } } return null; }
+function opCategorias(){ var s={}; (OP||[]).forEach(function(i){ if(i.categoria) s[i.categoria]=1; }); return Object.keys(s).sort(); }
+
+function renderOperacao(){
+  snapOpen();
+  var html = '<p style="color:var(--mut);font-size:13px;margin:2px 0 14px">Cada item passa pelo mesmo ciclo de 6 fases. Crie o item só com <b>nome + categoria</b> — as fases já vêm prontas.</p>';
+  ETAPAS.forEach(function(et){
+    var slug = et[0], label = et[1];
+    if (slug === "operacao_campo"){
+      html += '<details class="etapa" data-et="'+slug+'"'+(OPEN_ET[slug]?' open':'')+'>'+
+        '<summary><span class="caret">▶</span><span class="ename">'+label+'</span></summary>'+
+        '<div class="etapabody"><p style="color:var(--dim);font-size:13px;margin:6px 0 10px">Esta etapa é cronológica, por dias — não usa o ciclo de fases.</p>'+
+        '<button class="btn2" data-act="go-campo" style="width:100%">Abrir Operação em Campo →</button></div></details>';
+      return;
+    }
+    var itens = OP.filter(function(i){ return i.etapa === slug; });
+    var tot=0, done=0;
+    itens.forEach(function(i){ (i.fases||[]).forEach(function(f){ tot++; if(faseDone(f)) done++; }); });
+    var pct = tot ? Math.round(done/tot*100) : 0;
+    html += '<details class="etapa" data-et="'+slug+'"'+(OPEN_ET[slug]?' open':'')+'>'+
+      '<summary><span class="caret">▶</span><span class="ename">'+label+'</span>'+
+      '<span class="ecount">'+itens.length+' '+(itens.length===1?'item':'itens')+' · '+pct+'%</span></summary>'+
+      '<div class="etapabody">'+
+        (itens.length ? itens.map(itemHtml).join('') : '<p style="color:var(--dim);font-size:13px;margin:6px 0">Nenhum item nesta etapa ainda.</p>') +
+        '<button class="microadd" data-act="item-new" data-etapa="'+slug+'" style="padding:10px">+ Novo item</button>'+
+      '</div></details>';
+  });
+  $("main").innerHTML = html;
+  $("main").onclick = onOpClick;
+  $("main").onchange = onOpChange;
+}
+
+function itemHtml(i){
+  var pills = (i.fases||[]).map(function(f){
+    return '<span class="fpill '+f.status+'" title="'+esc(FASE_TXT[f.tipo]+' · '+FST_TXT[f.status])+'">'+esc((FASE_TXT[f.tipo]||f.tipo).split(" ")[0])+'</span>';
+  }).join('');
+  var body = (i.fases||[]).map(function(f){ return faseHtml(i,f); }).join('');
+  return '<details class="opitem" data-id="'+i.id+'"'+(OPEN_IT[i.id]?' open':'')+'>'+
+    '<summary>'+
+      '<span class="inm">'+esc(i.nome)+'</span>'+
+      (i.categoria ? '<span class="chip">'+esc(i.categoria)+'</span>' : '')+
+      (i.homologado ? '<span class="homtag">homologado</span>' : '')+
+      '<button class="ipgear" data-act="item-edit" data-id="'+i.id+'" title="Editar item">⚙</button>'+
+    '</summary>'+
+    '<div class="fasepills" style="padding:0 13px 2px">'+pills+'</div>'+
+    '<div class="opbody">'+body+'</div></details>';
+}
+
+function faseHtml(i,f){
+  var micros = (f.micros||[]).map(function(m){ return microHtml(f,m); }).join('');
+  var sel = '<select class="stsel" data-act="fase-st" data-id="'+f.id+'">'+
+    ["afazer","andamento","concluido","nao_utilizada"].map(function(s){
+      return '<option value="'+s+'"'+(f.status===s?' selected':'')+'>'+FST_TXT[s]+'</option>'; }).join('')+'</select>';
+  return '<div class="fasebloco">'+
+    '<div class="faseh st-'+f.status+'"><span class="fn">'+esc(FASE_TXT[f.tipo])+'</span>'+sel+'</div>'+
+    micros +
+    '<button class="microadd" data-act="micro-add" data-fase="'+f.id+'" data-tipo="'+f.tipo+'">+ microtarefa</button>'+
+    '</div>';
+}
+
+function microHtml(f,m){
+  var timeStr = "";
+  if (f.tipo === "execucao" && (m.horario||m.data||m.responsavel)){
+    var parts = [];
+    if (m.data) parts.push(esc(m.data));
+    if (m.horario) parts.push('<span class="tp'+(m.tipo==="fixa"?' fixa':'')+'">'+esc(m.horario)+'</span>');
+    if (m.responsavel) parts.push(esc(m.responsavel));
+    timeStr = '<span class="mtime">'+parts.join(' · ')+'</span>';
+  }
+  return '<div class="microrow'+(m.concluido?' done':'')+'" data-id="'+m.id+'">'+
+    '<button class="microchk" data-act="micro-chk" data-id="'+m.id+'">'+(m.concluido?'✓':'')+'</button>'+
+    '<span class="mtxt" data-act="micro-edit" data-id="'+m.id+'" data-tipo="'+f.tipo+'">'+esc(m.titulo)+'</span>'+
+    timeStr +
+    '<button class="mdel" data-act="micro-del" data-id="'+m.id+'" title="Excluir">×</button>'+
+    '</div>';
+}
+
+function onOpClick(e){
+  var el = e.target.closest ? e.target.closest("[data-act]") : null;
+  if (!el) return;
+  var act = el.getAttribute("data-act");
+  var id = +el.getAttribute("data-id");
+  if (act === "go-campo"){ e.preventDefault(); location.hash = "#/e/"+EV.evento.id+"/campo"; return; }
+  // ações dentro de <summary> não devem alternar o acordeão
+  if (act==="item-edit"||act==="micro-chk"||act==="micro-del"||act==="micro-edit"||act==="micro-add"||act==="item-new"){
+    e.preventDefault(); e.stopPropagation();
+  }
+  if (act === "item-new"){ sheetOpItem(el.getAttribute("data-etapa"), null); return; }
+  if (act === "item-edit"){ var it=findItem(id); if(it) sheetOpItem(null, it); return; }
+  if (act === "micro-chk"){
+    var r = findMicro(id); if(!r) return;
+    var novo = r.micro.concluido ? 0 : 1; r.micro.concluido = novo;
+    var row = el.parentNode; row.classList.toggle("done", !!novo); el.textContent = novo ? "✓" : "";
+    api("/api/op-micros/"+id, "PATCH", {concluido:novo}).catch(function(er){ toast(er.message, true); });
+    return;
+  }
+  if (act === "micro-del"){
+    api("/api/op-micros/"+id, "DELETE").then(function(){ toast("Microtarefa excluída"); return recarregarOperacao(); }).catch(function(er){ toast(er.message, true); });
+    return;
+  }
+  if (act === "micro-edit"){ var rr=findMicro(id); if(rr) sheetMicro(rr.fase.id, el.getAttribute("data-tipo"), rr.micro); return; }
+  if (act === "micro-add"){ sheetMicro(+el.getAttribute("data-fase"), el.getAttribute("data-tipo"), null); return; }
+}
+
+function onOpChange(e){
+  var el = e.target.closest ? e.target.closest("[data-act='fase-st']") : null;
+  if (!el) return;
+  var id = +el.getAttribute("data-id"), st = el.value;
+  var r = findFase(id); if (r) r.fase.status = st;
+  var fh = el.closest(".faseh"); if (fh) fh.className = "faseh st-"+st;
+  api("/api/op-fases/"+id, "PATCH", {status:st, atualizado_por:NOME}).then(recarregarOperacao).catch(function(er){ toast(er.message, true); });
+}
+
+function sheetOpItem(etapaSlug, item){
+  var novo = !item;
+  var et = novo ? etapaSlug : item.etapa;
+  abrirSheet(
+    '<h2 class="anton">'+(novo?"Novo item":"Editar item")+'</h2>'+
+    '<p class="meta">'+esc(ETAPA_TXT[et]||"")+(novo?' · o sistema cria as 6 fases automaticamente':'')+'</p>'+
+    '<label class="top" for="oi_nome">Nome do item</label>'+
+    '<input id="oi_nome" maxlength="200" placeholder="ex.: Hotel Serra Bela" value="'+esc(novo?"":item.nome)+'">'+
+    '<label class="top" for="oi_cat">Categoria</label>'+
+    '<input id="oi_cat" list="dl_opcats" maxlength="120" placeholder="ex.: Hotel, Bebidas, Camiseta" value="'+esc(novo?"":item.categoria)+'">'+
+    '<datalist id="dl_opcats">'+opCategorias().map(function(v){ return '<option value="'+esc(v)+'">'; }).join('')+'</datalist>'+
+    '<label style="display:flex;gap:10px;align-items:center;font-size:14px;color:var(--mut);margin-top:14px">'+
+      '<input type="checkbox" id="oi_hom" style="width:auto"'+(!novo&&item.homologado?' checked':'')+'><span>Parceiro já homologado (pode pular pesquisa/negociação)</span></label>'+
+    '<label class="top" for="oi_obs">Observações</label>'+
+    '<textarea id="oi_obs" rows="2" maxlength="600">'+esc(novo?"":(item.observacoes||""))+'</textarea>'+
+    '<div class="actions">'+(novo?'<button class="btn2" data-close>Cancelar</button>':'<button class="btn-danger" id="oi_del">Excluir</button>')+
+    '<button class="btn" id="oi_ok">'+(novo?"Criar item":"Salvar")+'</button></div>'
+  );
+  $("oi_ok").onclick = function(){
+    var nome = $("oi_nome").value.trim(); if(!nome) return toast("Dê um nome ao item", true);
+    var body = { nome:nome, categoria:$("oi_cat").value.trim(), homologado:$("oi_hom").checked?1:0, observacoes:$("oi_obs").value.trim(), atualizado_por:NOME };
+    $("oi_ok").disabled = true;
+    var p = novo ? api("/api/eventos/"+EV.evento.id+"/op/itens","POST",Object.assign({etapa:et},body))
+                 : api("/api/op-itens/"+item.id,"PATCH",body);
+    p.then(function(res){ fecharSheet(); if(novo){ OPEN_ET[et]=true; if(res&&res.id) OPEN_IT[res.id]=true; } toast(novo?"Item criado":"Item salvo"); return recarregarOperacao(); })
+     .catch(function(e){ $("oi_ok").disabled=false; toast(e.message, true); });
+  };
+  if (!novo){ var d=$("oi_del"); if(d) d.onclick = function(){
+    api("/api/op-itens/"+item.id,"DELETE").then(function(){ fecharSheet(); toast("Item excluído"); return recarregarOperacao(); }).catch(function(e){ toast(e.message, true); });
+  }; }
+  setTimeout(function(){ $("oi_nome").focus(); }, 50);
+}
+
+function sheetMicro(faseId, faseTipo, micro){
+  var novo = !micro, exec = faseTipo === "execucao";
+  var extra = exec ?
+    ('<div class="grid2">'+
+      '<div><label class="top" for="mi_data">Data / dia</label><input id="mi_data" maxlength="20" placeholder="ex.: Quinta ou 26/08" value="'+esc(novo?"":(micro.data||""))+'"></div>'+
+      '<div><label class="top" for="mi_hora">Horário previsto</label><input id="mi_hora" maxlength="20" placeholder="08:00" value="'+esc(novo?"":(micro.horario||""))+'"></div>'+
+     '</div>'+
+     '<div class="grid2">'+
+      '<div><label class="top" for="mi_resp">Responsável</label><input id="mi_resp" maxlength="120" value="'+esc(novo?"":(micro.responsavel||""))+'"></div>'+
+      '<div><label class="top" for="mi_tipo">Tipo (agenda)</label><select id="mi_tipo"><option value="fixa"'+(!novo&&micro.tipo==="fixa"?' selected':'')+'>Fixa</option><option value="ajustavel"'+(novo||micro.tipo==="ajustavel"?' selected':'')+'>Ajustável</option></select></div>'+
+     '</div>') : '';
+  abrirSheet(
+    '<h2 class="anton">'+(novo?"Nova microtarefa":"Editar microtarefa")+'</h2>'+
+    '<p class="meta">'+esc(FASE_TXT[faseTipo]||"")+(exec?' · aparece na Agenda quando tem horário':'')+'</p>'+
+    '<label class="top" for="mi_tit">Título</label>'+
+    '<input id="mi_tit" maxlength="300" value="'+esc(novo?"":micro.titulo)+'">'+
+    extra +
+    '<div class="actions">'+(novo?'<button class="btn2" data-close>Cancelar</button>':'<button class="btn-danger" id="mi_del">Excluir</button>')+
+    '<button class="btn" id="mi_ok">'+(novo?"Adicionar":"Salvar")+'</button></div>'
+  );
+  $("mi_ok").onclick = function(){
+    var tit = $("mi_tit").value.trim(); if(!tit) return toast("Escreva a microtarefa", true);
+    var body = { titulo:tit };
+    if (exec){ body.data=$("mi_data").value.trim(); body.horario=$("mi_hora").value.trim(); body.responsavel=$("mi_resp").value.trim(); body.tipo=$("mi_tipo").value; }
+    $("mi_ok").disabled = true;
+    var p = novo ? api("/api/op-fases/"+faseId+"/micros","POST",body) : api("/api/op-micros/"+micro.id,"PATCH",body);
+    p.then(function(){ fecharSheet(); return recarregarOperacao(); }).catch(function(e){ $("mi_ok").disabled=false; toast(e.message, true); });
+  };
+  if (!novo){ var d=$("mi_del"); if(d) d.onclick = function(){
+    api("/api/op-micros/"+micro.id,"DELETE").then(function(){ fecharSheet(); return recarregarOperacao(); }).catch(function(e){ toast(e.message, true); });
+  }; }
+  setTimeout(function(){ $("mi_tit").focus(); }, 50);
+}
+
+/* ============================================================
+   v4.1 · Operação em Campo (campo_*) — por dias, cronológico
+   ============================================================ */
+function carregarCampo(){
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+  api("/api/eventos/"+EV.evento.id+"/campo").then(function(j){ CAMPO = j.dias || []; renderCampo(); })
+    .catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
+}
+function recarregarCampo(){
+  return api("/api/eventos/"+EV.evento.id+"/campo").then(function(j){ CAMPO = j.dias || []; renderCampo(); })
+    .catch(function(e){ toast(e.message, true); });
+}
+function findCT(id){ for(var a=0;a<CAMPO.length;a++){ var ts=CAMPO[a].tarefas||[]; for(var b=0;b<ts.length;b++) if(ts[b].id===id) return {dia:CAMPO[a],tarefa:ts[b]}; } return null; }
+function findCD(id){ for(var a=0;a<CAMPO.length;a++) if(CAMPO[a].id===id) return CAMPO[a]; return null; }
+function findCSub(id){ for(var a=0;a<CAMPO.length;a++){ var ts=CAMPO[a].tarefas||[]; for(var b=0;b<ts.length;b++){ var ss=ts[b].subs||[]; for(var c=0;c<ss.length;c++) if(ss[c].id===id) return ss[c]; } } return null; }
+
+function renderCampo(){
+  var html = '<p style="color:var(--mut);font-size:13px;margin:2px 0 14px">Cada dia em ordem cronológica. Tarefa <b>Ajustável</b> reajusta as próximas ao registrar o horário real; <b>Fixa</b> não move as outras.</p>';
+  if (!CAMPO.length) html += '<div class="empty" style="margin-bottom:12px">Nenhum dia cadastrado ainda. Comece criando o Dia 1.</div>';
+  CAMPO.forEach(function(d){
+    var ts = d.tarefas || [];
+    var done = ts.filter(function(t){ return t.status==="concluido"; }).length;
+    html += '<div class="dayblock">'+
+      '<div class="dayhead"><h3 class="anton">'+esc(d.rotulo)+'</h3>'+
+      '<div class="dayactions"><span class="cnt">'+done+'/'+ts.length+'</span>'+
+      '<button class="daysort" data-act="cd-edit" data-id="'+d.id+'">editar dia</button></div></div>'+
+      ts.map(ctarefaHtml).join('')+
+      '<button class="addrow" data-act="ct-new" data-dia="'+d.id+'">+ Tarefa</button>'+
+      '</div>';
+  });
+  html += '<button class="btn2" data-act="cd-new" style="width:100%;margin-top:8px">+ Novo dia</button>';
+  $("main").innerHTML = html;
+  $("main").onclick = onCampoClick;
+}
+
+function ctarefaHtml(t){
+  var subs = t.subs || [];
+  var subsDone = subs.filter(function(s){ return s.concluido; }).length;
+  var subHtml = subs.map(function(s){
+    return '<button class="subrow'+(s.concluido?' done':'')+'" data-act="cst-chk" data-id="'+s.id+'">'+
+      '<span class="subchk">'+(s.concluido?'✓':'')+'</span><span class="subtxt">'+esc(s.titulo)+'</span></button>';
+  }).join('');
+  return '<div class="ctarefa st-'+t.status+'">'+
+    '<div class="htime"><b>'+esc(t.h_planejado||'--:--')+'</b><small>previsto</small>'+
+      (t.h_realizado?'<div class="real">'+esc(t.h_realizado)+'</div>':'')+'</div>'+
+    '<div class="cinfo">'+
+      '<div class="cn">'+esc(t.nome)+'</div>'+
+      '<div class="csub">'+
+        '<span class="tipotag '+t.tipo+'">'+(t.tipo==="fixa"?"Fixa":"Ajustável")+'</span>'+
+        (t.responsavel?'<span>'+esc(t.responsavel)+'</span>':'')+
+        (subs.length?'<span>'+subsDone+'/'+subs.length+' checks</span>':'')+
+        '<button class="daysort" data-act="ct-realizar" data-id="'+t.id+'">⏱ realizado</button>'+
+        '<button class="daysort" data-act="ct-edit" data-id="'+t.id+'">editar</button>'+
+        '<button class="daysort" data-act="cst-add" data-tarefa="'+t.id+'">+ check</button>'+
+      '</div>'+
+      (subHtml?'<div class="subs" style="margin-left:0">'+subHtml+'</div>':'')+
+    '</div>'+
+    '<button class="stbtn" data-act="ct-status" data-id="'+t.id+'" title="Status">'+(t.status==="concluido"?'✓':'')+'</button>'+
+    '</div>';
+}
+
+function onCampoClick(e){
+  var el = e.target.closest ? e.target.closest("[data-act]") : null;
+  if (!el) return;
+  var act = el.getAttribute("data-act"), id = +el.getAttribute("data-id");
+  if (act === "cd-new"){ sheetCampoDia(null); return; }
+  if (act === "cd-edit"){ var d=findCD(id); if(d) sheetCampoDia(d); return; }
+  if (act === "ct-new"){ sheetCampoTarefa(+el.getAttribute("data-dia"), null); return; }
+  if (act === "ct-edit"){ var r=findCT(id); if(r) sheetCampoTarefa(r.dia.id, r.tarefa); return; }
+  if (act === "ct-realizar"){ var rr=findCT(id); if(rr) sheetRealizar(rr.tarefa); return; }
+  if (act === "ct-status"){
+    var r2=findCT(id); if(!r2) return;
+    var next = STATUS_SEQ[r2.tarefa.status] || "afazer"; r2.tarefa.status = next;
+    api("/api/campo-tarefas/"+id,"PATCH",{status:next,atualizado_por:NOME}).then(recarregarCampo).catch(function(er){ toast(er.message,true); });
+    return;
+  }
+  if (act === "cst-chk"){
+    var s=findCSub(id); if(!s) return; var novo=s.concluido?0:1; s.concluido=novo;
+    el.classList.toggle("done",!!novo); var chk=el.querySelector(".subchk"); if(chk) chk.textContent=novo?'✓':'';
+    api("/api/campo-subtarefas/"+id,"PATCH",{concluido:novo}).catch(function(er){ toast(er.message,true); });
+    return;
+  }
+  if (act === "cst-add"){ sheetCampoSub(+el.getAttribute("data-tarefa")); return; }
+}
+
+function sheetCampoDia(dia){
+  var novo = !dia;
+  abrirSheet(
+    '<h2 class="anton">'+(novo?"Novo dia":"Editar dia")+'</h2>'+
+    '<label class="top" for="cd_rot">Rótulo do dia</label>'+
+    '<input id="cd_rot" maxlength="160" placeholder="ex.: Dia 1 — Chegada e boas-vindas" value="'+esc(novo?"":dia.rotulo)+'">'+
+    '<label class="top" for="cd_data">Data (opcional)</label>'+
+    '<input id="cd_data" maxlength="20" placeholder="ex.: 26/08" value="'+esc(novo?"":(dia.data||""))+'">'+
+    '<div class="actions">'+(novo?'<button class="btn2" data-close>Cancelar</button>':'<button class="btn-danger" id="cd_del">Excluir</button>')+
+    '<button class="btn" id="cd_ok">'+(novo?"Criar":"Salvar")+'</button></div>'
+  );
+  $("cd_ok").onclick = function(){
+    var rot=$("cd_rot").value.trim(); if(!rot) return toast("Dê um rótulo ao dia", true);
+    var body={ rotulo:rot, data:$("cd_data").value.trim() };
+    $("cd_ok").disabled=true;
+    var p = novo ? api("/api/eventos/"+EV.evento.id+"/campo/dias","POST",body) : api("/api/campo-dias/"+dia.id,"PATCH",body);
+    p.then(function(){ fecharSheet(); toast(novo?"Dia criado":"Dia salvo"); return recarregarCampo(); }).catch(function(e){ $("cd_ok").disabled=false; toast(e.message,true); });
+  };
+  if (!novo){ var d=$("cd_del"); if(d) d.onclick=function(){ api("/api/campo-dias/"+dia.id,"DELETE").then(function(){ fecharSheet(); toast("Dia excluído"); return recarregarCampo(); }).catch(function(e){ toast(e.message,true); }); }; }
+  setTimeout(function(){ $("cd_rot").focus(); }, 50);
+}
+
+function sheetCampoTarefa(diaId, t){
+  var novo = !t;
+  abrirSheet(
+    '<h2 class="anton">'+(novo?"Nova tarefa":"Editar tarefa")+'</h2>'+
+    '<label class="top" for="ct_nome">Nome</label>'+
+    '<input id="ct_nome" maxlength="200" placeholder="ex.: Briefing" value="'+esc(novo?"":t.nome)+'">'+
+    '<div class="grid2">'+
+      '<div><label class="top" for="ct_hp">Horário previsto</label><input id="ct_hp" maxlength="20" placeholder="08:00" value="'+esc(novo?"":(t.h_planejado||""))+'"></div>'+
+      '<div><label class="top" for="ct_tipo">Tipo</label><select id="ct_tipo"><option value="ajustavel"'+(novo||t.tipo==="ajustavel"?' selected':'')+'>Ajustável</option><option value="fixa"'+(!novo&&t.tipo==="fixa"?' selected':'')+'>Fixa</option></select></div>'+
+    '</div>'+
+    '<label class="top" for="ct_resp">Responsável</label><input id="ct_resp" maxlength="120" value="'+esc(novo?"":(t.responsavel||""))+'">'+
+    '<label class="top" for="ct_obs">Observações</label><textarea id="ct_obs" rows="2" maxlength="600">'+esc(novo?"":(t.observacoes||""))+'</textarea>'+
+    '<div class="actions">'+(novo?'<button class="btn2" data-close>Cancelar</button>':'<button class="btn-danger" id="ct_del">Excluir</button>')+
+    '<button class="btn" id="ct_ok">'+(novo?"Adicionar":"Salvar")+'</button></div>'
+  );
+  $("ct_ok").onclick = function(){
+    var nome=$("ct_nome").value.trim(); if(!nome) return toast("Dê um nome à tarefa", true);
+    var body={ nome:nome, h_planejado:$("ct_hp").value.trim(), tipo:$("ct_tipo").value, responsavel:$("ct_resp").value.trim(), observacoes:$("ct_obs").value.trim(), atualizado_por:NOME };
+    $("ct_ok").disabled=true;
+    var p = novo ? api("/api/campo-dias/"+diaId+"/tarefas","POST",body) : api("/api/campo-tarefas/"+t.id,"PATCH",body);
+    p.then(function(){ fecharSheet(); return recarregarCampo(); }).catch(function(e){ $("ct_ok").disabled=false; toast(e.message,true); });
+  };
+  if (!novo){ var d=$("ct_del"); if(d) d.onclick=function(){ api("/api/campo-tarefas/"+t.id,"DELETE").then(function(){ fecharSheet(); toast("Tarefa excluída"); return recarregarCampo(); }).catch(function(e){ toast(e.message,true); }); }; }
+  setTimeout(function(){ $("ct_nome").focus(); }, 50);
+}
+
+function sheetRealizar(t){
+  abrirSheet(
+    '<h2 class="anton">Registrar horário</h2>'+
+    '<p class="meta">'+esc(t.nome)+' · previsto '+esc(t.h_planejado||"--:--")+'</p>'+
+    '<label class="top" for="rz_hr">Horário realizado</label>'+
+    '<input id="rz_hr" maxlength="20" placeholder="08:30" value="'+esc(t.h_realizado||t.h_planejado||"")+'">'+
+    (t.tipo==="ajustavel"?'<label style="display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--mut);margin-top:14px"><input type="checkbox" id="rz_aj" checked style="width:auto;margin-top:3px"><span>Reajustar as próximas tarefas <b>ajustáveis</b> pelo mesmo atraso/adianto</span></label>':'<p class="meta" style="margin-top:12px">Tarefa fixa — não altera a programação das demais.</p>')+
+    '<div class="actions"><button class="btn2" data-close>Cancelar</button><button class="btn" id="rz_ok">Concluir tarefa</button></div>'
+  );
+  $("rz_ok").onclick = function(){
+    var hr=$("rz_hr").value.trim();
+    var aplicar = t.tipo==="ajustavel" && $("rz_aj") && $("rz_aj").checked;
+    $("rz_ok").disabled=true;
+    api("/api/campo-tarefas/"+t.id+"/reajustar","POST",{h_realizado:hr,aplicar:aplicar,atualizado_por:NOME})
+      .then(function(res){ fecharSheet(); toast(res.reajustadas?(res.reajustadas+" tarefa(s) reajustada(s)"):"Tarefa concluída"); return recarregarCampo(); })
+      .catch(function(e){ $("rz_ok").disabled=false; toast(e.message,true); });
+  };
+  setTimeout(function(){ var i=$("rz_hr"); i.focus(); i.select(); }, 50);
+}
+
+function sheetCampoSub(tid){
+  abrirSheet(
+    '<h2 class="anton">Nova subtarefa</h2>'+
+    '<label class="top" for="cs_tit">O que conferir</label><input id="cs_tit" maxlength="200" placeholder="ex.: Conferir projetor">'+
+    '<div class="actions"><button class="btn2" data-close>Cancelar</button><button class="btn" id="cs_ok">Adicionar</button></div>'
+  );
+  $("cs_ok").onclick = function(){
+    var tit=$("cs_tit").value.trim(); if(!tit) return toast("Escreva a subtarefa", true);
+    $("cs_ok").disabled=true;
+    api("/api/campo-tarefas/"+tid+"/subtarefas","POST",{titulo:tit}).then(function(){ fecharSheet(); return recarregarCampo(); }).catch(function(e){ $("cs_ok").disabled=false; toast(e.message,true); });
+  };
+  setTimeout(function(){ $("cs_tit").focus(); }, 50);
+}
+
+/* ============================================================
+   v4.1 · Agenda / Painel Operacional — cronológico por dia
+   ============================================================ */
+function carregarAgenda(){
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+  api("/api/eventos/"+EV.evento.id+"/agenda").then(function(j){ AGENDA = j.entradas || []; renderAgenda(); })
+    .catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
+}
+function renderAgenda(){
+  var html = '<p style="color:var(--mut);font-size:13px;margin:2px 0 14px">Painel operacional — tudo do dia em ordem cronológica: tarefas de Campo + entregas (fase Execução) que têm horário.</p>';
+  if (!AGENDA.length){ $("main").innerHTML = html+'<div class="empty">Nada com horário ainda. Defina horários nas tarefas de Campo ou nas microtarefas de Execução.</div>'; return; }
+  var diaAtual = null, aberto = false;
+  AGENDA.forEach(function(e){
+    if (e.dia !== diaAtual){
+      if (aberto) html += '</div>';
+      diaAtual = e.dia; aberto = true;
+      html += '<div class="dayblock"><div class="dayhead"><h3 class="anton">'+esc(e.dia||"Sem dia")+'</h3></div>';
+    }
+    var tag = e.origem==="campo"
+      ? '<span class="tipotag '+(e.tipo||"")+'">'+(e.tipo==="fixa"?"Fixa":"Ajustável")+'</span>'
+      : '<span class="chip">'+esc(e.categoria||e.item||"Item")+'</span>';
+    html += '<div class="agrow st-'+(e.status||"afazer")+'">'+
+      '<span class="agt">'+esc(e.horario||"--:--")+'</span>'+
+      '<div class="agn">'+esc(e.nome)+' '+tag+
+        (e.responsavel?' <span class="agmeta">· '+esc(e.responsavel)+'</span>':'')+
+        (e.h_realizado?' <span class="agmeta" style="color:var(--ok)">· real '+esc(e.h_realizado)+'</span>':'')+
+      '</div></div>';
+  });
+  if (aberto) html += '</div>';
+  $("main").innerHTML = html;
+}
 
 function telaTarefas(){
   $("head").innerHTML =
