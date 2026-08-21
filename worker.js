@@ -8,7 +8,7 @@
 
    Módulos: Checklist · Participantes + Financeiro · Simulador de
             custos · Hospedagem · Tarefas gerais · Mini-CRM ·
-            Custos + Fornecedores
+            Custos + Fornecedores · Cardápio (formulário público)
 
    Acesso em dois níveis (chave única compartilhada por nível):
      APP_KEY  (secret) → papel "admin": tudo, inclusive dados
@@ -20,6 +20,7 @@
 
 import UI_HTML from "./ui.html";
 import { handleMcp } from "./mcp.js";
+import { handleCardapio, limparPerguntas, respostasCsv, PERGUNTAS_PADRAO } from "./cardapio.js";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -246,6 +247,12 @@ export default {
     if (mcpRes) return mcpRes;
 
     if (method === "OPTIONS") return new Response(null, { headers: CORS });
+
+    /* v4.3: formulário de cardápio — /cardapio/<slug> é PÚBLICO (as famílias
+       respondem sem chave), então vem antes do portão de autenticação. */
+    const card = await handleCardapio(request, env);
+    if (card) return card;
+
     if (path === "/" && method === "GET")
       return new Response(UI_HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
     if (!path.startsWith("/api/")) return json({ erro: "não encontrado" }, 404);
@@ -1221,6 +1228,111 @@ export default {
         (a.dia_ordem - b.dia_ordem) || String(a.dia).localeCompare(String(b.dia)) ||
         String(a.horario).localeCompare(String(b.horario)));
       return json({ entradas });
+    }
+
+
+    /* ================= CARDÁPIO · formulário público (admin) =================
+       O formulário em si é servido fora daqui, sem chave (cardapio.js). Estas
+       rotas são o painel: criar, editar, ver respostas e baixar a planilha. */
+
+    if ((m = path.match(/^\/api\/eventos\/(\d+)\/cardapio$/))) {
+      const eid = +m[1];
+      if (method === "GET") {
+        if (!admin) return negado();
+        const { results } = await db.prepare(`
+          SELECT f.*, (SELECT COUNT(*) FROM cardapio_respostas r WHERE r.form_id=f.id) AS respostas_qtd
+          FROM cardapio_forms f WHERE f.evento_id=? ORDER BY f.id DESC`).bind(eid).all();
+        return json({ formularios: results });
+      }
+      if (method === "POST") {
+        if (!admin) return negado();
+        const b = await request.json().catch(() => ({}));
+        const ev = await db.prepare("SELECT nome FROM eventos WHERE id=?").bind(eid).first();
+        if (!ev) return json({ erro: "evento não encontrado" }, 404);
+        // slug do link: pedido do painel ou derivado do nome do evento
+        let slug = S(b.slug, 60).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "");
+        if (!slug) slug = `cardapio-${eid}`;
+        const existe = await db.prepare("SELECT id FROM cardapio_forms WHERE slug=?").bind(slug).first();
+        if (existe) return json({ erro: `o link /cardapio/${slug} já está em uso` }, 409);
+        const perguntas = b.perguntas ? limparPerguntas(b.perguntas) : PERGUNTAS_PADRAO;
+        if (!perguntas || !perguntas.length) return json({ erro: "o formulário precisa de ao menos uma pergunta" }, 400);
+        const r = await db.prepare(`
+          INSERT INTO cardapio_forms (evento_id, slug, titulo, subtitulo, descricao, perguntas,
+                                      aberto, prazo, agradecimento, token_planilha)
+          VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(
+            eid, slug,
+            S(b.titulo, 120).trim() || "Cardápio da expedição",
+            S(b.subtitulo, 200), S(b.descricao, 1200),
+            JSON.stringify(perguntas), b.aberto === false ? 0 : 1,
+            S(b.prazo, 60), S(b.agradecimento, 400),
+            crypto.randomUUID().replace(/-/g, "")
+          ).run();
+        const form = await db.prepare("SELECT * FROM cardapio_forms WHERE id=?").bind(r.meta.last_row_id).first();
+        return json({ ok: true, formulario: form });
+      }
+    }
+
+    if ((m = path.match(/^\/api\/cardapio\/(\d+)$/))) {
+      const fid = +m[1];
+      if (!admin) return negado();
+      if (method === "PATCH") {
+        const b = await request.json().catch(() => ({}));
+        const campos = {};
+        for (const c of ["titulo", "subtitulo", "descricao", "prazo", "agradecimento"]) {
+          if (c in b) campos[c] = S(b[c], c === "descricao" ? 1200 : 400);
+        }
+        if ("aberto" in b) campos.aberto = B(b.aberto);
+        if ("perguntas" in b) {
+          const p = limparPerguntas(b.perguntas);
+          if (!p || !p.length) return json({ erro: "o formulário precisa de ao menos uma pergunta" }, 400);
+          campos.perguntas = JSON.stringify(p);
+        }
+        // trocar o token invalida o link antigo da planilha, de propósito
+        if (b.novo_token) campos.token_planilha = crypto.randomUUID().replace(/-/g, "");
+        if (!await upd(db, "cardapio_forms", fid, campos)) return json({ erro: "nada para atualizar" }, 400);
+        const form = await db.prepare("SELECT * FROM cardapio_forms WHERE id=?").bind(fid).first();
+        return form ? json({ ok: true, formulario: form }) : json({ erro: "não encontrado" }, 404);
+      }
+      if (method === "DELETE") {
+        // apaga respostas junto: sem ON DELETE CASCADE ligado no D1, é na mão
+        await db.prepare("DELETE FROM cardapio_respostas WHERE form_id=?").bind(fid).run();
+        await db.prepare("DELETE FROM cardapio_forms WHERE id=?").bind(fid).run();
+        return json({ ok: true });
+      }
+    }
+
+    if ((m = path.match(/^\/api\/cardapio\/(\d+)\/respostas$/)) && method === "GET") {
+      if (!admin) return negado();
+      const { results } = await db.prepare(
+        "SELECT id, nome, contato, respostas, criado_em FROM cardapio_respostas WHERE form_id=? ORDER BY id DESC"
+      ).bind(+m[1]).all();
+      return json({ respostas: results });
+    }
+
+    if ((m = path.match(/^\/api\/cardapio\/(\d+)\/respostas\/(\d+)$/)) && method === "DELETE") {
+      if (!admin) return negado();
+      await db.prepare("DELETE FROM cardapio_respostas WHERE id=? AND form_id=?").bind(+m[2], +m[1]).run();
+      return json({ ok: true });
+    }
+
+    /* Planilha pela chave do sistema — é o botão "baixar" do painel. O link com
+       token (para a planilha do Google puxar sozinha) fica em cardapio.js. */
+    if ((m = path.match(/^\/api\/cardapio\/(\d+)\/planilha\.csv$/)) && method === "GET") {
+      if (!admin) return negado();
+      const form = await db.prepare("SELECT slug, perguntas FROM cardapio_forms WHERE id=?").bind(+m[1]).first();
+      if (!form) return json({ erro: "não encontrado" }, 404);
+      let perguntas = [];
+      try { perguntas = JSON.parse(form.perguntas || "[]"); } catch {}
+      const { results } = await db.prepare(
+        "SELECT criado_em, respostas FROM cardapio_respostas WHERE form_id=? ORDER BY id"
+      ).bind(+m[1]).all();
+      return new Response(respostasCsv(perguntas, results ?? []), {
+        headers: {
+          "content-type": "text/csv; charset=utf-8",
+          "content-disposition": `attachment; filename="cardapio-${form.slug}.csv"`,
+          ...CORS,
+        },
+      });
     }
 
     return json({ erro: "não encontrado" }, 404);
