@@ -1257,12 +1257,12 @@ export default {
         const perguntas = b.perguntas ? limparPerguntas(b.perguntas) : PERGUNTAS_PADRAO;
         if (!perguntas || !perguntas.length) return json({ erro: "o formulário precisa de ao menos uma pergunta" }, 400);
         const r = await db.prepare(`
-          INSERT INTO cardapio_forms (evento_id, slug, titulo, subtitulo, descricao, perguntas,
-                                      aberto, prazo, agradecimento, token_planilha)
-          VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(
+          INSERT INTO cardapio_forms (evento_id, slug, titulo, sobretitulo, subtitulo, descricao,
+                                      perguntas, aberto, prazo, agradecimento, token_planilha)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(
             eid, slug,
             S(b.titulo, 120).trim() || "Cardápio da expedição",
-            S(b.subtitulo, 200), S(b.descricao, 1200),
+            S(b.sobretitulo, 160), S(b.subtitulo, 200), S(b.descricao, 1200),
             JSON.stringify(perguntas), b.aberto === false ? 0 : 1,
             S(b.prazo, 60), S(b.agradecimento, 400),
             crypto.randomUUID().replace(/-/g, "")
@@ -1278,7 +1278,7 @@ export default {
       if (method === "PATCH") {
         const b = await request.json().catch(() => ({}));
         const campos = {};
-        for (const c of ["titulo", "subtitulo", "descricao", "prazo", "agradecimento"]) {
+        for (const c of ["titulo", "sobretitulo", "subtitulo", "descricao", "prazo", "agradecimento"]) {
           if (c in b) campos[c] = S(b[c], c === "descricao" ? 1200 : 400);
         }
         if ("aberto" in b) campos.aberto = B(b.aberto);

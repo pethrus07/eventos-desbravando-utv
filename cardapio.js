@@ -16,6 +16,12 @@
    celular, no meio do mato, com sinal ruim. Sem framework, sem build.
    ============================================================ */
 
+import { simbolos, usoLogotipo, usoMontanha } from "./marca.js";
+
+/* Curvas de nível do cabeçalho: geradas fora (soma de senos amostrada e suavizada
+   em cúbicas) e embutidas como texto — nada é calculado no cliente. */
+const TOPOGRAFIA = "<svg class=\"topografia\" viewBox=\"0 0 1200 560\" preserveAspectRatio=\"xMidYMid slice\" aria-hidden=\"true\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\"><path d=\"M0 -40C12 -36 50 -21 75 -14C100 -7 125 -1 150 2C175 5 200 4 225 3C250 2 275 -3 300 -6C325 -9 350 -14 375 -16C400 -18 425 -20 450 -20C475 -19 500 -17 525 -15C550 -14 575 -11 600 -11C625 -10 650 -11 675 -14C700 -17 725 -24 750 -31C775 -38 800 -48 825 -56C850 -65 875 -75 900 -81C925 -87 950 -92 975 -94C1000 -95 1025 -93 1050 -90C1075 -87 1100 -81 1125 -75C1150 -70 1188 -62 1200 -59\"/><path d=\"M0 77C12 76 50 74 75 71C100 68 125 63 150 60C175 58 200 55 225 55C250 54 275 56 300 58C325 59 350 63 375 64C400 64 425 66 450 63C475 61 500 57 525 51C550 45 575 35 600 27C625 19 650 8 675 1C700 -7 725 -14 750 -17C775 -20 800 -20 825 -18C850 -17 875 -11 900 -7C925 -2 950 5 975 10C1000 15 1025 19 1050 21C1075 24 1100 24 1125 24C1150 24 1188 22 1200 21\"/><path d=\"M0 130C12 130 50 129 75 131C100 132 125 135 150 137C175 138 200 141 225 140C250 139 275 136 300 131C325 126 350 118 375 110C400 102 425 91 450 83C475 75 500 67 525 62C550 57 575 55 600 55C625 55 650 59 675 63C700 67 725 74 750 79C775 84 800 89 825 92C850 95 875 97 900 97C925 98 950 96 975 95C1000 95 1025 93 1050 94C1075 95 1100 98 1125 102C1150 107 1188 118 1200 121\"/><path d=\"M0 215C12 214 50 214 75 210C100 207 125 200 150 193C175 185 200 175 225 166C250 158 275 148 300 142C325 136 350 131 375 130C400 128 425 130 450 133C475 136 500 143 525 148C550 152 575 159 600 162C625 166 650 169 675 170C700 171 725 169 750 169C775 168 800 166 825 167C850 167 875 168 900 171C925 175 950 181 975 188C1000 194 1025 204 1050 211C1075 219 1100 227 1125 232C1150 237 1188 238 1200 240\"/><path d=\"M0 250C12 245 50 231 75 223C100 216 125 210 150 206C175 203 200 203 225 205C250 207 275 212 300 217C325 221 350 228 375 232C400 236 425 240 450 242C475 244 500 243 525 243C550 242 575 240 600 240C625 239 650 239 675 242C700 244 725 249 750 254C775 260 800 269 825 277C850 285 875 294 900 300C925 306 950 311 975 313C1000 314 1025 313 1050 309C1075 306 1100 299 1125 292C1150 286 1188 275 1200 271\"/><path d=\"M0 278C12 280 50 283 75 287C100 290 125 297 150 301C175 306 200 311 225 313C250 316 275 316 300 316C325 316 350 314 375 313C400 313 425 311 450 313C475 314 500 317 525 322C550 327 575 335 600 343C625 350 650 360 675 367C700 374 725 381 750 384C775 387 800 388 825 386C850 384 875 378 900 373C925 367 950 359 975 352C1000 346 1025 339 1050 335C1075 331 1100 329 1125 328C1150 327 1188 328 1200 328\"/><path d=\"M0 384C12 385 50 389 75 389C100 390 125 388 150 387C175 387 200 384 225 385C250 386 275 387 300 391C325 395 350 402 375 409C400 416 425 426 450 433C475 441 500 449 525 454C550 459 575 461 600 461C625 461 650 457 675 452C700 448 725 439 750 433C775 427 800 419 825 414C850 409 875 406 900 404C925 402 950 403 975 403C1000 403 1025 405 1050 405C1075 404 1100 403 1125 400C1150 397 1188 389 1200 386\"/><path d=\"M0 458C12 458 50 458 75 461C100 463 125 469 150 475C175 481 200 491 225 499C250 506 275 516 300 522C325 528 350 533 375 534C400 536 425 534 450 531C475 527 500 520 525 514C550 508 575 500 600 494C625 489 650 484 675 481C700 478 725 478 750 478C775 477 800 480 825 480C850 480 875 480 900 478C925 476 950 471 975 466C1000 461 1025 453 1050 447C1075 440 1100 433 1125 428C1150 424 1188 422 1200 421\"/><path d=\"M0 564C12 568 50 582 75 589C100 596 125 603 150 606C175 609 200 609 225 607C250 605 275 600 300 594C325 589 350 580 375 574C400 568 425 562 450 559C475 555 500 554 525 553C550 552 575 554 600 554C625 554 650 556 675 554C700 553 725 550 750 546C775 541 800 534 825 528C850 521 875 513 900 507C925 502 950 497 975 495C1000 494 1025 495 1050 499C1075 502 1100 510 1125 517C1150 524 1188 538 1200 542\"/><path d=\"M0 682C12 681 50 678 75 673C100 669 125 661 150 655C175 649 200 642 225 637C250 633 275 630 300 629C325 627 350 628 375 629C400 629 425 631 450 630C475 629 500 628 525 625C550 621 575 615 600 609C625 603 650 594 675 588C700 581 725 575 750 572C775 569 800 568 825 570C850 572 875 578 900 584C925 590 950 600 975 607C1000 615 1025 624 1050 629C1075 635 1100 639 1125 641C1150 643 1188 642 1200 642\"/></svg>";
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
@@ -119,58 +125,86 @@ export function limparPerguntas(bruto) {
 
 /* -------------------------------------------------- página pública */
 
+/**
+ * Um campo. A seção NÃO sai daqui: quem monta os blocos por noite é o
+ * corpoCampos(), que precisa abrir e fechar <section> em volta de vários campos.
+ */
 function campoHtml(p) {
   const req = p.obrigatorio ? " required" : "";
-  const abertura = p.secao ? `<h2 class="dia anton">${esc(p.secao)}</h2>` : "";
-  /* Opção comprida (nome de prato com descrição) não cabe em chip lado a lado no
-     celular — acima de 28 caracteres o grupo vira lista empilhada. */
-  const compridas = (p.opcoes ?? []).some((o) => String(o).length > 28) ? " col" : "";
-  const ajuda = p.ajuda ? `<small>${esc(p.ajuda)}</small>` : "";
-  const marca = p.obrigatorio ? ' <i class="req">obrigatório</i>' : "";
+  const ajuda = p.ajuda ? `<small class="ajuda">${esc(p.ajuda)}</small>` : "";
+  const marca = p.obrigatorio ? "" : ' <i class="opc">opcional</i>';
+  /* Nome de prato não cabe lado a lado no celular. O limiar é baixo (16) de
+     propósito: com um valor alto, um bloco saía em cartões de larguras desiguais e o
+     seguinte em lista, e a mistura desalinha a página. Fica inline só o que é
+     realmente curto — Sim/Não e afins. */
+  const empilha = (p.opcoes ?? []).some((o) => String(o).length > 16) ? " col" : "";
+  const opcao = (o, tipo) =>
+    `<label class="op"><input type="${tipo}" name="${esc(p.id)}" value="${esc(o)}"${tipo === "radio" ? req : ""}>` +
+    `<i class="marca" aria-hidden="true"></i><span>${esc(o)}</span></label>`;
+
   let controle = "";
   if (p.tipo === "obs") {
-    controle = `<textarea name="${esc(p.id)}" rows="3" maxlength="800"${req}></textarea>`;
+    controle = `<textarea name="${esc(p.id)}" rows="3" maxlength="800" placeholder="Escreva aqui"${req}></textarea>`;
   } else if (p.tipo === "numero") {
-    controle = `<input type="number" inputmode="numeric" min="0" max="999" name="${esc(p.id)}"${req}>`;
+    controle = `<input type="number" inputmode="numeric" min="0" max="999" placeholder="0"${req} name="${esc(p.id)}">`;
   } else if (p.tipo === "sim_nao") {
-    controle =
-      `<div class="opcoes">` +
-      ["Sim", "Não"]
-        .map((o) => `<label class="op"><input type="radio" name="${esc(p.id)}" value="${esc(o)}"${req}><span>${esc(o)}</span></label>`)
-        .join("") +
-      `</div>`;
+    controle = `<div class="opcoes">${["Sim", "Não"].map((o) => opcao(o, "radio")).join("")}</div>`;
   } else if (p.tipo === "escolha") {
-    controle =
-      `<div class="opcoes${compridas}">` +
-      p.opcoes
-        .map((o) => `<label class="op"><input type="radio" name="${esc(p.id)}" value="${esc(o)}"${req}><span>${esc(o)}</span></label>`)
-        .join("") +
-      `</div>`;
+    controle = `<div class="opcoes${empilha}">${p.opcoes.map((o) => opcao(o, "radio")).join("")}</div>`;
   } else if (p.tipo === "multi") {
-    controle =
-      `<div class="opcoes${compridas}">` +
-      p.opcoes
-        .map((o) => `<label class="op"><input type="checkbox" name="${esc(p.id)}" value="${esc(o)}"><span>${esc(o)}</span></label>`)
-        .join("") +
-      `</div>`;
+    controle = `<div class="opcoes${empilha}">${p.opcoes.map((o) => opcao(o, "checkbox")).join("")}</div>`;
   } else {
-    controle = `<input type="text" name="${esc(p.id)}" maxlength="200"${req}>`;
+    controle = `<input type="text" maxlength="200" placeholder="Escreva aqui"${req} name="${esc(p.id)}">`;
   }
-  return `${abertura}<div class="campo"><label class="rot">${esc(p.rotulo)}${marca}</label>${ajuda}${controle}</div>`;
+  return `<div class="campo" data-campo="${esc(p.id)}">
+      <label class="rot">${esc(p.rotulo)}${marca}</label>${ajuda}${controle}
+    </div>`;
+}
+
+/**
+ * Monta o corpo agrupando por seção. Cada seção vira um bloco numerado — é o que
+ * dá ritmo de "uma noite por vez" em vez de uma lista longa de perguntas.
+ */
+function corpoCampos(perguntas) {
+  let html = "";
+  let dentro = false;
+  let n = 0;
+  for (const p of perguntas) {
+    if (p.secao) {
+      if (dentro) html += `</section>`;
+      n += 1;
+      html +=
+        `<section class="bloco">` +
+        `<h2 class="cab"><i class="num anton">${String(n).padStart(2, "0")}</i>` +
+        `<span class="nome">${esc(p.secao)}</span><i class="risco"></i></h2>`;
+      dentro = true;
+    }
+    html += campoHtml(p);
+  }
+  return html + (dentro ? `</section>` : "");
 }
 
 export function paginaFormulario(form, perguntas) {
   const fechado = !form.aberto;
-  const prazo = form.prazo ? `<p class="prazo">Responda até <b>${esc(form.prazo)}</b></p>` : "";
+  const obrigatorias = perguntas.filter((p) => p.obrigatorio).length;
+
   const corpo = fechado
-    ? `<div class="aviso"><h2 class="anton">As respostas foram encerradas</h2>
-         <p>Este formulário está fechado. Se você ainda precisa avisar algo sobre a alimentação,
-            fale direto com a equipe da Desbravando.</p></div>`
+    ? `<div class="cartao">
+         ${usoMontanha('class="selo"')}
+         <h2 class="anton">As respostas foram encerradas</h2>
+         <p>Este formulário está fechado. Se você ainda precisa avisar algo sobre a
+            alimentação, fale direto com a equipe da Desbravando.</p>
+       </div>`
     : `<form id="f" novalidate>
-         ${perguntas.map(campoHtml).join("")}
-         <button class="btn" type="submit" id="env">Enviar resposta</button>
-         <p class="lgpd">Usamos estas respostas só para planejar a alimentação da expedição.
-            Nada é publicado nem repassado para terceiros.</p>
+         ${corpoCampos(perguntas)}
+         <div class="enviar">
+           <button class="btn" type="submit" id="env">
+             <span>Enviar resposta</span>
+             <svg viewBox="0 0 20 12" aria-hidden="true"><path d="M0 6h17M12 1l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+           </button>
+           <p class="lgpd">Usamos estas respostas só para planejar a alimentação da
+             expedição. Nada é publicado nem repassado para terceiros.</p>
+         </div>
        </form>`;
 
   return `<!doctype html>
@@ -179,135 +213,282 @@ export function paginaFormulario(form, perguntas) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
+<meta name="theme-color" content="#0A0A0A">
 <title>${esc(form.titulo)} · Desbravando UTV</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0B0B0B;--card:#141414;--line:#2B2B2B;--txt:#FFF;--mut:#C7C7C7;--dim:#8A8A8A;--ok:#6FCF97;--erro:#EB5757}
+:root{
+  --bg:#0A0A0A; --bg2:#0E0E0E; --cartao:#131313; --cartao2:#171717;
+  --linha:#242424; --linha2:#333; --txt:#FFF; --mut:#B9B9B9; --dim:#7C7C7C; --erro:#E86A6A;
+}
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--txt);font-family:'Archivo',-apple-system,'Segoe UI',Roboto,Arial,sans-serif;line-height:1.55;padding:0 0 80px}
-.anton{font-family:'Anton',sans-serif;font-weight:400;text-transform:uppercase;letter-spacing:-.5px;line-height:.95}
-.wrap{max-width:620px;margin:0 auto;padding:0 20px}
-header{border-bottom:1px solid var(--line);padding:34px 0 26px;margin-bottom:26px}
-.marca{display:flex;align-items:center;gap:10px;color:var(--dim);font-size:11px;letter-spacing:2.4px;text-transform:uppercase;margin-bottom:18px}
-.marca svg{width:26px;height:auto;opacity:.9}
-h1{font-size:34px}
-.sub{color:var(--mut);font-size:15px;margin-top:10px}
-.desc{color:var(--mut);font-size:15px;margin-top:14px;white-space:pre-line}
-.prazo{margin-top:16px;font-size:13px;color:var(--dim);border-left:2px solid #444;padding-left:10px}
-.campo{margin-bottom:22px}
-.rot{display:block;font-size:15px;font-weight:600;margin-bottom:2px}
-.req{font-style:normal;font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);margin-left:6px}
-.campo small{display:block;color:var(--dim);font-size:13px;margin-bottom:8px}
-input[type=text],input[type=number],textarea{width:100%;background:#0F0F0F;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:12px 13px;font-family:inherit;font-size:16px;margin-top:6px}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--txt);font-family:'Archivo',-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased;padding-bottom:64px}
+.anton{font-family:'Anton',sans-serif;font-weight:400;text-transform:uppercase;letter-spacing:-.4px;line-height:.98}
+.wrap{max-width:640px;margin:0 auto;padding:0 22px}
+:focus-visible{outline:2px solid #FFF;outline-offset:3px;border-radius:6px}
+
+/* ---------- progresso: 2 px no topo, único indicador de que falta algo ---------- */
+.progresso{position:fixed;inset:0 0 auto;height:2px;background:#1C1C1C;z-index:9}
+.progresso i{display:block;height:100%;width:0;background:#FFF;transition:width .25s ease}
+
+/* ---------- cabeçalho ---------- */
+header{position:relative;overflow:hidden;border-bottom:1px solid var(--linha);
+  background:linear-gradient(#101010,var(--bg));padding:40px 0 30px;margin-bottom:34px}
+/* curvas de nível: textura só no hero, o formulário fica limpo */
+.topografia{position:absolute;inset:-30% -10% auto -10%;height:150%;color:#FFF;opacity:.055;pointer-events:none}
+header .wrap{position:relative}
+.logo{display:block;width:172px;height:auto;color:#FFF;margin-bottom:26px}
+.sobre{font-size:10.5px;letter-spacing:2.6px;text-transform:uppercase;color:var(--dim);margin-bottom:10px}
+h1{font-size:clamp(30px,8.5vw,42px);max-width:15ch;text-wrap:balance}
+.sub{color:var(--mut);font-size:15px;margin-top:12px}
+.regua{width:46px;height:2px;background:#FFF;margin:24px 0 20px;opacity:.85}
+.desc{color:var(--mut);font-size:15px;white-space:pre-line;max-width:52ch}
+.prazo{display:inline-flex;align-items:center;gap:8px;margin-top:18px;font-size:12.5px;color:var(--mut);
+  border:1px solid var(--linha2);border-radius:99px;padding:6px 14px}
+.prazo b{color:#FFF;font-weight:600}
+.prazo::before{content:"";width:6px;height:6px;border-radius:50%;background:#FFF;flex:none}
+
+/* ---------- bloco por noite ---------- */
+.bloco{margin-bottom:38px}
+.cab{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.cab .num{font-size:15px;color:var(--dim);letter-spacing:0;font-variant-numeric:tabular-nums}
+.cab .nome{font-size:11.5px;letter-spacing:2.6px;text-transform:uppercase;color:#FFF;font-weight:600;white-space:nowrap}
+.cab .risco{flex:1;height:1px;background:var(--linha)}
+
+/* ---------- campo ---------- */
+.campo{margin-bottom:24px}
+.rot{display:block;font-size:16px;font-weight:600;letter-spacing:-.1px}
+.opc{font-style:normal;font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);
+  border:1px solid var(--linha);border-radius:99px;padding:2px 7px;margin-left:8px;vertical-align:2px}
+.ajuda{display:block;color:var(--dim);font-size:13px;margin-top:3px}
+input[type=text],input[type=number],textarea{width:100%;margin-top:10px;background:var(--cartao);
+  border:1px solid var(--linha);color:var(--txt);border-radius:12px;padding:14px 15px;
+  font-family:inherit;font-size:16px;transition:border-color .15s}
+input:hover,textarea:hover{border-color:var(--linha2)}
 input:focus,textarea:focus{outline:none;border-color:#FFF}
-textarea{resize:vertical}
-.dia{font-size:15px;letter-spacing:2px;color:var(--dim);border-top:1px solid var(--line);padding-top:20px;margin:30px 0 16px}
-.dia:first-of-type{border-top:none;padding-top:0;margin-top:0}
-.opcoes{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-.opcoes.col{flex-direction:column;align-items:stretch}
+::placeholder{color:#4E4E4E}
+textarea{resize:vertical;line-height:1.5}
+
+/* ---------- opções ---------- */
+.opcoes{display:flex;flex-wrap:wrap;gap:9px;margin-top:12px}
+.opcoes.col{flex-direction:column}
+.op{position:relative;display:flex;align-items:center;gap:12px;flex:0 1 auto;
+  background:var(--cartao);border:1px solid var(--linha);border-radius:12px;
+  padding:14px 17px 14px 15px;font-size:15.5px;cursor:pointer;
+  transition:border-color .15s,background .15s,transform .12s}
 .opcoes.col .op{width:100%}
-.op{display:inline-flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:15px;cursor:pointer}
-.op:hover{border-color:#5A5A5A}
-/* Controle desenhado na mão: com accent-color no fundo escuro o radio DESMARCADO
-   aparece como bolinha branca cheia e o formulário parece já respondido. */
-.op input{appearance:none;-webkit-appearance:none;flex:none;margin:0;width:18px;height:18px;
-  border:1.5px solid #6B6B6B;border-radius:50%;background:transparent;position:relative;cursor:pointer}
-.op input[type=checkbox]{border-radius:5px}
-.op input:checked{border-color:#FFF}
-.op input[type=radio]:checked::after{content:"";position:absolute;inset:3px;background:#FFF;border-radius:50%}
-.op input[type=checkbox]:checked{background:#FFF}
-.op input[type=checkbox]:checked::after{content:"";position:absolute;left:5px;top:2px;width:4px;height:8px;
-  border:solid #000;border-width:0 2px 2px 0;transform:rotate(45deg)}
-.op input:focus-visible{outline:2px solid #FFF;outline-offset:2px}
-.op:has(input:checked){border-color:#FFF;background:#1D1D1D}
-.btn{width:100%;background:#FFF;color:#000;border:none;border-radius:12px;padding:16px;font-family:inherit;font-size:16px;font-weight:700;cursor:pointer;margin-top:8px}
-.btn:disabled{opacity:.5;cursor:default}
-.lgpd{color:var(--dim);font-size:12px;margin-top:16px}
-.aviso,.fim{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:26px}
-.aviso h2,.fim h2{font-size:24px;margin-bottom:10px}
-.aviso p,.fim p{color:var(--mut);font-size:15px}
-.erro{background:#2A1414;border:1px solid #5E2626;color:#FFC9C9;border-radius:10px;padding:12px 14px;font-size:14px;margin-bottom:16px;display:none}
+.op:hover{border-color:var(--linha2);background:var(--cartao2)}
+.op input{position:absolute;opacity:0;width:0;height:0}
+/* indicador desenhado: com accent-color o radio desmarcado fica branco cheio no
+   fundo escuro e o formulário parece já respondido */
+.op .marca{flex:none;width:19px;height:19px;border:1.5px solid #5E5E5E;border-radius:50%;
+  position:relative;transition:border-color .15s,background .15s}
+.op input[type=checkbox]~.marca{border-radius:6px}
+.op span{min-width:0}
+.op:has(input:checked){border-color:#FFF;background:#1B1B1B}
+.op:has(input:checked)::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;
+  background:#FFF;border-radius:0 3px 3px 0}
+.op input:checked~.marca{border-color:#FFF}
+.op input[type=radio]:checked~.marca::after{content:"";position:absolute;inset:3.5px;background:#FFF;border-radius:50%}
+.op input[type=checkbox]:checked~.marca{background:#FFF}
+.op input[type=checkbox]:checked~.marca::after{content:"";position:absolute;left:5.5px;top:2px;
+  width:4px;height:9px;border:solid #000;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.op:focus-within{outline:2px solid #FFF;outline-offset:3px}
+.op:active{transform:scale(.995)}
+
+/* ---------- envio ---------- */
+.enviar{border-top:1px solid var(--linha);padding-top:26px;margin-top:36px}
+.btn{width:100%;display:inline-flex;align-items:center;justify-content:center;gap:12px;
+  background:#FFF;color:#000;border:none;border-radius:14px;padding:18px;
+  font-family:inherit;font-size:16.5px;font-weight:700;letter-spacing:-.1px;cursor:pointer;transition:opacity .15s}
+.btn svg{width:20px}
+.btn:hover{opacity:.9}
+.btn:disabled{opacity:.45;cursor:default}
+.lgpd{color:var(--dim);font-size:12.5px;margin-top:16px;text-align:center}
+
+/* ---------- cartão de aviso / fim ---------- */
+.cartao{background:var(--cartao);border:1px solid var(--linha);border-radius:18px;padding:34px 28px}
+.cartao .selo{display:block;width:52px;color:#FFF;opacity:.9;margin-bottom:20px}
+.cartao h2{font-size:26px;margin-bottom:12px}
+.cartao p{color:var(--mut);font-size:15px}
+.resumo{margin-top:24px;border-top:1px solid var(--linha);padding-top:20px}
+.resumo h3{font-size:10.5px;letter-spacing:2.4px;text-transform:uppercase;color:var(--dim);margin-bottom:14px}
+.resumo dl{display:grid}
+.resumo .par{display:grid;gap:3px;padding:12px 0;border-top:1px solid #1E1E1E}
+.resumo .par:first-child{border-top:none;padding-top:0}
+.resumo dt{font-size:10.5px;letter-spacing:1.8px;text-transform:uppercase;color:var(--dim)}
+.resumo dd{color:#FFF;font-weight:600;font-size:15.5px;line-height:1.35}
+
+/* ---------- erro ---------- */
+.erro{display:none;gap:10px;align-items:flex-start;background:#241414;border:1px solid #4E2626;
+  color:#FFD3D3;border-radius:12px;padding:14px 16px;font-size:14px;margin-bottom:22px}
+.erro.on{display:flex}
+.erro svg{flex:none;width:18px;margin-top:2px}
 .campo.falta input,.campo.falta textarea{border-color:var(--erro)}
-.campo.falta .opcoes{outline:1px solid var(--erro);outline-offset:6px;border-radius:6px}
-footer{color:#5E5E5E;font-size:11px;letter-spacing:1.6px;text-transform:uppercase;text-align:center;margin-top:34px}
+.campo.falta .rot::after{content:"falta responder";display:inline-block;margin-left:8px;font-size:10px;
+  letter-spacing:1.4px;text-transform:uppercase;color:var(--erro);font-weight:600;vertical-align:2px}
+.campo.falta .op{border-color:#4E2626}
+
+footer{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:46px;
+  color:#4A4A4A;font-size:10px;letter-spacing:2.4px;text-transform:uppercase}
+footer svg{width:22px;color:#4A4A4A}
+
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+@media(min-width:620px){
+  header{padding:56px 0 40px}
+  .logo{width:196px}
+  .op{padding:15px 19px 15px 17px}
+}
 </style>
 </head>
 <body>
-<header><div class="wrap">
-  <div class="marca">
-    <svg viewBox="0 0 64 26" aria-hidden="true"><path fill="currentColor" d="M2 24 20 4l9 11 6-7 8 9 5-5 12 12H2Z"/></svg>
-    Desbravando UTV
+${simbolos()}
+<div class="progresso" aria-hidden="true"><i id="barra"></i></div>
+
+<header>
+  ${TOPOGRAFIA}
+  <div class="wrap">
+    ${usoLogotipo('class="logo" role="img" aria-label="Desbravando UTV"')}
+    ${form.sobretitulo ? `<p class="sobre">${esc(form.sobretitulo)}</p>` : ""}
+    <h1 class="anton">${esc(form.titulo)}</h1>
+    ${form.subtitulo ? `<p class="sub">${esc(form.subtitulo)}</p>` : ""}
+    ${form.descricao ? `<div class="regua"></div><p class="desc">${esc(form.descricao)}</p>` : ""}
+    ${!fechado && form.prazo ? `<p class="prazo">Responda até <b>${esc(form.prazo)}</b></p>` : ""}
   </div>
-  <h1 class="anton">${esc(form.titulo)}</h1>
-  ${form.subtitulo ? `<p class="sub">${esc(form.subtitulo)}</p>` : ""}
-  ${form.descricao ? `<p class="desc">${esc(form.descricao)}</p>` : ""}
-  ${fechado ? "" : prazo}
-</div></header>
+</header>
+
 <main class="wrap">
-  <div class="erro" id="erro"></div>
+  <div class="erro" id="erro">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+      <circle cx="10" cy="10" r="8.2"/><path d="M10 6v5.4M10 14.2v.2"/></svg>
+    <span id="erro_txt"></span>
+  </div>
   ${corpo}
-  <div class="fim" id="fim" style="display:none">
-    <h2 class="anton">Resposta registrada</h2>
-    <p>${esc(form.agradecimento || "Obrigado! A cozinha já recebeu. Se mudar algo, é só responder de novo.")}</p>
+  <div class="cartao" id="fim" style="display:none">
+    ${usoMontanha('class="selo"')}
+    <h2 class="anton" id="fim_titulo">Escolha registrada</h2>
+    <p>${esc(form.agradecimento || "Obrigado! A cozinha já recebeu. Se mudar algo, responda de novo — vale a última resposta.")}</p>
+    <div class="resumo" id="resumo" style="display:none">
+      <h3>O que você escolheu</h3>
+      <dl id="resumo_lista"></dl>
+    </div>
   </div>
 </main>
-<footer class="wrap">Desbravando UTV</footer>
+
+<footer>${usoMontanha()} Desbravando UTV</footer>
+
 <script>
 (function(){
   var f = document.getElementById("f");
   if (!f) return;
-  var erro = document.getElementById("erro"), btn = document.getElementById("env");
+  var erro = document.getElementById("erro"), erroTxt = document.getElementById("erro_txt");
+  var btn = document.getElementById("env"), barra = document.getElementById("barra");
+  var OBRIGATORIAS = ${obrigatorias};
+
+  /* rótulo de cada pergunta, com a seção herdada do bloco — o mesmo critério da
+     planilha, para o resumo final não dizer "Escolha seu prato" quatro vezes */
+  var ROTULOS = {};
+  Array.prototype.forEach.call(f.querySelectorAll("[data-campo]"), function(c){
+    var bloco = c.closest(".bloco");
+    var sec = bloco ? (bloco.querySelector(".cab .nome") || {}).textContent : "";
+    var rot = c.querySelector(".rot").textContent.replace(/\\s*opcional\\s*$/, "").trim();
+    ROTULOS[c.getAttribute("data-campo")] = sec ? sec + " · " + rot : rot;
+  });
+
+  function valores(){
+    var d = {};
+    Array.prototype.forEach.call(f.elements, function(el){
+      if (!el.name) return;
+      if (el.type === "checkbox") { if (el.checked) (d[el.name] = d[el.name] || []).push(el.value); }
+      else if (el.type === "radio") { if (el.checked) d[el.name] = el.value; }
+      else if (String(el.value).trim()) d[el.name] = el.value.trim();
+    });
+    return d;
+  }
+
+  function respondido(campo){
+    var req = campo.querySelector("[required]");
+    if (!req) return true;
+    var grupo = f.querySelectorAll('[name="' + req.getAttribute("name") + '"]');
+    for (var i = 0; i < grupo.length; i++){
+      var el = grupo[i];
+      if (el.type === "radio" || el.type === "checkbox") { if (el.checked) return true; }
+      else if (String(el.value).trim()) return true;
+    }
+    return false;
+  }
+
+  function progresso(){
+    if (!OBRIGATORIAS) return;
+    var feitas = 0;
+    Array.prototype.forEach.call(f.querySelectorAll("[data-campo]"), function(c){
+      if (c.querySelector("[required]") && respondido(c)) feitas++;
+    });
+    barra.style.width = Math.round(feitas / OBRIGATORIAS * 100) + "%";
+  }
+  f.addEventListener("input", function(e){
+    progresso();
+    var c = e.target.closest(".campo");
+    if (c && c.classList.contains("falta") && respondido(c)) c.classList.remove("falta");
+  });
+  f.addEventListener("change", progresso);
+  progresso();
+
   f.addEventListener("submit", function(ev){
     ev.preventDefault();
-    erro.style.display = "none";
-    // validação na mão: o navegador não marca grupo de radio de forma clara no celular
+    erro.classList.remove("on");
     var faltando = [];
-    Array.prototype.forEach.call(f.querySelectorAll(".campo"), function(c){
+    Array.prototype.forEach.call(f.querySelectorAll("[data-campo]"), function(c){
       c.classList.remove("falta");
-      var req = c.querySelector("[required]");
-      if (!req) return;
-      var nome = req.getAttribute("name");
-      var grupo = f.querySelectorAll('[name="' + nome + '"]');
-      var ok = false;
-      Array.prototype.forEach.call(grupo, function(i){
-        if (i.type === "radio" || i.type === "checkbox") { if (i.checked) ok = true; }
-        else if (String(i.value).trim()) ok = true;
-      });
-      if (!ok) { faltando.push(c); c.classList.add("falta"); }
+      if (!respondido(c)) { faltando.push(c); c.classList.add("falta"); }
     });
     if (faltando.length) {
-      erro.textContent = faltando.length === 1
-        ? "Falta responder um campo obrigatório."
-        : "Faltam " + faltando.length + " campos obrigatórios.";
-      erro.style.display = "block";
+      erroTxt.textContent = faltando.length === 1
+        ? "Falta responder um campo. Marcamos ele abaixo."
+        : "Faltam " + faltando.length + " respostas. Marcamos elas abaixo.";
+      erro.classList.add("on");
       faltando[0].scrollIntoView({ block: "center", behavior: "smooth" });
       return;
     }
-    var dados = {};
-    Array.prototype.forEach.call(f.elements, function(el){
-      if (!el.name) return;
-      if (el.type === "checkbox") { if (el.checked) (dados[el.name] = dados[el.name] || []).push(el.value); }
-      else if (el.type === "radio") { if (el.checked) dados[el.name] = el.value; }
-      else if (String(el.value).trim()) dados[el.name] = el.value;
-    });
-    btn.disabled = true; btn.textContent = "Enviando…";
+
+    var dados = valores();
+    btn.disabled = true; btn.querySelector("span").textContent = "Enviando…";
     fetch(location.pathname, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ respostas: dados })
     }).then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.erro||"Erro"); return j; }); })
       .then(function(){
+        /* devolve a escolha na tela: quem respondeu por quatro noites quer conferir */
+        var nome = "";
+        var lista = document.getElementById("resumo_lista"), n = 0;
+        Object.keys(ROTULOS).forEach(function(id){
+          var v = dados[id];
+          if (v === undefined) return;
+          // rótulo sem " · " = campo fora dos blocos de noite, ou seja o nome
+          if (!nome && typeof v === "string" && ROTULOS[id].indexOf(" · ") === -1) nome = v;
+          var linha = document.createElement("div");
+          linha.className = "par";
+          var dt = document.createElement("dt"); dt.textContent = ROTULOS[id];
+          var dd = document.createElement("dd"); dd.textContent = Array.isArray(v) ? v.join(", ") : v;
+          linha.appendChild(dt); linha.appendChild(dd); lista.appendChild(linha); n++;
+        });
+        if (n) document.getElementById("resumo").style.display = "block";
+        if (nome) document.getElementById("fim_titulo").textContent = "Obrigado, " + nome.split(" ")[0];
         f.style.display = "none";
+        barra.style.width = "100%";
         document.getElementById("fim").style.display = "block";
         window.scrollTo({ top: 0, behavior: "smooth" });
       })
       .catch(function(e){
-        erro.textContent = e.message + " — tente de novo em alguns segundos.";
-        erro.style.display = "block";
-        btn.disabled = false; btn.textContent = "Enviar resposta";
+        erroTxt.textContent = e.message + " — tente de novo em alguns segundos.";
+        erro.classList.add("on");
+        btn.disabled = false; btn.querySelector("span").textContent = "Enviar resposta";
+        window.scrollTo({ top: 0, behavior: "smooth" });
       });
   });
 })();
@@ -380,8 +561,8 @@ export async function handleCardapio(request, env) {
   if (metodo === "OPTIONS") return new Response(null, { headers: CORS });
 
   const form = await env.DB.prepare(
-    `SELECT id, evento_id, slug, titulo, subtitulo, descricao, perguntas, aberto, prazo,
-            agradecimento, token_planilha
+    `SELECT id, evento_id, slug, titulo, sobretitulo, subtitulo, descricao, perguntas,
+            aberto, prazo, agradecimento, token_planilha
        FROM cardapio_forms WHERE slug=?`
   ).bind(slug).first();
 
