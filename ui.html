@@ -2977,6 +2977,7 @@ function renderCardapio(){
 
     '<div class="cdbox">' +
       '<h3>Como o formulário aparece</h3>' +
+      '<label class="top">Linha de contexto (acima do título)</label><input id="cd_sobre" value="'+esc(f.sobretitulo||"")+'" maxlength="160" placeholder="3ª Expedição Família · Urubici SC">' +
       '<label class="top">Título</label><input id="cd_titulo" value="'+esc(f.titulo)+'" maxlength="120">' +
       '<label class="top">Linha de apoio</label><input id="cd_sub" value="'+esc(f.subtitulo)+'" maxlength="200">' +
       '<label class="top">Explicação (opcional)</label><textarea id="cd_desc" rows="3" maxlength="1200">'+esc(f.descricao)+'</textarea>' +
@@ -3133,6 +3134,7 @@ function cdSalvar(){
   var b = $("cd_salvar"); b.disabled = true; b.textContent = "Salvando…";
   api("/api/cardapio/"+CD.form.id, "PATCH", {
     titulo: $("cd_titulo").value,
+    sobretitulo: $("cd_sobre").value,
     subtitulo: $("cd_sub").value,
     descricao: $("cd_desc").value,
     prazo: $("cd_prazo").value,
