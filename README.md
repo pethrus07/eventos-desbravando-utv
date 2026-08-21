@@ -98,6 +98,13 @@ Autenticação: header `x-app-key`. Papel "ambos" = admin e equipe; "admin" = s�
 | `/api/cenarios/:id` | PATCH / DELETE | admin | Parâmetros · exclui |
 | `/api/cenarios/:id/linhas` | POST | admin | Nova linha de custo |
 | `/api/linhas/:id` | PATCH / DELETE | admin | Edita · remove linha |
+| `/api/eventos/:id/cardapio` | GET / POST | admin | Formulário de cardápio do evento · cria (perguntas padrão se não vierem) |
+| `/api/cardapio/:id` | PATCH / DELETE | admin | Título, perguntas, abre/encerra, `novo_token` · exclui com as respostas |
+| `/api/cardapio/:id/respostas` | GET | admin | Respostas recebidas |
+| `/api/cardapio/:id/respostas/:rid` | DELETE | admin | Remove uma resposta |
+| `/api/cardapio/:id/planilha.csv` | GET | admin | Planilha das respostas (download no painel) |
+| `/cardapio/:slug` | GET / POST | **público** | Página do formulário · grava a resposta |
+| `/cardapio/:slug/planilha.csv?t=` | GET | **token** | CSV para a planilha do Google puxar (`=IMPORTDATA`) |
 | `/api/eventos/:id/custos` | GET / POST | admin | Custos reais da expedição (+ lista de staff) · adiciona |
 | `/api/eventos/:id/custos/importar` | POST | admin | Gera itens de custo a partir de um cenário do simulador |
 | `/api/eventos/:id/custos/reordenar` | POST | admin | Salva a nova ordem (drag & drop) |
@@ -170,3 +177,4 @@ A URL final (`https://eventos.SEU-USUARIO.workers.dev`) é o app completo. Desen
 - Os dados pessoais reais (CPF, telefone, financeiro, CRM) **nunca entram no git**: ficam num seed ignorado (`seed_dados_reais.sql`) e num banco privado — este repositório é só o código.
 - As chaves de acesso são *secrets* do Wrangler, não vão no código nem no HTML; trocar é um comando e desloga quem usava a antiga.
 - CPF/telefone e todo o financeiro só aparecem com a chave admin; a equipe opera checklist, hospedagem e tarefas sem ver dado pessoal.
+- O formulário de cardápio é a **única** rota pública que grava no banco. Ele aceita só as perguntas que o formulário declara — campo desconhecido e opção fora da lista são descartados no servidor —, guarda nome e WhatsApp de quem responde e nada mais, e pode ser encerrado com um clique. O CSV para planilha tem token próprio, separado das chaves do sistema: vazou, você gera outro e o antigo morre.

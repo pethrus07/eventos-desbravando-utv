@@ -79,6 +79,30 @@ h1{font-size:clamp(30px,6.5vw,50px)}
 .paybar>i{display:block;height:100%;border-radius:99px;background:var(--warn)}
 .paybar>i.full{background:var(--ok)}
 input.mini,select.mini{padding:7px 8px;font-size:13px;border-radius:8px}
+/* ---------- cardápio: formulário público (admin) ---------- */
+.cdbox{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 16px 18px;margin-bottom:14px}
+.cdbox h3{font-family:'Anton',sans-serif;font-weight:400;text-transform:uppercase;font-size:15px;letter-spacing:-.2px;margin-bottom:4px}
+.cdbox .hint{color:var(--dim);font-size:12.5px;margin-bottom:12px}
+.cdlink{display:flex;align-items:center;gap:8px;background:#0F0F0F;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.cdlink code{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;color:var(--mut);overflow:auto;white-space:nowrap;scrollbar-width:none}
+.cdlink code::-webkit-scrollbar{display:none}
+.cdlink button{flex:none;background:transparent;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600}
+.cdlink button:hover{border-color:#666}
+.cdq{display:grid;grid-template-columns:1fr 130px 26px;gap:8px;align-items:start;padding:10px 0;border-bottom:1px solid #1d1d1d}
+.cdq .opc{grid-column:1/3}
+.cdq .sec{grid-column:1/4;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);background:transparent;border-style:dashed;padding:7px 10px}
+.cdq .sec:not(:placeholder-shown){color:var(--txt);border-style:solid}
+.cdq .del{background:transparent;border:none;color:var(--dim);font-size:17px;line-height:1;padding:8px 0}
+.cdq .del:hover{color:var(--p1)}
+.cdq .obr{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mut);grid-column:1/3;margin-top:-2px}
+.cdq .obr input{width:16px;height:16px;accent-color:#FFF}
+.cdresp{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+.cdresp .top{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+.cdresp .top b{font-size:14.5px}
+.cdresp .top small{color:var(--dim);font-size:11.5px;margin-left:auto;white-space:nowrap}
+.cdresp dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px}
+.cdresp dt{color:var(--dim)}
+.cdresp dd{color:var(--mut)}
 .simtab{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0}
 .simtab th{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);text-align:left;padding:6px 5px;border-bottom:1px solid var(--line)}
 .simtab td{padding:5px 4px;border-bottom:1px solid #1d1d1d;vertical-align:middle}
@@ -386,7 +410,7 @@ function route(){
   clearInterval(pollTimer); pollTimer = null;
 
   var h = location.hash || "#/";
-  var m = h.match(/^#\/e\/(\d+)(?:\/(custos|participantes|simulador|hospedagem|operacao|campo|agenda))?$/);
+  var m = h.match(/^#\/e\/(\d+)(?:\/(custos|participantes|simulador|hospedagem|operacao|campo|agenda|cardapio))?$/);
   if (m) return telaEvento(+m[1], m[2] || "");
   if (h === "#/tarefas") return telaTarefas();
   if (h === "#/crm") return telaCRM();
@@ -555,7 +579,7 @@ function itensFiltrados(){
 function renderEvento(aba){
   var ev = EV.evento, s = stats(EV.itens);
   var TABS = [["","Checklist"],["operacao","Operação"],["campo","Campo"],["agenda","Agenda"]];
-  if (PAPEL === "admin") TABS.push(["custos","Custos"],["participantes","Participantes"],["simulador","Simulador"]);
+  if (PAPEL === "admin") TABS.push(["custos","Custos"],["participantes","Participantes"],["simulador","Simulador"],["cardapio","Cardápio"]);
   TABS.push(["hospedagem","Hospedagem"]);
   var tabsHtml = TABS.map(function(t){
     return '<button class="tab'+(aba===t[0]?' on':'')+'" data-tab="'+t[0]+'">'+t[1]+'</button>';
@@ -592,6 +616,7 @@ function renderEvento(aba){
   else if (aba === "operacao") carregarOperacao();
   else if (aba === "campo") carregarCampo();
   else if (aba === "agenda") carregarAgenda();
+  else if (aba === "cardapio") carregarCardapio();
   else renderChecklist();
 }
 
@@ -2834,6 +2859,302 @@ function sheetContato(id){
 /* ============================================================
    Sheet / overlay
    ============================================================ */
+
+/* ============================================================
+   CARDÁPIO — formulário público do evento (admin)
+
+   O formulário fica fora do sistema, num link sem chave, para as
+   famílias responderem pelo celular. Aqui é o lado de dentro:
+   monta as perguntas, mostra o link, lê as respostas e entrega a
+   planilha.
+   ============================================================ */
+var CD = { form: null, respostas: [], perguntas: [] };
+
+var CD_TIPOS = [
+  ["texto","Texto curto"], ["obs","Texto longo"], ["numero","Número"],
+  ["escolha","Escolha uma"], ["multi","Escolha várias"], ["sim_nao","Sim / Não"]
+];
+
+function carregarCardapio(){
+  if (PAPEL !== "admin"){
+    $("main").innerHTML = '<div class="empty">O formulário de cardápio é gerenciado apenas com a chave admin.</div>';
+    return;
+  }
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+  api("/api/eventos/"+EV.evento.id+"/cardapio").then(function(j){
+    CD.form = (j.formularios || [])[0] || null;
+    CD.perguntas = [];
+    if (CD.form){
+      try { CD.perguntas = JSON.parse(CD.form.perguntas || "[]"); } catch(e){ CD.perguntas = []; }
+      return api("/api/cardapio/"+CD.form.id+"/respostas").then(function(r){
+        CD.respostas = r.respostas || [];
+      });
+    }
+    CD.respostas = [];
+  }).then(renderCardapio)
+    .catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
+}
+
+/* Nome do evento -> pedaço do link público. O servidor sanea de novo e recusa
+   slug repetido; aqui é só para o link nascer legível em vez de "cardapio-7". */
+function cdSlug(nome){
+  var mapa = {"á":"a","à":"a","ã":"a","â":"a","é":"e","ê":"e","í":"i","ó":"o","õ":"o","ô":"o","ú":"u","ü":"u","ç":"c"};
+  return String(nome||"").toLowerCase().replace(/[^a-z0-9]/g, function(c){ return mapa[c] || "-"; })
+    .replace(/-+/g,"-").replace(/^-|-$/g,"").slice(0,50) || "cardapio";
+}
+
+function renderCardapio(){
+  if (!CD.form){
+    $("main").innerHTML =
+      '<div class="empty" style="text-align:left;padding:26px 22px">' +
+        '<h3 class="anton" style="font-size:18px;color:var(--txt);margin-bottom:8px">Formulário de cardápio</h3>' +
+        '<p style="margin-bottom:6px">Um link público para as famílias responderem o que vão comer — ' +
+        'quantas pessoas, restrição alimentar, preferências. As respostas caem aqui e saem em planilha.</p>' +
+        '<p style="margin-bottom:18px">Começa com um conjunto de perguntas pronto; depois você edita, tira e acrescenta o que quiser.</p>' +
+        '<button class="btn" id="cd_criar">Criar o formulário</button>' +
+      '</div>';
+    $("cd_criar").onclick = function(){
+      var b = this; b.disabled = true; b.textContent = "Criando…";
+      api("/api/eventos/"+EV.evento.id+"/cardapio", "POST", {
+        titulo: "Cardápio · " + EV.evento.nome,
+        subtitulo: "Conte para a cozinha o que a sua família vai comer.",
+        slug: cdSlug(EV.evento.nome)
+      }).then(function(){ toast("Formulário criado"); carregarCardapio(); })
+        .catch(function(e){ toast(e.message, true); b.disabled = false; b.textContent = "Criar o formulário"; });
+    };
+    return;
+  }
+
+  var f = CD.form;
+  var linkForm = location.origin + "/cardapio/" + f.slug;
+  var linkCsv  = linkForm + "/planilha.csv?t=" + f.token_planilha;
+  var total = CD.respostas.length;
+
+  /* KPIs derivados: acha a pergunta pelo tipo + palavra no rótulo, porque as
+     perguntas são editáveis e não existe campo fixo de "pessoas". */
+  var pessoas = 0, criancas = 0, comRestricao = 0;
+  CD.respostas.forEach(function(r){
+    var v = {}; try { v = JSON.parse(r.respostas || "{}"); } catch(e){}
+    CD.perguntas.forEach(function(p){
+      if (p.tipo === "numero" && /pessoa/i.test(p.rotulo)) pessoas += Number(v[p.id]) || 0;
+      if (p.tipo === "numero" && /crian/i.test(p.rotulo)) criancas += Number(v[p.id]) || 0;
+      if (p.tipo === "multi" && /restri/i.test(p.rotulo)){
+        var l = v[p.id] || [];
+        if (l.length && !(l.length === 1 && /nenhuma/i.test(l[0]))) comRestricao++;
+      }
+    });
+  });
+
+  var h =
+    '<div class="kpis">' +
+      '<div class="kpi"><small>Respostas</small><b>'+total+'</b></div>' +
+      '<div class="kpi"><small>Pessoas somadas</small><b>'+(pessoas||"—")+'</b></div>' +
+      '<div class="kpi"><small>Crianças</small><b>'+(criancas||"—")+'</b></div>' +
+      '<div class="kpi"><small>Com restrição</small><b class="'+(comRestricao?"warn":"")+'">'+(comRestricao||"—")+'</b></div>' +
+    '</div>' +
+
+    '<div class="cdbox">' +
+      '<h3>Link para enviar às famílias</h3>' +
+      '<p class="hint">Quem tem o link responde, sem senha. Pode mandar no grupo do WhatsApp.</p>' +
+      '<div class="cdlink"><code id="cd_url">'+esc(linkForm)+'</code>' +
+        '<button data-copiar="cd_url">Copiar</button>' +
+        '<button id="cd_abrir">Abrir</button></div>' +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">' +
+        '<button class="btn2" id="cd_toggle">'+(f.aberto ? "Encerrar respostas" : "Reabrir respostas")+'</button>' +
+        '<span class="chip '+(f.aberto?"ok":"bad")+'">'+(f.aberto ? "Recebendo respostas" : "Encerrado")+'</span>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="cdbox">' +
+      '<h3>Planilha</h3>' +
+      '<p class="hint">Baixe agora, ou cole a fórmula numa planilha do Google para ela puxar as respostas sozinha e ficar sempre atualizada.</p>' +
+      '<button class="btn2" id="cd_csv" style="margin-bottom:10px">↓ Baixar planilha (CSV)</button>' +
+      '<div class="cdlink"><code id="cd_formula">=IMPORTDATA("'+esc(linkCsv)+'";";")</code>' +
+        '<button data-copiar="cd_formula">Copiar</button></div>' +
+      '<p class="hint" style="margin:0">Esse endereço abre as respostas para quem tiver o link. ' +
+        '<a href="#" id="cd_token" style="color:var(--mut)">Gerar um novo endereço</a> invalida o anterior.</p>' +
+    '</div>' +
+
+    '<div class="cdbox">' +
+      '<h3>Como o formulário aparece</h3>' +
+      '<label class="top">Título</label><input id="cd_titulo" value="'+esc(f.titulo)+'" maxlength="120">' +
+      '<label class="top">Linha de apoio</label><input id="cd_sub" value="'+esc(f.subtitulo)+'" maxlength="200">' +
+      '<label class="top">Explicação (opcional)</label><textarea id="cd_desc" rows="3" maxlength="1200">'+esc(f.descricao)+'</textarea>' +
+      '<label class="top">Prazo para responder</label><input id="cd_prazo" value="'+esc(f.prazo)+'" maxlength="60" placeholder="ex.: domingo, 24/08">' +
+      '<label class="top">Mensagem depois de enviar</label><input id="cd_agr" value="'+esc(f.agradecimento)+'" maxlength="400" placeholder="Obrigado! A cozinha já recebeu.">' +
+    '</div>' +
+
+    '<div class="cdbox">' +
+      '<h3>Perguntas</h3>' +
+      '<p class="hint">Nas de escolha, separe as opções por ponto e vírgula.</p>' +
+      '<div id="cd_perguntas"></div>' +
+      '<button class="btn2" id="cd_add" style="margin-top:12px">+ Pergunta</button>' +
+    '</div>' +
+
+    '<button class="btn" id="cd_salvar" style="width:100%;margin-bottom:22px">Salvar formulário</button>';
+
+  h += '<h3 class="anton" style="font-size:17px;margin:6px 0 10px">Respostas ('+total+')</h3>';
+  if (!total){
+    h += '<div class="empty">Ninguém respondeu ainda. A primeira resposta aparece aqui.</div>';
+  } else {
+    CD.respostas.forEach(function(r){
+      var v = {}; try { v = JSON.parse(r.respostas || "{}"); } catch(e){}
+      /* a secao marca so a primeira pergunta do bloco; as seguintes herdam */
+      var secAtual = "";
+      var linhas = CD.perguntas.map(function(p){
+        if (p.secao) secAtual = p.secao;
+        return { p: p, rot: secAtual ? secAtual+" · "+p.rotulo : p.rotulo };
+      }).filter(function(x){
+        return v[x.p.id] !== undefined && v[x.p.id] !== "";
+      }).map(function(x){
+        var val = v[x.p.id];
+        if (Array.isArray(val)) val = val.join(", ");
+        return '<dt>'+esc(x.rot)+'</dt><dd>'+esc(val)+'</dd>';
+      }).join("");
+      h += '<div class="cdresp">' +
+             '<div class="top"><b>'+esc(r.nome || "Sem nome")+'</b>' +
+               (r.contato ? '<span style="color:var(--dim);font-size:12.5px">'+esc(r.contato)+'</span>' : '') +
+               '<small>'+esc(fmtData(r.criado_em))+'</small>' +
+               '<button data-cdel="'+r.id+'" title="Apagar resposta" ' +
+                 'style="background:none;border:none;color:var(--dim);font-size:15px;padding:0 2px;cursor:pointer">✕</button>' +
+             '</div>' +
+             '<dl>'+linhas+'</dl>' +
+           '</div>';
+    });
+  }
+
+  $("main").innerHTML = h;
+  cdRenderPerguntas();
+
+  $("cd_abrir").onclick = function(){ window.open(linkForm, "_blank", "noopener"); };
+  $("cd_csv").onclick = cdBaixarCsv;
+  $("cd_add").onclick = function(){
+    cdLerPerguntas();
+    CD.perguntas.push({ id:"", rotulo:"", tipo:"texto" });
+    cdRenderPerguntas();
+  };
+  $("cd_salvar").onclick = cdSalvar;
+  $("cd_toggle").onclick = function(){
+    api("/api/cardapio/"+f.id, "PATCH", { aberto: !f.aberto })
+      .then(function(){ toast(f.aberto ? "Respostas encerradas" : "Respostas reabertas"); carregarCardapio(); })
+      .catch(function(e){ toast(e.message, true); });
+  };
+  $("cd_token").onclick = function(e){
+    e.preventDefault();
+    if (!confirm("Gerar um novo endereço de planilha?\n\nQuem estiver usando o endereço antigo — inclusive planilhas do Google já montadas — para de receber as respostas.")) return;
+    api("/api/cardapio/"+f.id, "PATCH", { novo_token: true })
+      .then(function(){ toast("Novo endereço gerado"); carregarCardapio(); })
+      .catch(function(err){ toast(err.message, true); });
+  };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-copiar]"), function(b){
+    b.onclick = function(){
+      var txt = $(b.getAttribute("data-copiar")).textContent;
+      navigator.clipboard.writeText(txt).then(function(){ toast("Copiado"); },
+        function(){ toast("Não consegui copiar — selecione à mão", true); });
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-cdel]"), function(b){
+    b.onclick = function(){
+      if (!confirm("Apagar esta resposta? Não tem como desfazer.")) return;
+      api("/api/cardapio/"+f.id+"/respostas/"+b.getAttribute("data-cdel"), "DELETE")
+        .then(function(){ toast("Resposta apagada"); carregarCardapio(); })
+        .catch(function(e){ toast(e.message, true); });
+    };
+  });
+}
+
+function cdRenderPerguntas(){
+  var alvo = $("cd_perguntas");
+  if (!alvo) return;
+  alvo.innerHTML = CD.perguntas.map(function(p, i){
+    var precisaOpcoes = (p.tipo === "escolha" || p.tipo === "multi");
+    return '<div class="cdq" data-q="'+i+'">' +
+      '<input class="q_secao sec" value="'+esc(p.secao||"")+'" maxlength="80" placeholder="Abrir um bloco aqui (ex.: QUARTA-FEIRA) — opcional">' +
+      '<input class="q_rot" value="'+esc(p.rotulo)+'" maxlength="160" placeholder="Pergunta">' +
+      '<select class="q_tipo">' + CD_TIPOS.map(function(t){
+          return '<option value="'+t[0]+'"'+(p.tipo===t[0]?" selected":"")+'>'+t[1]+'</option>';
+        }).join("") + '</select>' +
+      '<button class="del" data-qdel="'+i+'" title="Remover">✕</button>' +
+      (precisaOpcoes
+        ? '<input class="q_opc opc" value="'+esc((p.opcoes||[]).join("; "))+'" placeholder="Opção 1; Opção 2; Opção 3">'
+        : '') +
+      '<label class="obr"><input type="checkbox" class="q_obr"'+(p.obrigatorio?" checked":"")+'> obrigatório</label>' +
+    '</div>';
+  }).join("");
+
+  Array.prototype.forEach.call(alvo.querySelectorAll(".q_tipo"), function(s){
+    s.onchange = function(){
+      cdLerPerguntas();
+      cdRenderPerguntas();  // trocou o tipo: o campo de opções entra ou sai
+    };
+  });
+  Array.prototype.forEach.call(alvo.querySelectorAll("[data-qdel]"), function(b){
+    b.onclick = function(){
+      cdLerPerguntas();
+      CD.perguntas.splice(+b.getAttribute("data-qdel"), 1);
+      cdRenderPerguntas();
+    };
+  });
+}
+
+/* Lê a tela de volta para CD.perguntas. O id existente é preservado de propósito:
+   é ele que liga a resposta já gravada à pergunta. */
+function cdLerPerguntas(){
+  var novas = [];
+  Array.prototype.forEach.call(document.querySelectorAll("#cd_perguntas .cdq"), function(el){
+    var i = +el.getAttribute("data-q");
+    var antiga = CD.perguntas[i] || {};
+    var p = {
+      id: antiga.id || "",
+      rotulo: el.querySelector(".q_rot").value,
+      tipo: el.querySelector(".q_tipo").value,
+      obrigatorio: el.querySelector(".q_obr").checked
+    };
+    if (antiga.ajuda) p.ajuda = antiga.ajuda;
+    var sec = el.querySelector(".q_secao");
+    if (sec && sec.value.trim()) p.secao = sec.value.trim();
+    var opc = el.querySelector(".q_opc");
+    if (opc) p.opcoes = opc.value.split(";").map(function(s){ return s.trim(); }).filter(Boolean);
+    novas.push(p);
+  });
+  CD.perguntas = novas;
+}
+
+function cdSalvar(){
+  cdLerPerguntas();
+  if (CD.perguntas.filter(function(p){ return !p.rotulo.trim(); }).length){
+    toast("Tem pergunta sem texto", true); return;
+  }
+  var semOpcao = CD.perguntas.filter(function(p){
+    return (p.tipo==="escolha"||p.tipo==="multi") && (!p.opcoes || !p.opcoes.length);
+  });
+  if (semOpcao.length){ toast("Pergunta de escolha sem opções: "+semOpcao[0].rotulo, true); return; }
+
+  var b = $("cd_salvar"); b.disabled = true; b.textContent = "Salvando…";
+  api("/api/cardapio/"+CD.form.id, "PATCH", {
+    titulo: $("cd_titulo").value,
+    subtitulo: $("cd_sub").value,
+    descricao: $("cd_desc").value,
+    prazo: $("cd_prazo").value,
+    agradecimento: $("cd_agr").value,
+    perguntas: CD.perguntas
+  }).then(function(){ toast("Formulário salvo"); carregarCardapio(); })
+    .catch(function(e){ toast(e.message, true); b.disabled = false; b.textContent = "Salvar formulário"; });
+}
+
+/* CSV pelo painel: precisa do header da chave, então baixa por fetch + blob. */
+function cdBaixarCsv(){
+  fetch("/api/cardapio/"+CD.form.id+"/planilha.csv", { headers: { "x-app-key": KEY } })
+    .then(function(r){ if(!r.ok) throw new Error("Erro "+r.status); return r.blob(); })
+    .then(function(bl){
+      var u = URL.createObjectURL(bl), a = document.createElement("a");
+      a.href = u; a.download = "cardapio-"+CD.form.slug+".csv";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(u); }, 1000);
+    })
+    .catch(function(e){ toast(e.message, true); });
+}
+
 function abrirSheet(html){
   $("sheet").innerHTML = html;
   $("overlay").classList.add("on");

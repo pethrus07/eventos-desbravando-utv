@@ -11,6 +11,7 @@ recupera; dado apagado não.**
 - **Cloudflare Worker** (`worker.js`) + **D1** (SQLite) + **SPA de arquivo único** (`ui.html`). Sem build, sem dependências.
 - `mcp.js` = conector MCP (o que liga o Claude ao sistema).
 - Rotas: `/` serve a interface; `/api/*` é a API; `/mcp` (e o alias `/api/mcp`) é o conector.
+- `cardapio.js` = formulário de cardápio. `/cardapio/<slug>` é **público** (sem chave) e é a única rota pública que grava no banco — o portão de autenticação vem depois dela no `fetch`.
 
 ## Rodar e publicar
 ```bash
