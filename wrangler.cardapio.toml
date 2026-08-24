@@ -1,0 +1,17 @@
+# Worker só do formulário de cardápio — ver worker-cardapio.js para o porquê.
+#
+#   npx wrangler deploy -c wrangler.cardapio.toml
+#
+# Aponta para o MESMO banco do sistema (eventos): as respostas têm de cair na
+# mesma tabela, senão o painel não as encontra quando a rota voltar para lá.
+# Não declara R2 nem secret: este worker não lê nada além do cardápio, e a parte
+# pública não usa chave.
+
+name = "cardapio"
+main = "worker-cardapio.js"
+compatibility_date = "2026-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "eventos"
+database_id = "c77cfaee-afe3-4a18-b1f1-a4164bdc9c75"
