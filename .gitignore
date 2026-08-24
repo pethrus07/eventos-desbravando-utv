@@ -15,6 +15,8 @@ seed_dados_reais.sql
 # Backups do banco de producao (contem dados reais) — nunca versionar
 backup*.sql
 *.backup.sql
+# idem para os despejos em JSON: o do cardapio leva o token da planilha
+backup*.json
 
 # Sistema
 .DS_Store
