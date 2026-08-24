@@ -361,7 +361,11 @@ function fmtData(iso){
   return d.toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
 }
 
-function api(path, method, body){
+/* Uma tentativa. O `fetch` só REJEITA quando não houve resposta nenhuma (rede caída,
+   celular que dormiu, conexão HTTP/2 velha) — resposta de erro do servidor resolve
+   normalmente e cai no ramo de cima. Marco os dois casos diferente porque só o
+   primeiro vale repetir. */
+function apiTentativa(path, method, body){
   return fetch(path, {
     method: method || "GET",
     headers: { "content-type":"application/json", "x-app-key": KEY },
@@ -371,6 +375,27 @@ function api(path, method, body){
     return r.json().then(function(j){
       if (!r.ok) throw new Error(j.erro || ("Erro " + r.status));
       return j;
+    });
+  }, function(){
+    throw { __rede: true };
+  });
+}
+
+/* Falha de rede não é erro do sistema, e no campo acontece muito: a primeira
+   requisição depois de o celular acordar costuma morrer sozinha. Antes isso subia
+   como o texto cru do navegador — "Failed to fetch" — impresso na tela, porque a
+   listagem de eventos e o painel geral mostram `e.message` direto. Agora tenta de
+   novo uma vez e, se ainda falhar, fala português. */
+function api(path, method, body){
+  return apiTentativa(path, method, body).catch(function(e){
+    if (!e || !e.__rede) throw e;
+    return new Promise(function(ok){ setTimeout(ok, 500); }).then(function(){
+      return apiTentativa(path, method, body).catch(function(e2){
+        if (!e2 || !e2.__rede) throw e2;
+        throw new Error(navigator.onLine === false
+          ? "Sem conexão. Verifique a internet e tente de novo."
+          : "Não consegui falar com o servidor. Tente de novo em alguns segundos.");
+      });
     });
   });
 }
