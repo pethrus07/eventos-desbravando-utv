@@ -117,6 +117,17 @@ export function limparPerguntas(bruto) {
         .slice(0, 30);
       if (!opcoes.length) continue; // escolha sem opção não vira campo
       item.opcoes = opcoes;
+      /* Linha de apoio por opção. Fica FORA de `opcoes` de propósito: o texto da
+         opção é o valor gravado e validado, então mudar a nota nunca invalida
+         resposta já no banco. Só entra nota de opção que existe. */
+      if (p?.notas && typeof p.notas === "object") {
+        const notas = {};
+        for (const o of opcoes) {
+          const t = String(p.notas[o] ?? "").slice(0, 160).trim();
+          if (t) notas[o] = t;
+        }
+        if (Object.keys(notas).length) item.notas = notas;
+      }
     }
     saida.push(item);
   }
@@ -138,9 +149,16 @@ function campoHtml(p) {
      seguinte em lista, e a mistura desalinha a página. Fica inline só o que é
      realmente curto — Sim/Não e afins. */
   const empilha = (p.opcoes ?? []).some((o) => String(o).length > 16) ? " col" : "";
-  const opcao = (o, tipo) =>
-    `<label class="op"><input type="${tipo}" name="${esc(p.id)}" value="${esc(o)}"${tipo === "radio" ? req : ""}>` +
-    `<i class="marca" aria-hidden="true"></i><span>${esc(o)}</span></label>`;
+  const opcao = (o, tipo) => {
+    const nota = p.notas?.[o];
+    return (
+      `<label class="op${nota ? " com-nota" : ""}">` +
+      `<input type="${tipo}" name="${esc(p.id)}" value="${esc(o)}"${tipo === "radio" ? req : ""}>` +
+      `<i class="marca" aria-hidden="true"></i>` +
+      `<span class="txt">${esc(o)}${nota ? `<i class="nota">${esc(nota)}</i>` : ""}</span>` +
+      `</label>`
+    );
+  };
 
   let controle = "";
   if (p.tipo === "obs") {
@@ -288,7 +306,11 @@ textarea{resize:vertical;line-height:1.5}
 .op .marca{flex:none;width:19px;height:19px;border:1.5px solid #5E5E5E;border-radius:50%;
   position:relative;transition:border-color .15s,background .15s}
 .op input[type=checkbox]~.marca{border-radius:6px}
-.op span{min-width:0}
+.op .txt{min-width:0;display:block}
+.op .nota{display:block;font-style:normal;font-size:13px;line-height:1.45;color:var(--dim);margin-top:3px}
+.op.com-nota{align-items:flex-start}
+.op.com-nota .marca{margin-top:2px}
+.op:has(input:checked) .nota{color:var(--mut)}
 .op:has(input:checked){border-color:#FFF;background:#1B1B1B}
 .op:has(input:checked)::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;
   background:#FFF;border-radius:0 3px 3px 0}
