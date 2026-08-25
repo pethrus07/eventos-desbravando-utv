@@ -1326,7 +1326,9 @@ export default {
       const { results } = await db.prepare(
         "SELECT criado_em, respostas FROM cardapio_respostas WHERE form_id=? ORDER BY id"
       ).bind(+m[1]).all();
-      return new Response(respostasCsv(perguntas, results ?? []), {
+      // ";" aqui de proposito: este e o download do painel, aberto no Excel pt-BR.
+      // A rota publica do token usa "," para o =IMPORTDATA do Google funcionar sem argumento.
+      return new Response(respostasCsv(perguntas, results ?? [], ";"), {
         headers: {
           "content-type": "text/csv; charset=utf-8",
           "content-disposition": `attachment; filename="cardapio-${form.slug}.csv"`,
