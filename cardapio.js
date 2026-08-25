@@ -521,7 +521,7 @@ ${simbolos()}
 
 /* ---------------------------------------------------------- CSV */
 
-const celula = (v, sep = ",") => {
+const celula = (v, sep = ";") => {
   let s = Array.isArray(v) ? v.join("; ") : String(v ?? "");
   s = s.replace(/\r?\n/g, " ");
   // apóstrofo na frente de = + - @ : impede a planilha de interpretar como fórmula
@@ -539,7 +539,7 @@ const celula = (v, sep = ",") => {
  * cru no cabeçalho: quem editou o formulário no meio do caminho não perde dado
  * que já tinha chegado — a planilha é o registro.
  */
-export function respostasCsv(perguntas, linhas, sep = ",") {
+export function respostasCsv(perguntas, linhas, sep = ";") {
   const lidas = linhas.map((l) => {
     try {
       return { criado_em: l.criado_em, v: JSON.parse(l.respostas || "{}") };
@@ -564,10 +564,11 @@ export function respostasCsv(perguntas, linhas, sep = ",") {
     ...perguntas.map((p) => v[p.id]),
     ...orfaos.map((k) => v[k]),
   ]);
-  /* Vírgula por padrão: é o CSV padrão, e o `=IMPORTDATA(url)` do Google separa as
-     colunas sozinho, sem precisar do segundo argumento — que é onde a fórmula quebra,
-     porque o separador de argumentos muda com o idioma da planilha. O ponto e vírgula
-     fica em `?sep=;` para quem for abrir o arquivo no Excel em pt-BR. */
+  /* ";" por padrão porque é o que a planilha do cliente já usa e funciona:
+     `=IMPORTDATA(url;";")`. Mudar o padrão quebraria fórmula em produção — o
+     segundo argumento diz ao Sheets em que caractere separar, então dado em
+     vírgula com fórmula pedindo ";" cai tudo numa coluna só. `?sep=,` entrega o
+     CSV padrão para quem precisar. */
   return [cab, ...corpo].map((linha) => linha.map((v) => celula(v, sep)).join(sep))
     .join("\r\n") + "\r\n";
 }
@@ -620,7 +621,7 @@ export async function handleCardapio(request, env) {
     /* Sem content-disposition: com ele o buscador do Google trata a resposta como
        arquivo para baixar em vez de dado, e o IMPORTDATA reclama que não alcançou
        a URL. */
-    const sep = url.searchParams.get("sep") === ";" ? ";" : ",";
+    const sep = url.searchParams.get("sep") === "," ? "," : ";";
     return new Response(respostasCsv(perguntas, results ?? [], sep), {
       headers: {
         "content-type": "text/csv; charset=utf-8",
