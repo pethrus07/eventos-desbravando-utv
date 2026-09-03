@@ -28,6 +28,13 @@ const CORS = {
   "Access-Control-Allow-Headers": "content-type",
 };
 
+/* Promessa do rodapé quando o formulário não define a sua. Genérica de propósito: o
+   texto antigo era do cardápio ("planejar a alimentação") e ficava errado em qualquer
+   outro formulário — no de avaliação, chegava a prometer que nada é publicado
+   justamente onde o cliente pode querer publicar o elogio. */
+const NOTA_RODAPE_PADRAO =
+  "Usamos estas respostas só para organizar a expedição. Nada é publicado nem repassado para terceiros.";
+
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -45,7 +52,14 @@ function rotulosCheios(perguntas) {
   });
 }
 
-const TIPOS = new Set(["texto", "numero", "escolha", "multi", "sim_nao", "obs"]);
+const TIPOS = new Set(["texto", "numero", "escolha", "multi", "sim_nao", "obs", "nota"]);
+
+/* `nota` é escala de avaliação (1..escala), não número livre: nota é comparável entre
+   respostas e cabe num toque, enquanto `numero` aceita 0 a 999 e é digitado. A escala
+   entra no dado porque 1-5 e 1-10 medem coisas diferentes e quem edita o formulário
+   decide — 5 é o padrão porque é o que o cliente pediu ("nota") e o que fecha numa
+   linha no celular. */
+const NOTA_ESCALA_PADRAO = 5;
 
 /* Acento -> letra simples, para gerar o id da pergunta a partir do rotulo. Mapa
    explicito em vez de normalize+intervalo de marcas combinantes: o intervalo fica
@@ -110,6 +124,16 @@ export function limparPerguntas(bruto) {
     if (p?.secao) item.secao = String(p.secao).slice(0, 80);
     if (p?.ajuda) item.ajuda = String(p.ajuda).slice(0, 200);
     if (p?.obrigatorio) item.obrigatorio = true;
+    if (tipo === "nota") {
+      const e = parseInt(String(p?.escala ?? NOTA_ESCALA_PADRAO), 10);
+      item.escala = Number.isFinite(e) && e >= 3 && e <= 10 ? e : NOTA_ESCALA_PADRAO;
+      /* Rótulo das pontas: escala sem âncora deixa o respondente adivinhar se 1 é
+         bom ou ruim, e a nota vira ruído. Só entra se vierem os dois. */
+      const pontas = (Array.isArray(p?.pontas) ? p.pontas : [])
+        .map((t) => String(t).slice(0, 40).trim())
+        .filter(Boolean);
+      if (pontas.length === 2) item.pontas = pontas;
+    }
     if (tipo === "escolha" || tipo === "multi") {
       const opcoes = (Array.isArray(p?.opcoes) ? p.opcoes : String(p?.opcoes ?? "").split(/\s*[;\n]\s*/))
         .map((o) => String(o).slice(0, 80).trim())
@@ -165,6 +189,20 @@ function campoHtml(p) {
     controle = `<textarea name="${esc(p.id)}" rows="3" maxlength="800" placeholder="Escreva aqui"${req}></textarea>`;
   } else if (p.tipo === "numero") {
     controle = `<input type="number" inputmode="numeric" min="0" max="999" placeholder="0"${req} name="${esc(p.id)}">`;
+  } else if (p.tipo === "nota") {
+    const max = p.escala ?? NOTA_ESCALA_PADRAO;
+    const botoes = Array.from({ length: max }, (_, i) => i + 1)
+      .map(
+        (n) =>
+          `<label class="nt"><input type="radio" name="${esc(p.id)}" value="${n}"${req}>` +
+          `<span class="anton">${n}</span></label>`
+      )
+      .join("");
+    controle =
+      `<div class="notas">${botoes}</div>` +
+      (p.pontas
+        ? `<div class="pontas"><span>${esc(p.pontas[0])}</span><span>${esc(p.pontas[1])}</span></div>`
+        : "");
   } else if (p.tipo === "sim_nao") {
     controle = `<div class="opcoes">${["Sim", "Não"].map((o) => opcao(o, "radio")).join("")}</div>`;
   } else if (p.tipo === "escolha") {
@@ -210,8 +248,8 @@ export function paginaFormulario(form, perguntas) {
     ? `<div class="cartao">
          ${usoMontanha('class="selo"')}
          <h2 class="anton">As respostas foram encerradas</h2>
-         <p>Este formulário está fechado. Se você ainda precisa avisar algo sobre a
-            alimentação, fale direto com a equipe da Desbravando.</p>
+         <p>Este formulário está fechado. Se você ainda precisa falar alguma coisa com a
+            gente, fale direto com a equipe da Desbravando.</p>
        </div>`
     : `<form id="f" novalidate>
          ${corpoCampos(perguntas)}
@@ -220,8 +258,7 @@ export function paginaFormulario(form, perguntas) {
              <span>Enviar resposta</span>
              <svg viewBox="0 0 20 12" aria-hidden="true"><path d="M0 6h17M12 1l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
            </button>
-           <p class="lgpd">Usamos estas respostas só para planejar a alimentação da
-             expedição. Nada é publicado nem repassado para terceiros.</p>
+           <p class="lgpd">${esc(String(form.nota_rodape ?? "").trim() || NOTA_RODAPE_PADRAO)}</p>
          </div>
        </form>`;
 
@@ -321,6 +358,26 @@ textarea{resize:vertical;line-height:1.5}
   width:4px;height:9px;border:solid #000;border-width:0 2px 2px 0;transform:rotate(45deg)}
 .op:focus-within{outline:2px solid #FFF;outline-offset:3px}
 .op:active{transform:scale(.995)}
+
+/* ---------- nota ----------
+   flex com base de 56px em vez de grid de N colunas: numa escala de 1 a 10 o grid
+   deixaria cada botao com ~25px no celular, menor que o alvo de toque; assim os
+   cinco enchem a linha e os dez quebram em duas linhas de cinco.
+   Selecionado fica SOLIDO (fundo branco, numero preto) — na escala o que importa e
+   ver de longe qual foi marcada, e contorno se perde entre cinco caixas iguais. */
+.notas{display:flex;flex-wrap:wrap;gap:9px;margin-top:12px}
+.nt{position:relative;flex:1 1 56px;min-width:56px;display:grid;place-items:center;
+  background:var(--cartao);border:1px solid var(--linha);border-radius:12px;
+  padding:15px 0;cursor:pointer;transition:border-color .15s,background .15s,transform .12s}
+.nt:hover{border-color:var(--linha2);background:var(--cartao2)}
+.nt input{position:absolute;opacity:0;width:0;height:0}
+.nt span{font-size:25px;color:var(--mut);transition:color .15s}
+.nt:has(input:checked){background:#FFF;border-color:#FFF}
+.nt:has(input:checked) span{color:#000}
+.nt:focus-within{outline:2px solid #FFF;outline-offset:3px}
+.nt:active{transform:scale(.99)}
+.pontas{display:flex;justify-content:space-between;gap:12px;margin-top:9px;
+  font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--dim)}
 
 /* ---------- envio ---------- */
 .enviar{border-top:1px solid var(--linha);padding-top:26px;margin-top:36px}
@@ -578,6 +635,27 @@ export function respostasCsv(perguntas, linhas, sep = ";") {
 const json = (d, s = 200) =>
   new Response(JSON.stringify(d), { status: s, headers: { "content-type": "application/json; charset=utf-8", ...CORS } });
 
+const COLUNAS_FORM = `id, evento_id, slug, titulo, sobretitulo, subtitulo, descricao,
+            perguntas, aberto, prazo, agradecimento, token_planilha`;
+
+/**
+ * Busca o formulário tolerando banco sem a migração v4.5. Deploy do worker e migração
+ * do banco são dois passos, e se o worker chegar primeiro o SELECT com a coluna nova
+ * falha — servir o formulário sem a nota personalizada é muito melhor do que devolver
+ * erro para quem abriu o link no meio do mato.
+ */
+async function achaForm(env, slug) {
+  try {
+    return await env.DB.prepare(
+      `SELECT ${COLUNAS_FORM}, nota_rodape FROM cardapio_forms WHERE slug=?`
+    ).bind(slug).first();
+  } catch {
+    return await env.DB.prepare(
+      `SELECT ${COLUNAS_FORM} FROM cardapio_forms WHERE slug=?`
+    ).bind(slug).first();
+  }
+}
+
 /**
  * Trata as rotas públicas do cardápio. Devolve null quando o caminho não é
  * daqui — assim o worker segue o roteamento normal.
@@ -590,11 +668,7 @@ export async function handleCardapio(request, env) {
   const metodo = request.method;
   if (metodo === "OPTIONS") return new Response(null, { headers: CORS });
 
-  const form = await env.DB.prepare(
-    `SELECT id, evento_id, slug, titulo, sobretitulo, subtitulo, descricao, perguntas,
-            aberto, prazo, agradecimento, token_planilha
-       FROM cardapio_forms WHERE slug=?`
-  ).bind(slug).first();
+  const form = await achaForm(env, slug);
 
   if (!form) {
     return csv
@@ -657,6 +731,10 @@ export async function handleCardapio(request, env) {
         const permitido = p.tipo === "sim_nao" ? ["Sim", "Não"] : p.opcoes ?? [];
         const s = String(v).slice(0, 80);
         if (permitido.includes(s)) limpo[p.id] = s;
+      } else if (p.tipo === "nota") {
+        const n = parseInt(String(v), 10);
+        const max = p.escala ?? NOTA_ESCALA_PADRAO;
+        if (Number.isFinite(n) && n >= 1 && n <= max) limpo[p.id] = n;
       } else if (p.tipo === "numero") {
         const n = parseInt(String(v), 10);
         if (Number.isFinite(n) && n >= 0 && n <= 999) limpo[p.id] = n;

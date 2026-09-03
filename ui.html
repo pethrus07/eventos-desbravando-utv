@@ -26,6 +26,8 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:#FFF}
 ::placeholder{color:#5E5E5E}
 select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239A9A9A' stroke-width='1.6' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;cursor:pointer}
 label.top{display:block;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);margin:14px 0 6px}
+/* linha de orientacao abaixo de um campo do painel */
+p.dica{font-size:12.5px;line-height:1.5;color:var(--dim);margin:6px 0 0}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#FFF;color:#000;border:none;border-radius:12px;padding:13px 22px;font-size:15px;font-weight:700}
 .btn:disabled{opacity:.45;cursor:default}
@@ -2897,7 +2899,8 @@ var CD = { form: null, respostas: [], perguntas: [] };
 
 var CD_TIPOS = [
   ["texto","Texto curto"], ["obs","Texto longo"], ["numero","Número"],
-  ["escolha","Escolha uma"], ["multi","Escolha várias"], ["sim_nao","Sim / Não"]
+  ["escolha","Escolha uma"], ["multi","Escolha várias"], ["sim_nao","Sim / Não"],
+  ["nota","Nota de 1 a 5"]
 ];
 
 function carregarCardapio(){
@@ -3008,6 +3011,8 @@ function renderCardapio(){
       '<label class="top">Explicação (opcional)</label><textarea id="cd_desc" rows="3" maxlength="1200">'+esc(f.descricao)+'</textarea>' +
       '<label class="top">Prazo para responder</label><input id="cd_prazo" value="'+esc(f.prazo)+'" maxlength="60" placeholder="ex.: domingo, 24/08">' +
       '<label class="top">Mensagem depois de enviar</label><input id="cd_agr" value="'+esc(f.agradecimento)+'" maxlength="400" placeholder="Obrigado! A cozinha já recebeu.">' +
+      '<label class="top">Promessa no pé da página</label><input id="cd_rodape" value="'+esc(f.nota_rodape||"")+'" maxlength="400" placeholder="Usamos estas respostas só para organizar a expedição. Nada é publicado nem repassado para terceiros.">' +
+      '<p class="dica">O que a gente promete fazer com a resposta. Vale ler antes de publicar: num formulário de avaliação, prometer que “nada é publicado” impede usar o elogio depois.</p>' +
     '</div>' +
 
     '<div class="cdbox">' +
@@ -3164,6 +3169,7 @@ function cdSalvar(){
     descricao: $("cd_desc").value,
     prazo: $("cd_prazo").value,
     agradecimento: $("cd_agr").value,
+    nota_rodape: $("cd_rodape").value,
     perguntas: CD.perguntas
   }).then(function(){ toast("Formulário salvo"); carregarCardapio(); })
     .catch(function(e){ toast(e.message, true); b.disabled = false; b.textContent = "Salvar formulário"; });
