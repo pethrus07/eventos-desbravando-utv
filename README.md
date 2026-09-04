@@ -178,3 +178,30 @@ A URL final (`https://eventos.SEU-USUARIO.workers.dev`) é o app completo. Desen
 - As chaves de acesso são *secrets* do Wrangler, não vão no código nem no HTML; trocar é um comando e desloga quem usava a antiga.
 - CPF/telefone e todo o financeiro só aparecem com a chave admin; a equipe opera checklist, hospedagem e tarefas sem ver dado pessoal.
 - O formulário de cardápio é a **única** rota pública que grava no banco. Ele aceita só as perguntas que o formulário declara — campo desconhecido e opção fora da lista são descartados no servidor —, guarda nome e WhatsApp de quem responde e nada mais, e pode ser encerrado com um clique. O CSV para planilha tem token próprio, separado das chaves do sistema: vazou, você gera outro e o antigo morre.
+
+## Formulários públicos · dado sensível
+
+Quatro formulários rodam no worker `cardapio` (mesmo banco do sistema):
+
+| slug | evento | o que coleta |
+|---|---|---|
+| `jantar-urubici` | Urubici · ago | escolha de jantar das 4 noites |
+| `almoco-vinicola` | Urubici · ago | escolha do almoço na vinícola |
+| `avaliacao-expedicao` | Urubici · ago | nome, nota de 1 a 5, comentário |
+| `cadastro-origens` | Origens · 23–25/10 | **nome, CPF, RG, endereço, CEP, nacionalidade, estado civil** |
+
+⚠️ **O `cadastro-origens` é o primeiro que coleta documento.** Duas consequências práticas:
+
+1. **O token do CSV virou credencial de verdade.** Ele existe porque o `=IMPORTDATA` do
+   Google puxa o endereço em texto puro, então não pode ser a `APP_KEY`. Nos formulários de
+   cardápio, um token vazado expõe preferência de jantar. Neste, expõe o CPF e o RG de todos
+   os clientes. Não colar a fórmula em planilha compartilhada com o grupo, e **trocar o
+   token no painel quando o cadastro terminar** — trocar invalida o link antigo, que é o
+   objetivo.
+2. **As respostas também aparecem no painel**, que é protegido por chave. Para poucos
+   clientes, ler ali evita criar a planilha e evita o token circulando.
+
+O CPF é validado pelos dígitos verificadores no servidor (`limparCpf`), e é gravado sempre
+no formato `000.000.000-00`, independente de como foi digitado. CPF que não fecha a conta é
+tratado como campo não respondido: o formulário recusa e diz que falta o CPF, em vez de
+guardar documento quebrado que só apareceria quando o contrato voltasse.
