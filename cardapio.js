@@ -28,6 +28,36 @@ const CORS = {
   "Access-Control-Allow-Headers": "content-type",
 };
 
+/**
+ * CPF: só entra se os dígitos verificadores fecharem. Não é preciosismo — o formulário
+ * existe para alimentar cadastro e contrato, e CPF digitado errado só aparece quando o
+ * contrato volta ou o cadastro é recusado, dias depois, com o cliente esperando. Erro de
+ * digitação quase sempre quebra o dígito verificador, então a checagem pega na hora, com
+ * o cliente ainda na tela.
+ *
+ * Devolve o CPF formatado (000.000.000-00) ou null. Formata sempre, independente de como
+ * a pessoa digitou: a planilha do cadastro fica com uma coluna homogênea.
+ */
+function limparCpf(bruto) {
+  const d = String(bruto ?? "").replace(/[^0-9]/g, "");
+  if (d.length !== 11) return null;
+  if (new Set(d).size === 1) return null; // 111.111.111-11 fecha a conta e nao existe
+  for (const [ate, pos] of [[9, 10], [10, 11]]) {
+    let soma = 0;
+    for (let i = 0; i < ate; i++) soma += Number(d[i]) * (pos - i);
+    const resto = (soma * 10) % 11 % 10;
+    if (resto !== Number(d[ate])) return null;
+  }
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
+/** CEP: oito dígitos, devolvidos como 00000-000. Sem consulta externa — a página tem de
+    abrir e funcionar com sinal ruim, e endereço vindo de fora chega errado em zona rural. */
+function limparCep(bruto) {
+  const d = String(bruto ?? "").replace(/[^0-9]/g, "");
+  return d.length === 8 ? `${d.slice(0, 5)}-${d.slice(5)}` : null;
+}
+
 /* Promessa do rodapé quando o formulário não define a sua. Genérica de propósito: o
    texto antigo era do cardápio ("planejar a alimentação") e ficava errado em qualquer
    outro formulário — no de avaliação, chegava a prometer que nada é publicado
@@ -52,7 +82,7 @@ function rotulosCheios(perguntas) {
   });
 }
 
-const TIPOS = new Set(["texto", "numero", "escolha", "multi", "sim_nao", "obs", "nota"]);
+const TIPOS = new Set(["texto", "numero", "escolha", "multi", "sim_nao", "obs", "nota", "cpf", "cep"]);
 
 /* `nota` é escala de avaliação (1..escala), não número livre: nota é comparável entre
    respostas e cabe num toque, enquanto `numero` aceita 0 a 999 e é digitado. A escala
@@ -187,6 +217,14 @@ function campoHtml(p) {
   let controle = "";
   if (p.tipo === "obs") {
     controle = `<textarea name="${esc(p.id)}" rows="3" maxlength="800" placeholder="Escreva aqui"${req}></textarea>`;
+  } else if (p.tipo === "cpf") {
+    controle =
+      `<input type="text" inputmode="numeric" autocomplete="off" maxlength="14" ` +
+      `placeholder="000.000.000-00" data-mascara="cpf"${req} name="${esc(p.id)}">`;
+  } else if (p.tipo === "cep") {
+    controle =
+      `<input type="text" inputmode="numeric" autocomplete="postal-code" maxlength="9" ` +
+      `placeholder="00000-000" data-mascara="cep"${req} name="${esc(p.id)}">`;
   } else if (p.tipo === "numero") {
     controle = `<input type="number" inputmode="numeric" min="0" max="999" placeholder="0"${req} name="${esc(p.id)}">`;
   } else if (p.tipo === "nota") {
@@ -509,7 +547,24 @@ ${simbolos()}
     });
     barra.style.width = Math.round(feitas / OBRIGATORIAS * 100) + "%";
   }
+  /* Máscara enquanto digita. Só formata o que já foi digitado — nunca completa nem
+     corrige, porque campo que "conserta" o número do documento do cliente é campo que
+     grava documento errado com aparência de certo. */
   f.addEventListener("input", function(e){
+    var el = e.target, tipo = el.getAttribute && el.getAttribute("data-mascara");
+    if (tipo) {
+      var d = el.value.replace(/[^0-9]/g, "");
+      if (tipo === "cpf") {
+        d = d.slice(0, 11);
+        el.value = d.length > 9 ? d.slice(0,3)+"."+d.slice(3,6)+"."+d.slice(6,9)+"-"+d.slice(9)
+                 : d.length > 6 ? d.slice(0,3)+"."+d.slice(3,6)+"."+d.slice(6)
+                 : d.length > 3 ? d.slice(0,3)+"."+d.slice(3)
+                 : d;
+      } else {
+        d = d.slice(0, 8);
+        el.value = d.length > 5 ? d.slice(0,5)+"-"+d.slice(5) : d;
+      }
+    }
     progresso();
     var c = e.target.closest(".campo");
     if (c && c.classList.contains("falta") && respondido(c)) c.classList.remove("falta");
@@ -731,6 +786,11 @@ export async function handleCardapio(request, env) {
         const permitido = p.tipo === "sim_nao" ? ["Sim", "Não"] : p.opcoes ?? [];
         const s = String(v).slice(0, 80);
         if (permitido.includes(s)) limpo[p.id] = s;
+      } else if (p.tipo === "cpf" || p.tipo === "cep") {
+        const v2 = p.tipo === "cpf" ? limparCpf(v) : limparCep(v);
+        /* Inválido é tratado como NÃO respondido: se o campo é obrigatório, a mensagem
+           de "falta responder" já aponta qual é. Guardar CPF quebrado seria pior. */
+        if (v2) limpo[p.id] = v2;
       } else if (p.tipo === "nota") {
         const n = parseInt(String(v), 10);
         const max = p.escala ?? NOTA_ESCALA_PADRAO;
