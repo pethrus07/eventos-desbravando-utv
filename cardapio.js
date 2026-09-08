@@ -154,6 +154,16 @@ export function limparPerguntas(bruto) {
     if (p?.secao) item.secao = String(p.secao).slice(0, 80);
     if (p?.ajuda) item.ajuda = String(p.ajuda).slice(0, 200);
     if (p?.obrigatorio) item.obrigatorio = true;
+    /* Pergunta condicional: só aparece quando outra tem um valor específico. Sem isso, a
+       alternativa é perguntar sempre ("se for acompanhante, nome do piloto") e conviver com
+       coluna meio vazia e com piloto preenchendo campo que não é dele. O `campo` é validado
+       contra os ids JÁ aceitos: dependência de pergunta que veio depois, ou que nem existe,
+       seria campo invisível para sempre. */
+    if (p?.depende && typeof p.depende === "object") {
+      const de = String(p.depende.campo ?? "").trim();
+      const val = String(p.depende.valor ?? "").slice(0, 80).trim();
+      if (vistos.has(de) && de !== unico && val) item.depende = { campo: de, valor: val };
+    }
     if (tipo === "nota") {
       const e = parseInt(String(p?.escala ?? NOTA_ESCALA_PADRAO), 10);
       item.escala = Number.isFinite(e) && e >= 3 && e <= 10 ? e : NOTA_ESCALA_PADRAO;
@@ -250,8 +260,16 @@ function campoHtml(p) {
   } else {
     controle = `<input type="text" maxlength="200" placeholder="Escreva aqui"${req} name="${esc(p.id)}">`;
   }
-  return `<div class="campo" data-campo="${esc(p.id)}">
-      <label class="rot">${esc(p.rotulo)}${marca}</label>${ajuda}${controle}
+  /* Campo condicional nasce escondido e SEM required: se nascesse obrigatório e oculto, o
+     navegador barraria o envio apontando para um campo que ninguém vê. Quem devolve o
+     required é o script, quando a condição passa a valer. */
+  const dep = p.depende
+    ? ` hidden data-de="${esc(p.depende.campo)}" data-de-valor="${esc(p.depende.valor)}"` +
+      (p.obrigatorio ? ` data-req="1"` : "")
+    : "";
+  const controleFinal = p.depende && p.obrigatorio ? controle.replace(" required", "") : controle;
+  return `<div class="campo" data-campo="${esc(p.id)}"${dep}>
+      <label class="rot">${esc(p.rotulo)}${marca}</label>${ajuda}${controleFinal}
     </div>`;
 }
 
@@ -504,7 +522,23 @@ ${simbolos()}
   if (!f) return;
   var erro = document.getElementById("erro"), erroTxt = document.getElementById("erro_txt");
   var btn = document.getElementById("env"), barra = document.getElementById("barra");
-  var OBRIGATORIAS = ${obrigatorias};
+  /* Campo condicional muda o denominador da barra: com número fixo, marcar
+     "acompanhante" fazia a barra andar para trás. O total é recontado a cada passada,
+     sobre o que está visível. */
+  function condicionais(){
+    Array.prototype.forEach.call(f.querySelectorAll("[data-de]"), function(c){
+      var de = c.getAttribute("data-de"), esperado = c.getAttribute("data-de-valor");
+      var marcado = f.querySelector('[name="' + de + '"]:checked');
+      var vale = marcado ? marcado.value === esperado : false;
+      c.hidden = !vale;
+      var campo = c.querySelector("input,textarea,select");
+      if (campo){
+        if (vale && c.getAttribute("data-req")) campo.setAttribute("required", "");
+        if (!vale){ campo.removeAttribute("required"); campo.value = ""; }
+      }
+      if (!vale) c.classList.remove("falta");
+    });
+  }
 
   /* rótulo de cada pergunta, com a seção herdada do bloco — o mesmo critério da
      planilha, para o resumo final não dizer "Escolha seu prato" quatro vezes */
@@ -540,12 +574,16 @@ ${simbolos()}
   }
 
   function progresso(){
-    if (!OBRIGATORIAS) return;
+    var total = 0;
+    Array.prototype.forEach.call(f.querySelectorAll("[data-campo]"), function(c){
+      if (!c.hidden && c.querySelector("[required]")) total++;
+    });
+    if (!total) { barra.style.width = "0%"; return; }
     var feitas = 0;
     Array.prototype.forEach.call(f.querySelectorAll("[data-campo]"), function(c){
-      if (c.querySelector("[required]") && respondido(c)) feitas++;
+      if (!c.hidden && c.querySelector("[required]") && respondido(c)) feitas++;
     });
-    barra.style.width = Math.round(feitas / OBRIGATORIAS * 100) + "%";
+    barra.style.width = Math.round(feitas / total * 100) + "%";
   }
   /* Máscara enquanto digita. Só formata o que já foi digitado — nunca completa nem
      corrige, porque campo que "conserta" o número do documento do cliente é campo que
@@ -569,7 +607,8 @@ ${simbolos()}
     var c = e.target.closest(".campo");
     if (c && c.classList.contains("falta") && respondido(c)) c.classList.remove("falta");
   });
-  f.addEventListener("change", progresso);
+  f.addEventListener("change", function(){ condicionais(); progresso(); });
+  condicionais();
   progresso();
 
   f.addEventListener("submit", function(ev){
@@ -802,7 +841,14 @@ export async function handleCardapio(request, env) {
         limpo[p.id] = String(v).slice(0, p.tipo === "obs" ? 800 : 200);
       }
     }
-    const faltando = perguntas.filter((p) => p.obrigatorio && limpo[p.id] === undefined);
+    /* Dependência não satisfeita: o valor sai e a pergunta deixa de ser obrigatória. O
+       cliente não vê o campo, então não pode ser cobrado por ele — e piloto que mandasse
+       nome de piloto por engano (ou de propósito) não sujaria a planilha do cadastro. */
+    const ativa = (p) =>
+      !p.depende || String(limpo[p.depende.campo] ?? "") === String(p.depende.valor);
+    for (const p of perguntas) if (!ativa(p)) delete limpo[p.id];
+
+    const faltando = perguntas.filter((p) => p.obrigatorio && ativa(p) && limpo[p.id] === undefined);
     if (faltando.length) {
       const nomes = rotulosCheios(perguntas);
       const quais = perguntas.map((p, i) => [p, nomes[i]]).filter(([p]) => faltando.includes(p)).map(([, n]) => n);
