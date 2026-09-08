@@ -188,7 +188,7 @@ Quatro formulários rodam no worker `cardapio` (mesmo banco do sistema):
 | `jantar-urubici` | Urubici · ago | escolha de jantar das 4 noites |
 | `almoco-vinicola` | Urubici · ago | escolha do almoço na vinícola |
 | `avaliacao-expedicao` | Urubici · ago | nome, nota de 1 a 5, comentário |
-| `cadastro-origens` | Origens · 23–25/10 | **nome, CPF, RG, endereço, CEP, nacionalidade, estado civil** |
+| `cadastro-origens` | Origens · 23–25/10 | **nome, piloto/acompanhante, CPF, RG, endereço, CEP, nacionalidade, estado civil** |
 
 ⚠️ **O `cadastro-origens` é o primeiro que coleta documento.** Duas consequências práticas:
 
@@ -205,3 +205,22 @@ O CPF é validado pelos dígitos verificadores no servidor (`limparCpf`), e é g
 no formato `000.000.000-00`, independente de como foi digitado. CPF que não fecha a conta é
 tratado como campo não respondido: o formulário recusa e diz que falta o CPF, em vez de
 guardar documento quebrado que só apareceria quando o contrato voltasse.
+
+### Pergunta condicional
+
+Uma pergunta pode depender de outra: `depende: { campo, valor }` faz o campo aparecer — e
+passar a ser obrigatório — só quando a pergunta de referência tem aquele valor. É o caso do
+**nome do piloto** no `cadastro-origens`, que só existe para quem marca "Acompanhante".
+
+Três detalhes que não são óbvios:
+
+- O campo nasce **escondido e sem `required`**. Se nascesse obrigatório e oculto, o navegador
+  barraria o envio apontando para um campo que ninguém vê.
+- A **barra de progresso reconta o total** a cada passada, sobre os campos visíveis. Com o
+  denominador fixo, marcar "Acompanhante" fazia a barra andar para trás.
+- No servidor, dependência não satisfeita **apaga o valor** e dispensa o obrigatório. O
+  cliente não vê o campo, então não pode ser cobrado por ele — e piloto que mandasse nome de
+  piloto, por engano ou não, não sujaria a planilha do cadastro.
+
+O `campo` da dependência é validado contra os ids já aceitos: apontar para uma pergunta que
+vem depois, ou que não existe, criaria campo invisível para sempre.
