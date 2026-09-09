@@ -90,6 +90,7 @@ const AMOSTRAS = [
       { rotulo: "Nota", tipo: "nota", escala: 5, pontas: ["ruim", "otimo"] },
       { rotulo: "CPF", tipo: "cpf", obrigatorio: true },
       { rotulo: "CEP", tipo: "cep" },
+      { rotulo: "Telefone", tipo: "telefone", obrigatorio: true },
       { rotulo: "E-mail", tipo: "email", obrigatorio: true },
       { rotulo: "Aviso", tipo: "informe", ajuda: "texto do aviso" },
       { rotulo: "Depende", tipo: "texto", depende: { campo: "escolha", valor: "A" } },

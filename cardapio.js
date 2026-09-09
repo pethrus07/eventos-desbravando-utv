@@ -77,6 +77,20 @@ function limparEmail(bruto) {
   return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(e) ? e : null;
 }
 
+/**
+ * Telefone: 10 ou 11 dígitos (fixo ou celular), devolvido como (00) 0000-0000 ou
+ * (00) 00000-0000. Com dois campos de telefone no mesmo formulário — o da pessoa e o de
+ * emergência — formato homogêneo deixou de ser estética: é o que permite discar da planilha
+ * sem reler. Aceita e descarta o 55 do começo, que muita gente cola do WhatsApp.
+ */
+function limparTelefone(bruto) {
+  let d = String(bruto ?? "").replace(/[^0-9]/g, "");
+  if (d.length > 11 && d.startsWith("55")) d = d.slice(2);
+  if (d.length !== 10 && d.length !== 11) return null;
+  const meio = d.length === 11 ? 5 : 4;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 2 + meio)}-${d.slice(2 + meio)}`;
+}
+
 /** CEP: oito dígitos, devolvidos como 00000-000. Sem consulta externa — a página tem de
     abrir e funcionar com sinal ruim, e endereço vindo de fora chega errado em zona rural. */
 function limparCep(bruto) {
@@ -108,7 +122,7 @@ function rotulosCheios(perguntas) {
   });
 }
 
-const TIPOS = new Set(["texto", "numero", "escolha", "multi", "sim_nao", "obs", "nota", "cpf", "cep", "email", "informe"]);
+const TIPOS = new Set(["texto", "numero", "escolha", "multi", "sim_nao", "obs", "nota", "cpf", "cep", "email", "informe", "telefone"]);
 
 /* `nota` é escala de avaliação (1..escala), não número livre: nota é comparável entre
    respostas e cabe num toque, enquanto `numero` aceita 0 a 999 e é digitado. A escala
@@ -257,6 +271,10 @@ function campoHtml(p) {
     controle =
       `<input type="email" inputmode="email" autocomplete="email" autocapitalize="off" ` +
       `spellcheck="false" maxlength="200" placeholder="voce@email.com"${req} name="${esc(p.id)}">`;
+  } else if (p.tipo === "telefone") {
+    controle =
+      `<input type="tel" inputmode="tel" autocomplete="tel" maxlength="16" ` +
+      `placeholder="(00) 00000-0000" data-mascara="tel"${req} name="${esc(p.id)}">`;
   } else if (p.tipo === "cpf") {
     controle =
       `<input type="text" inputmode="numeric" autocomplete="off" maxlength="14" ` +
@@ -651,6 +669,14 @@ ${simbolos()}
                  : d.length > 6 ? d.slice(0,3)+"."+d.slice(3,6)+"."+d.slice(6)
                  : d.length > 3 ? d.slice(0,3)+"."+d.slice(3)
                  : d;
+      } else if (tipo === "tel") {
+        if (d.length > 11 && d.slice(0,2) === "55") d = d.slice(2);
+        d = d.slice(0, 11);
+        var m = d.length > 10 ? 7 : 6;
+        el.value = d.length > m ? "(" + d.slice(0,2) + ") " + d.slice(2, m) + "-" + d.slice(m)
+                 : d.length > 2 ? "(" + d.slice(0,2) + ") " + d.slice(2)
+                 : d.length > 0 ? "(" + d
+                 : d;
       } else {
         d = d.slice(0, 8);
         el.value = d.length > 5 ? d.slice(0,5)+"-"+d.slice(5) : d;
@@ -887,6 +913,9 @@ export async function handleCardapio(request, env) {
       } else if (p.tipo === "email") {
         const e = limparEmail(v);
         if (e) limpo[p.id] = e;
+      } else if (p.tipo === "telefone") {
+        const t = limparTelefone(v);
+        if (t) limpo[p.id] = t;
       } else if (p.tipo === "cpf" || p.tipo === "cep") {
         const v2 = p.tipo === "cpf" ? limparCpf(v) : limparCep(v);
         /* Inválido é tratado como NÃO respondido: se o campo é obrigatório, a mensagem

@@ -201,7 +201,7 @@ Quatro formulários rodam no worker `cardapio` (mesmo banco do sistema):
 | `jantar-urubici` | Urubici · ago | escolha de jantar das 4 noites |
 | `almoco-vinicola` | Urubici · ago | escolha do almoço na vinícola |
 | `avaliacao-expedicao` | Urubici · ago | nome, nota de 1 a 5, comentário |
-| `cadastro-origens` | Origens · 23–25/10 | **nome, piloto/acompanhante, CPF, RG, endereço, CEP, nacionalidade, estado civil** |
+| `cadastro-origens` | Origens · 23–25/10 | **nome, piloto/acompanhante, telefone, CPF, RG, endereço, CEP, nacionalidade, estado civil, camiseta, contato de emergência, forma de pagamento, e-mail** |
 
 ⚠️ **O `cadastro-origens` é o primeiro que coleta documento.** Duas consequências práticas:
 
@@ -237,3 +237,7 @@ Três detalhes que não são óbvios:
 
 O `campo` da dependência é validado contra os ids já aceitos: apontar para uma pergunta que
 vem depois, ou que não existe, criaria campo invisível para sempre.
+
+**Isso dita a ordem do formulário.** Quando o e-mail passou a depender da forma de pagamento (09/09 — só quem paga por boleto precisa dele), o bloco de pagamento teve de **subir** e o e-mail virou o último campo. Lê melhor assim, por sorte: escolheu boleto, então me dê o e-mail. Mas a restrição é técnica, não estética — pergunta condicional não pode apontar para frente.
+
+⚠️ **Consequência de negócio de uma decisão técnica:** quem paga por Pix não deixa e-mail nenhum. O contato dessa pessoa passa a ser o telefone, que entrou na mesma leva de mudanças. As duas se encaixam por acaso — vale conferir antes de tornar outro campo condicional.
