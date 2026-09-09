@@ -20,6 +20,23 @@ npx wrangler deploy     # PUBLICA EM PRODUÇÃO — é o sistema no ar de verdad
 npx wrangler tail       # acompanha erros ao vivo
 ```
 
+### 🛑 Antes de publicar o worker do cardápio, rode a trava
+```bash
+node tools/checar-antes-do-deploy.mjs && npx wrangler deploy -c wrangler.cardapio.toml
+```
+**Não publique com a trava vermelha.** Ela existe por um defeito que chegou à produção em
+09/09/2026: **acento grave dentro de comentário CSS fecha o template literal** que carrega a
+página, o CSS vira código e o worker responde `Error 1101`. O formulário de cadastro dos
+clientes — o que coleta CPF — ficou fora do ar até o deploy seguinte.
+
+A armadilha já estava documentada em dois outros templates e me pegou de novo, porque o
+comentário onde cabe o acento grave é justamente o que explica CSS. **Cuidado não escala;
+verificação sim.** A trava importa o módulo (pega o erro de sintaxe), renderiza um formulário
+com todos os tipos de campo e confere que o CSS não vazou para fora do `<style>`.
+
+Tipo de campo novo entra na lista `AMOSTRAS` da trava **junto com o código**, senão ela deixa
+de cobrir o que passou a existir.
+
 ## Banco (D1 "eventos")
 - Estrutura em `schema.sql`; mudanças incrementais em `migracao_*.sql`.
 - Aplicar migração: `npx wrangler d1 execute eventos --remote --file=migracao_x.sql`
