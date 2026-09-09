@@ -1,19 +1,32 @@
 /* ============================================================
    FORMULÁRIO DE CARDÁPIO — parte pública (sem chave)
 
-   Rotas tratadas aqui, antes do portão de autenticação do worker:
+   O QUE É: o motor de formulário público do sistema. O nome ficou da
+   primeira versão, mas hoje ele serve qualquer coisa que o cliente
+   precise perguntar — o jantar das quatro noites, a avaliação da
+   expedição e o CADASTRO com CPF, RG e endereço. O que muda de um
+   para o outro é só a lista de perguntas gravada em cardapio_forms.
+
+   Rotas tratadas aqui, antes do portão de autenticação do worker
+   (é público de propósito: quem responde é o cliente, sem chave):
 
      GET  /cardapio/<slug>                     página do formulário
      POST /cardapio/<slug>                     grava a resposta
      GET  /cardapio/<slug>/planilha.csv?t=TOK  CSV para a planilha
 
+   Criar e editar formulário NÃO é aqui: é o painel, em /api/cardapio/*
+   no worker.js, com a chave admin.
+
    O CSV tem token próprio de propósito: a planilha do Google puxa o
    endereço em texto puro (=IMPORTDATA), então não pode ser a APP_KEY.
-   Token vazado expõe respostas de cardápio, não o sistema — e trocar
-   é um clique no painel.
+   Num formulário de cardápio, token vazado expõe preferência de jantar;
+   no de cadastro, expõe CPF e RG de todos — trocar o token é um clique
+   no painel, e é o que se faz quando o cadastro termina.
 
    A página é servida montada no servidor: quem responde abre o link no
    celular, no meio do mato, com sinal ruim. Sem framework, sem build.
+
+   Ver docs/ARQUITETURA.md §8.
    ============================================================ */
 
 import { simbolos, usoLogotipo, usoMontanha } from "./marca.js";
@@ -856,7 +869,11 @@ export async function handleCardapio(request, env) {
     }
     if (!Object.keys(limpo).length) return json({ erro: "nada foi respondido" }, 400);
 
-    // nome/contato saem das duas primeiras perguntas de texto, só para a lista do painel
+    /* nome/contato são cópia desnormalizada das duas primeiras perguntas de
+       texto: a lista do painel precisa ordenar e mostrar quem respondeu sem
+       abrir o JSON de cada linha. É heurística, e falha de propósito para o
+       lado seguro — num formulário que não comece por nome, essas duas colunas
+       saem erradas, mas a resposta em si continua íntegra em `respostas`. */
     const textos = perguntas.filter((p) => p.tipo === "texto");
     const nome = String(limpo[textos[0]?.id] ?? "").slice(0, 120);
     const contato = String(limpo[textos[1]?.id] ?? "").slice(0, 120);

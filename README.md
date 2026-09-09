@@ -12,6 +12,8 @@
 
 > Sistema de gestão para uma operação **real** de expedições de UTV: substituiu um emaranhado de planilhas por um app único que a equipe abre **no celular, em campo**. Roda inteiro em um **Cloudflare Worker + D1** (SQLite serverless), no plano gratuito — nada de servidor pra manter.
 
+> **Para entender o código sozinho, comece por [docs/ARQUITETURA.md](docs/ARQUITETURA.md).**
+
 ---
 
 ## 1. Visão Geral e a Dor
@@ -142,6 +144,8 @@ Autenticação: header `x-app-key`. Papel "ambos" = admin e equipe; "admin" = s�
 | `/api/campo-subtarefas/:id` | PATCH / DELETE | Marca · exclui |
 | `/api/eventos/:id/agenda` | GET | Agenda cronológica (campo + execução com horário) |
 
+Fora desta tabela ainda existem as rotas de reordenação (`/api/eventos/:id/itens/reordenar`, `/api/tarefas/reordenar`, `/api/eventos/:id/op/reordenar`), as de subtarefa (`/api/itens/:id/subitens`, `/api/subitens/:id`, `/api/tarefas/:id/subtarefas`, `/api/subtarefas/:id`) e o **conector MCP** (`/mcp`, `/api/mcp`, `/oauth/*`, `/.well-known/*`), que tem autenticação própria. Todas estão descritas em [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
+
 **Cálculo do simulador** (mesma lógica da planilha original): linha `pessoa` = média × preço × multiplicador (nenhum / diárias / dias de trilha / refeições / eventos), somado por pessoa; linha `fixo` = valor × multiplicador, rateado entre as pessoas.
 
 ---
@@ -160,15 +164,24 @@ npx wrangler deploy                                   # 4) publica
 
 A URL final (`https://eventos.SEU-USUARIO.workers.dev`) é o app completo. Desenvolvimento local: `npx wrangler dev` (chaves num `.dev.vars`, fora do git).
 
+> **Instalação limpa:** o `schema.sql` cria 24 tabelas, mas **não** as do cardápio — elas nasceram na v4.3. Depois do passo 2, rode também `migracao_v4_3.sql`, `migracao_v4_4.sql` e `migracao_v4_5.sql`, senão os formulários públicos não sobem.
+
 | Arquivo | O que é |
 | --- | --- |
 | `worker.js` | API (`/api/*`) + entrega da interface |
 | `ui.html` | Interface completa (SPA de arquivo único) |
+| `cardapio.js` | O formulário público (página, gravação e CSV) |
+| `worker-cardapio.js` + `wrangler.cardapio.toml` | Worker separado que só serve o formulário — ver o cabeçalho do arquivo |
+| `mcp.js` | Conector MCP + OAuth (o Claude operando o sistema) |
+| `marca.js` | A marca da Desbravando em vetor, usada pelo formulário |
 | `schema.sql` | Estrutura do banco |
-| `migracao_v3_*.sql` / `migracao_v4_1.sql` | Migrações incrementais |
+| `migracao_v3_*.sql` / `migracao_v4_*.sql` | Migrações incrementais (v3.1 a v4.5) |
 | `seed_playbook.sql` | Semeia o "Playbook Desbravando (Modelo)" |
+| `seed_avaliacao.sql` · `seed_cadastro_origens.sql` · `upd_cadastro_piloto.sql` | Os formulários públicos criados por SQL |
 | `tools/gerar_seed_playbook.py` | Gera o seed a partir da planilha de levantamento |
+| `tools/links-cardapio.mjs` | Imprime o link e a fórmula da planilha de cada formulário |
 | `wrangler.toml` | Configuração do Worker/D1 |
+| `docs/ARQUITETURA.md` | O manual do funcionamento inteiro |
 
 ---
 
@@ -177,7 +190,7 @@ A URL final (`https://eventos.SEU-USUARIO.workers.dev`) é o app completo. Desen
 - Os dados pessoais reais (CPF, telefone, financeiro, CRM) **nunca entram no git**: ficam num seed ignorado (`seed_dados_reais.sql`) e num banco privado — este repositório é só o código.
 - As chaves de acesso são *secrets* do Wrangler, não vão no código nem no HTML; trocar é um comando e desloga quem usava a antiga.
 - CPF/telefone e todo o financeiro só aparecem com a chave admin; a equipe opera checklist, hospedagem e tarefas sem ver dado pessoal.
-- O formulário de cardápio é a **única** rota pública que grava no banco. Ele aceita só as perguntas que o formulário declara — campo desconhecido e opção fora da lista são descartados no servidor —, guarda nome e WhatsApp de quem responde e nada mais, e pode ser encerrado com um clique. O CSV para planilha tem token próprio, separado das chaves do sistema: vazou, você gera outro e o antigo morre.
+- O formulário de cardápio é a única rota pública que grava **dado de gente** no banco. (O `POST /oauth/register` do conector MCP também grava sem chave, mas só a linha técnica de um cliente OAuth — é o que o registro dinâmico exige, e registrar não dá acesso a nada.) Ele aceita só as perguntas que o formulário declara — campo desconhecido e opção fora da lista são descartados no servidor —, guarda nome e WhatsApp de quem responde e nada mais, e pode ser encerrado com um clique. O CSV para planilha tem token próprio, separado das chaves do sistema: vazou, você gera outro e o antigo morre.
 
 ## Formulários públicos · dado sensível
 

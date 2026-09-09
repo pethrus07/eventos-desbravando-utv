@@ -1,21 +1,34 @@
 /* ============================================================
-   CONTROLE DE EVENTOS · Desbravando UTV — v3.4
+   CONTROLE DE EVENTOS · Desbravando UTV — v4.5
    Cloudflare Worker + D1 (SQLite serverless)
 
-   Um só arquivo responde tudo: serve o front (ui.html) na raiz e
-   expõe a API em /api/*. Sem framework — roteamento na mão por
-   regex de path + método.
+   O QUE É: a entrada única do sistema. Um só arquivo serve o front
+   (ui.html) na raiz e expõe toda a API em /api/*. Sem framework e
+   sem build — roteamento na mão por regex de path + método.
 
-   Módulos: Checklist · Participantes + Financeiro · Simulador de
-            custos · Hospedagem · Tarefas gerais · Mini-CRM ·
-            Custos + Fornecedores · Cardápio (formulário público)
+   POR QUE ASSIM: a operação são 2–5 pessoas no celular, no campo.
+   Um arquivo que se lê de cima a baixo e um deploy de um comando
+   valem mais aqui do que camadas que ninguém vai manter depois.
+
+   Módulos: Checklist · Sistema Operacional (Ciclo de 6 fases +
+            Operação em Campo + Agenda) · Participantes +
+            Financeiro · Simulador de custos · Hospedagem ·
+            Custos + Fornecedores · Tarefas gerais · Mini-CRM ·
+            painel do Cardápio (o formulário em si é cardapio.js)
 
    Acesso em dois níveis (chave única compartilhada por nível):
      APP_KEY  (secret) → papel "admin": tudo, inclusive dados
                           pessoais, financeiro, custos e CRM
      TEAM_KEY (secret, opcional) → papel "equipe": checklist,
-                          hospedagem e tarefas (sem CPF/financeiro)
+                          operação, hospedagem e tarefas
+                          (sem CPF/financeiro/CRM)
    A chave vai no header "x-app-key" (ver papel()).
+
+   Duas portas NÃO usam essa chave, e por isso são chamadas antes
+   do portão no fetch(): o conector MCP (mcp.js) e o formulário
+   público (cardapio.js) — o porquê está em cada chamada.
+
+   O funcionamento inteiro está em docs/ARQUITETURA.md.
    ============================================================ */
 
 import UI_HTML from "./ui.html";
@@ -216,7 +229,18 @@ function minHhmm(t) {
 /* UPDATE genérico: monta o "SET col=?" a partir das chaves do objeto
    já saneado e faz bind na ordem. `extra` é um trecho fixo pra colar
    no fim do SET (ex.: atualizado_em/atualizado_por). Retorna false
-   quando não há nada pra atualizar. */
+   quando não há nada pra atualizar.
+
+   É isto que permite a gravação por campo: como o PATCH manda um
+   campo só, o UPDATE tem de nascer do que veio, não de uma lista
+   fixa de colunas — e assim duas pessoas na mesma expedição não
+   sobrescrevem o trabalho uma da outra.
+
+   ATENÇÃO ao `extra`: ele é colado CRU na SQL, sem bind. É o único
+   lugar do arquivo em que texto de usuário não passa por parâmetro,
+   e por isso cada chamada dobra o apóstrofo do `atualizado_por` na
+   mão. Campo novo que precise de valor do usuário deve entrar em
+   `campos` (ganha bind de graça), nunca no `extra`. */
 async function upd(db, tabela, id, campos, extra = "") {
   const chaves = Object.keys(campos);
   if (!chaves.length) return false;
@@ -242,7 +266,11 @@ export default {
     const path = url.pathname;
     const method = request.method;
 
-    // v4.2: conector MCP + OAuth (/mcp, /oauth/*, /.well-known/*) — auth própria
+    /* v4.2: conector MCP + OAuth (/mcp, /oauth/*, /.well-known/*).
+       Vem PRIMEIRO porque tem autenticação própria — inclusive uma tela
+       de login em HTML no /oauth/authorize. Passar pelo portão do
+       x-app-key mataria o fluxo do navegador antes de ele começar.
+       Devolve null para qualquer caminho que não seja dele. */
     const mcpRes = await handleMcp(request, env);
     if (mcpRes) return mcpRes;
 
@@ -267,6 +295,11 @@ export default {
     if (path === "/api/me" && method === "GET") return json({ papel: quem });
 
     /* ================= EVENTOS ================= */
+    /* NOTA (conferir com o Pedro): diferente de /api/eventos/:id/itens, esta
+       lista devolve `valor_total` para os DOIS papéis, e o cardEvento() do
+       ui.html o mostra sem olhar o papel — ou seja, a chave de equipe vê o
+       custo total de cada expedição na tela inicial. Não é dado pessoal, mas
+       contraria a regra "equipe não vê financeiro". Anotado, não mexido. */
     if (path === "/api/eventos" && method === "GET") {
       const { results } = await db.prepare(`
         SELECT e.id, e.nome, e.criado_em, e.arquivado,
@@ -900,7 +933,11 @@ export default {
       }
     }
 
-    /* ================= CUSTOS (admin · financeiro) ================= */
+    /* ================= CUSTOS (admin · financeiro) =================
+       Repare que TODA regex de rota deste arquivo é ancorada em ^…$.
+       É o que deixa /custos/importar e /custos/reordenar conviverem com
+       /custos sem depender da ordem dos if: sem a âncora, a regex mais
+       genérica engoliria as específicas conforme quem viesse antes. */
     if ((m = path.match(/^\/api\/eventos\/(\d+)\/custos\/importar$/)) && method === "POST") {
       if (!admin) return negado();
       const eid = +m[1];

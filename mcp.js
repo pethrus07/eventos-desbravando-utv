@@ -1,11 +1,24 @@
 /* ============================================================
-   CONECTOR MCP · Desbravando UTV — v4.2
+   CONECTOR MCP · Desbravando UTV — v4.2.2
    Servidor MCP remoto + OAuth 2.1, tudo no mesmo Worker.
 
-   Deixa o Claude do cliente (claude.ai web, via "custom connector")
-   conversar com o sistema: ver expedições/agenda e operar (marcar
-   tarefas, registrar horário realizado, criar item). NÃO expõe
-   CPF/financeiro/CRM — só o módulo operacional (LGPD).
+   O QUE É: MCP é o protocolo que deixa um assistente de IA usar as
+   ferramentas de um sistema. Este arquivo é o servidor: em vez de
+   abrir o painel, o dono pergunta ao Claude "o que falta no checklist
+   da Urubici?" ou manda registrar o horário real de uma tarefa de
+   campo, e o Claude fala com o D1 pelas 31 ferramentas de TOOLS.
+
+   PARA QUEM SERVE: o dono e a equipe — é a MESMA chave do app, com o
+   MESMO limite de papel. As 4 ferramentas de admin (participantes com
+   CPF, custos, fornecedores, CRM) nem aparecem no tools/list de uma
+   conexão de equipe; as 27 "both" que têm pedaço sensível o escondem
+   por dentro (resumo_expedicao sem custos, ver_checklist sem valor).
+
+   DOIS CLIENTES, DUAS AUTENTICAÇÕES, o mesmo endpoint /mcp:
+     · claude.ai na web ("custom connector") exige OAuth — daí o
+       servidor OAuth inteiro aqui dentro;
+     · Claude Code e afins mandam a chave direto, em x-app-key ou
+       como Authorization: Bearer <chave>.
 
    Fluxo OAuth (o claude.ai cuida do lado dele):
      1. POST /mcp sem token  → 401 + WWW-Authenticate (aponta pro metadata)
@@ -17,6 +30,8 @@
      7. POST /mcp  Authorization: Bearer <token>
 
    Login = a mesma chave do app: APP_KEY (papel admin) ou TEAM_KEY (equipe).
+
+   Ver docs/ARQUITETURA.md §9.
    ============================================================ */
 
 const enc = new TextEncoder();
@@ -47,7 +62,16 @@ async function hmac(data, key) {
 async function sha256b64url(data) {
   return b64urlBytes(new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(data))));
 }
+/* Chave que assina os tokens. Cai na APP_KEY quando não há MCP_SIGNING_KEY
+   para o conector funcionar sem um secret a mais — e o literal só existe
+   para o `wrangler dev`, onde não há secret nenhum. Em produção, se as duas
+   faltarem, o segredo vira público e o token passa a ser forjável. */
 function signingKey(env) { return env.MCP_SIGNING_KEY || env.APP_KEY || "dev-mcp-key"; }
+
+/* Token = JSON em base64url + HMAC-SHA256, sem nada no banco. Stateless de
+   propósito: o Worker escala a zero e não vale manter sessão em tabela. O
+   preço é não haver revogação individual — o que invalida TODOS os tokens
+   de uma vez é trocar a chave que assina (acima). */
 async function makeToken(payload, env) {
   const body = b64urlBytes(enc.encode(JSON.stringify(payload)));
   return body + "." + (await hmac(body, signingKey(env)));
@@ -509,7 +533,12 @@ export async function handleMcp(request, env) {
     }), { headers: jsonHdr });
   }
 
-  /* ---- Dynamic Client Registration (RFC 7591) ---- */
+  /* ---- Dynamic Client Registration (RFC 7591) ----
+     Grava SEM chave nenhuma, porque é assim que o registro dinâmico
+     funciona: o claude.ai precisa se cadastrar antes de existir qualquer
+     credencial. Registrar não dá acesso a nada — o acesso só nasce no
+     /oauth/authorize, que pede a chave do app. O custo é que mcp_clients
+     cresce sem limite e ninguém varre; hoje é lixo inofensivo. */
   if (path === "/oauth/register" && request.method === "POST") {
     const b = await request.json().catch(() => ({}));
     const uris = Array.isArray(b.redirect_uris) ? b.redirect_uris.filter(u => typeof u === "string").slice(0, 10) : [];
