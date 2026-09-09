@@ -64,6 +64,19 @@ function limparCpf(bruto) {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
+/**
+ * E-mail: validação DELIBERADAMENTE frouxa. O contrato sai por e-mail, então o campo
+ * precisa pegar o erro de digitação — mas regra apertada demais recusa e-mail válido e
+ * trava a reserva de um cliente real, estrago muito maior do que um endereço torto que a
+ * gente conserta perguntando. Exige só o que todo e-mail tem: uma arroba, algo antes dela,
+ * e um domínio com ponto. Guarda em minúsculas, senão a mesma pessoa entra duas vezes na
+ * planilha com grafia diferente.
+ */
+function limparEmail(bruto) {
+  const e = String(bruto ?? "").trim().toLowerCase().slice(0, 200);
+  return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(e) ? e : null;
+}
+
 /** CEP: oito dígitos, devolvidos como 00000-000. Sem consulta externa — a página tem de
     abrir e funcionar com sinal ruim, e endereço vindo de fora chega errado em zona rural. */
 function limparCep(bruto) {
@@ -95,7 +108,7 @@ function rotulosCheios(perguntas) {
   });
 }
 
-const TIPOS = new Set(["texto", "numero", "escolha", "multi", "sim_nao", "obs", "nota", "cpf", "cep"]);
+const TIPOS = new Set(["texto", "numero", "escolha", "multi", "sim_nao", "obs", "nota", "cpf", "cep", "email", "informe"]);
 
 /* `nota` é escala de avaliação (1..escala), não número livre: nota é comparável entre
    respostas e cabe num toque, enquanto `numero` aceita 0 a 999 e é digitado. A escala
@@ -240,6 +253,10 @@ function campoHtml(p) {
   let controle = "";
   if (p.tipo === "obs") {
     controle = `<textarea name="${esc(p.id)}" rows="3" maxlength="800" placeholder="Escreva aqui"${req}></textarea>`;
+  } else if (p.tipo === "email") {
+    controle =
+      `<input type="email" inputmode="email" autocomplete="email" autocapitalize="off" ` +
+      `spellcheck="false" maxlength="200" placeholder="voce@email.com"${req} name="${esc(p.id)}">`;
   } else if (p.tipo === "cpf") {
     controle =
       `<input type="text" inputmode="numeric" autocomplete="off" maxlength="14" ` +
@@ -273,6 +290,17 @@ function campoHtml(p) {
   } else {
     controle = `<input type="text" maxlength="200" placeholder="Escreva aqui"${req} name="${esc(p.id)}">`;
   }
+  /* `informe` não é pergunta: é informação dentro do formulário (o valor do pacote, uma
+     condição de pagamento). Não tem controle, não conta na barra de progresso e NÃO VIRA
+     COLUNA na planilha — coluna vazia com título de aviso é o tipo de sujeira que faz quem
+     lê a planilha desconfiar do resto. */
+  if (p.tipo === "informe") {
+    return `<div class="informe" data-informe="${esc(p.id)}">
+      <span class="informe-rot">${esc(p.rotulo)}</span>
+      ${p.ajuda ? `<p class="informe-txt">${esc(p.ajuda)}</p>` : ""}
+    </div>`;
+  }
+
   /* Campo condicional nasce escondido e SEM required: se nascesse obrigatório e oculto, o
      navegador barraria o envio apontando para um campo que ninguém vê. Quem devolve o
      required é o script, quando a condição passa a valer. */
@@ -389,7 +417,10 @@ h1{font-size:clamp(30px,8.5vw,42px);max-width:15ch;text-wrap:balance}
 .opc{font-style:normal;font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);
   border:1px solid var(--linha);border-radius:99px;padding:2px 7px;margin-left:8px;vertical-align:2px}
 .ajuda{display:block;color:var(--dim);font-size:13px;margin-top:3px}
-input[type=text],input[type=number],textarea{width:100%;margin-top:10px;background:var(--cartao);
+/* Seletor por exclusão, não por lista de tipos: era [type=text],[type=number] e o campo
+   de e-mail entrou sem estilo nenhum — caixa branca do navegador no meio de um formulário
+   escuro. Lista de tipos permitidos esquece o tipo que ainda não existe. */
+input:not([type=radio]):not([type=checkbox]),textarea{width:100%;margin-top:10px;background:var(--cartao);
   border:1px solid var(--linha);color:var(--txt);border-radius:12px;padding:14px 15px;
   font-family:inherit;font-size:16px;transition:border-color .15s}
 input:hover,textarea:hover{border-color:var(--linha2)}
@@ -447,6 +478,15 @@ textarea{resize:vertical;line-height:1.5}
 .nt:active{transform:scale(.99)}
 .pontas{display:flex;justify-content:space-between;gap:12px;margin-top:9px;
   font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--dim)}
+
+/* ---------- informe ----------
+   Painel, não texto solto: o valor do pacote é o número que a pessoa está aceitando e
+   precisa ler como declaração, não como observação em letra miúda. */
+.informe{margin:24px 0 4px;background:var(--cartao);border:1px solid var(--linha2);
+  border-radius:14px;padding:18px 19px}
+.informe-rot{display:block;font-family:'Anton',sans-serif;font-weight:400;
+  text-transform:uppercase;letter-spacing:-.2px;font-size:22px;line-height:1.15;color:#FFF}
+.informe-txt{margin-top:9px;font-size:14.5px;line-height:1.55;color:var(--mut)}
 
 /* ---------- envio ---------- */
 .enviar{border-top:1px solid var(--linha);padding-top:26px;margin-top:36px}
@@ -704,6 +744,8 @@ const celula = (v, sep = ";") => {
  * que já tinha chegado — a planilha é o registro.
  */
 export function respostasCsv(perguntas, linhas, sep = ";") {
+  /* `informe` sai fora: não é pergunta, não tem resposta, e viraria coluna vazia. */
+  perguntas = perguntas.filter((p) => p.tipo !== "informe");
   const lidas = linhas.map((l) => {
     try {
       return { criado_em: l.criado_em, v: JSON.parse(l.respostas || "{}") };
@@ -829,6 +871,10 @@ export async function handleCardapio(request, env) {
     // só entra o que o formulário perguntou, no formato que ele definiu
     const limpo = {};
     for (const p of perguntas) {
+      /* `informe` não é pergunta: nada que venha com o id dele entra. Pela tela é
+         impossível responder (não há controle), mas quem chama a API direto conseguiria
+         gravar texto arbitrário nessa chave. */
+      if (p.tipo === "informe") continue;
       const v = corpo.respostas[p.id];
       if (v === undefined || v === null || v === "") continue;
       if (p.tipo === "multi") {
@@ -838,6 +884,9 @@ export async function handleCardapio(request, env) {
         const permitido = p.tipo === "sim_nao" ? ["Sim", "Não"] : p.opcoes ?? [];
         const s = String(v).slice(0, 80);
         if (permitido.includes(s)) limpo[p.id] = s;
+      } else if (p.tipo === "email") {
+        const e = limparEmail(v);
+        if (e) limpo[p.id] = e;
       } else if (p.tipo === "cpf" || p.tipo === "cep") {
         const v2 = p.tipo === "cpf" ? limparCpf(v) : limparCep(v);
         /* Inválido é tratado como NÃO respondido: se o campo é obrigatório, a mensagem
