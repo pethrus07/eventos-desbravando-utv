@@ -1,4 +1,28 @@
 <!doctype html>
+<!--
+  ============================================================
+  INTERFACE · Controle de Eventos — Desbravando UTV
+
+  O QUE É: o sistema inteiro do lado do navegador, num arquivo só —
+  CSS, telas e lógica. O worker.js importa este HTML como TEXTO (a
+  regra [[rules]] type = "Text" do wrangler.toml) e o devolve na raiz.
+
+  POR QUE ASSIM: nada de build, nada de framework, nada de
+  node_modules. A equipe abre isto no celular, no meio do mato, no
+  4G ruim; um arquivo que chega inteiro numa requisição carrega mais
+  rápido do que qualquer bundle, e um ano depois ainda compila — não
+  há toolchain para envelhecer. A única coisa que vem de fora são as
+  fontes (Anton + Archivo) do Google Fonts.
+
+  COMO SE ORIENTAR: as telas estão em ordem no <script> abaixo, cada
+  bloco com seu cabeçalho — utilidades, login, rotas, home, evento
+  (checklist), custos, participantes, simulador, hospedagem, tarefas,
+  ciclo, campo, agenda, CRM, cardápio, sheet, boot. Cada tela é uma
+  função render…/tela… que remonta o HTML e religa os eventos.
+
+  O funcionamento inteiro está em docs/ARQUITETURA.md §5.
+  ============================================================
+-->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -1932,6 +1956,12 @@ var TFILT = { q:"", status:"", prio:"", resp:"", setor:"" };
    A árvore é renderizada como acordeão; mutações refazem a busca
    preservando o estado aberto/fechado (OPEN_ET / OPEN_IT).
    ============================================================ */
+/* DEFEITO CONHECIDO (09/09/2026, não corrigido — ver docs/ARQUITETURA.md §16):
+   estas duas globais são declaradas DE NOVO no bloco do CRM, mais abaixo neste
+   mesmo escopo. Como são `var`, a segunda declaração sobrescreve esta quando o
+   script carrega, e renderOperacao() acaba iterando as etapas do funil do CRM —
+   nenhum op_item casa, e a aba Operação aparece vazia. A correção é renomear o
+   par do CRM (ex.: CRM_ETAPAS / CRM_ETAPA_TXT). */
 var ETAPAS = [
   ["validacao","Validação"], ["marketing","Marketing"], ["vendas","Vendas"],
   ["contratacoes","Contratações"], ["pre_expedicao","Evento Pré-Expedição"],
@@ -2681,6 +2711,9 @@ function sheetTarefa(id){
    ============================================================ */
 var CRM = [];
 var CRMFILT = { q:"", etapa:"", pend:false };
+/* DEFEITO CONHECIDO: estes dois nomes colidem com as etapas do Sistema
+   Operacional declaradas acima (ver a nota lá). Estas aqui vencem, porque são
+   as últimas a executar — o CRM funciona e a aba Operação é que quebra. */
 var ETAPAS = [["lead","Lead"],["contato","Em contato"],["proposta","Proposta"],["confirmado","Confirmado"],["pos_evento","Pós-evento"],["perdido","Perdido"]];
 var ETAPA_TXT = {}; ETAPAS.forEach(function(e){ ETAPA_TXT[e[0]] = e[1]; });
 var ETAPA_CLS = { lead:"", contato:"", proposta:"warn", confirmado:"ok", pos_evento:"ok", perdido:"bad" };

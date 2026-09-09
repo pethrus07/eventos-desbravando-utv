@@ -20,6 +20,9 @@
    nada duplicado.
 
    Publicar:  npx wrangler deploy -c wrangler.cardapio.toml
+
+   A divergência entre as duas cópias segue aberta — conferida de novo em
+   09/09/2026. Ver docs/ARQUITETURA.md §11 antes de qualquer deploy.
    ============================================================ */
 
 import { handleCardapio } from "./cardapio.js";
