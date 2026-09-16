@@ -432,8 +432,9 @@ header .wrap{position:relative}
    nome ocupava 172px de largura logo acima de um título em Anton que já diz de quem é o
    formulário; a montanha sozinha assina sem repetir. A proporção da montanha (1000:379) é
    quase a mesma do logotipo (2300:813), então largura menor vira altura menor na mesma
-   medida — 120px dá ~45px de altura, contra ~61px de antes. */
-.logo{display:block;width:120px;height:auto;color:#FFF;margin-bottom:22px}
+   medida. Ficou em 92px (~35px de altura, contra ~61px do logotipo) — 120px foi o primeiro
+   passo e ele pediu menor em 16/09. */
+.logo{display:block;width:92px;height:auto;color:#FFF;margin-bottom:20px}
 .sobre{font-size:10.5px;letter-spacing:2.6px;text-transform:uppercase;color:var(--dim);margin-bottom:10px}
 h1{font-size:clamp(30px,8.5vw,42px);max-width:15ch;text-wrap:balance}
 .sub{color:var(--mut);font-size:15px;margin-top:12px}
@@ -572,7 +573,7 @@ footer svg{width:22px;color:#4A4A4A}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media(min-width:620px){
   header{padding:56px 0 40px}
-  .logo{width:132px}
+  .logo{width:104px}
   .op{padding:15px 19px 15px 17px}
 }
 </style>
