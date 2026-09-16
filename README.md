@@ -202,6 +202,7 @@ Quatro formulários rodam no worker `cardapio` (mesmo banco do sistema):
 | `almoco-vinicola` | Urubici · ago | escolha do almoço na vinícola |
 | `avaliacao-expedicao` | Urubici · ago | nome, nota de 1 a 5, comentário |
 | `cadastro-origens` | Origens · 23–25/10 | **nome, piloto/acompanhante, telefone, CPF, RG, endereço, CEP, nacionalidade, estado civil, camiseta, contato de emergência, forma de pagamento, e-mail** |
+| `bebidas-origens` | Origens · 23–25/10 | nome, bebidas do cooler e a quantidade de cada uma |
 
 ⚠️ **O `cadastro-origens` é o primeiro que coleta documento.** Duas consequências práticas:
 
@@ -237,6 +238,8 @@ Três detalhes que não são óbvios:
 
 O `campo` da dependência é validado contra os ids já aceitos: apontar para uma pergunta que
 vem depois, ou que não existe, criaria campo invisível para sempre.
+
+**Vale para múltipla escolha também** (16/09): as seis quantidades do `bebidas-origens` dependem cada uma da sua bebida estar marcada, então quem marca duas vê dois campos e só esses dois são obrigatórios. Duas correções foram necessárias para isso — no cliente, `querySelectorAll` em vez de `querySelector` (com caixa de seleção o primeiro marcado não é o único) e no servidor, `includes` em vez de comparar com `String()` (resposta de múltipla é array, e `String(["a","b"])` nunca ia bater com `"a"`).
 
 **Isso dita a ordem do formulário.** Quando o e-mail passou a depender da forma de pagamento (09/09 — só quem paga por boleto precisa dele), o bloco de pagamento teve de **subir** e o e-mail virou o último campo. Lê melhor assim, por sorte: escolheu boleto, então me dê o e-mail. Mas a restrição é técnica, não estética — pergunta condicional não pode apontar para frente.
 

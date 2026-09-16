@@ -122,7 +122,7 @@ function rotulosCheios(perguntas) {
   });
 }
 
-const TIPOS = new Set(["texto", "numero", "escolha", "multi", "sim_nao", "obs", "nota", "cpf", "cep", "email", "informe", "telefone"]);
+const TIPOS = new Set(["texto", "numero", "escolha", "multi", "sim_nao", "obs", "nota", "cpf", "cep", "email", "informe", "telefone", "aviso"]);
 
 /* `nota` é escala de avaliação (1..escala), não número livre: nota é comparável entre
    respostas e cabe num toque, enquanto `numero` aceita 0 a 999 e é digitado. A escala
@@ -130,6 +130,12 @@ const TIPOS = new Set(["texto", "numero", "escolha", "multi", "sim_nao", "obs", 
    decide — 5 é o padrão porque é o que o cliente pediu ("nota") e o que fecha numa
    linha no celular. */
 const NOTA_ESCALA_PADRAO = 5;
+
+/* Tipos que NÃO são pergunta: só desenham texto. Não aceitam valor no POST e não viram
+   coluna na planilha. Estava escrito em dois lugares como `=== "informe"`, e o `aviso`
+   novo entrou na página mas não nas duas exceções — virou coluna de planilha com a frase
+   inteira no cabeçalho. Um conjunto só resolve, e o próximo tipo de texto entra aqui. */
+const SEM_RESPOSTA = new Set(["informe", "aviso"]);
 
 /* Acento -> letra simples, para gerar o id da pergunta a partir do rotulo. Mapa
    explicito em vez de normalize+intervalo de marcas combinantes: o intervalo fica
@@ -312,6 +318,15 @@ function campoHtml(p) {
      condição de pagamento). Não tem controle, não conta na barra de progresso e NÃO VIRA
      COLUNA na planilha — coluna vazia com título de aviso é o tipo de sujeira que faz quem
      lê a planilha desconfiar do resto. */
+  /* `aviso` é recado de fecho: pequeno, mas com peso. Não virou `nota_rodape` porque
+     aquela linha é a promessa de privacidade, no tom mais apagado da página — e
+     "aproveite com responsabilidade, se beber não pilote" não é letra miúda de rodapé,
+     é recado que precisa ser lido. Também não virou `informe`, cujo título é Anton em
+     caixa alta e ficaria gritando. Fica no meio: corpo pequeno, cor cheia, filete. */
+  if (p.tipo === "aviso") {
+    return `<p class="aviso-fecho" data-aviso="${esc(p.id)}">${esc(p.rotulo)}</p>`;
+  }
+
   if (p.tipo === "informe") {
     return `<div class="informe" data-informe="${esc(p.id)}">
       <span class="informe-rot">${esc(p.rotulo)}</span>
@@ -506,6 +521,10 @@ textarea{resize:vertical;line-height:1.5}
   text-transform:uppercase;letter-spacing:-.2px;font-size:22px;line-height:1.15;color:#FFF}
 .informe-txt{margin-top:9px;font-size:14.5px;line-height:1.55;color:var(--mut)}
 
+/* ---------- aviso de fecho ---------- */
+.aviso-fecho{margin:26px 0 2px;padding:13px 0 13px 15px;border-left:3px solid #FFF;
+  font-size:14px;line-height:1.5;font-weight:600;color:#FFF}
+
 /* ---------- envio ---------- */
 .enviar{border-top:1px solid var(--linha);padding-top:26px;margin-top:36px}
 .btn{width:100%;display:inline-flex;align-items:center;justify-content:center;gap:12px;
@@ -599,8 +618,12 @@ ${simbolos()}
   function condicionais(){
     Array.prototype.forEach.call(f.querySelectorAll("[data-de]"), function(c){
       var de = c.getAttribute("data-de"), esperado = c.getAttribute("data-de-valor");
-      var marcado = f.querySelector('[name="' + de + '"]:checked');
-      var vale = marcado ? marcado.value === esperado : false;
+      /* querySelectorAll, não querySelector: numa pergunta de múltipla escolha o primeiro
+         marcado não é o único, e olhar só ele fazia a dependência valer apenas para a
+         opção que vem primeiro na lista. Serve para escolha única e múltipla. */
+      var marcados = f.querySelectorAll('[name="' + de + '"]:checked');
+      var vale = false;
+      for (var k = 0; k < marcados.length; k++) if (marcados[k].value === esperado) vale = true;
       c.hidden = !vale;
       var campo = c.querySelector("input,textarea,select");
       if (campo){
@@ -770,8 +793,9 @@ const celula = (v, sep = ";") => {
  * que já tinha chegado — a planilha é o registro.
  */
 export function respostasCsv(perguntas, linhas, sep = ";") {
-  /* `informe` sai fora: não é pergunta, não tem resposta, e viraria coluna vazia. */
-  perguntas = perguntas.filter((p) => p.tipo !== "informe");
+  /* Tipo sem resposta sai fora: não é pergunta e viraria coluna vazia — no caso do
+     `aviso`, uma coluna cujo cabeçalho é a frase inteira do recado. */
+  perguntas = perguntas.filter((p) => !SEM_RESPOSTA.has(p.tipo));
   const lidas = linhas.map((l) => {
     try {
       return { criado_em: l.criado_em, v: JSON.parse(l.respostas || "{}") };
@@ -897,15 +921,20 @@ export async function handleCardapio(request, env) {
     // só entra o que o formulário perguntou, no formato que ele definiu
     const limpo = {};
     for (const p of perguntas) {
-      /* `informe` não é pergunta: nada que venha com o id dele entra. Pela tela é
-         impossível responder (não há controle), mas quem chama a API direto conseguiria
-         gravar texto arbitrário nessa chave. */
-      if (p.tipo === "informe") continue;
+      /* Nada que venha com o id de um tipo sem resposta entra. Pela tela é impossível
+         responder (não há controle), mas quem chama a API direto conseguiria gravar texto
+         arbitrário nessa chave. */
+      if (SEM_RESPOSTA.has(p.tipo)) continue;
       const v = corpo.respostas[p.id];
       if (v === undefined || v === null || v === "") continue;
       if (p.tipo === "multi") {
         const lista = (Array.isArray(v) ? v : [v]).map((x) => String(x).slice(0, 80)).filter(Boolean).slice(0, 30);
-        if (lista.length) limpo[p.id] = lista.filter((x) => p.opcoes?.includes(x));
+        /* O filtro pelas opções válidas vem ANTES da decisão de "foi respondida": estava
+           depois, e uma resposta só com opção inexistente gravava lista VAZIA — que não é
+           `undefined`, então passava pela checagem de obrigatório. Formulário obrigatório
+           aceito sem resposta nenhuma. */
+        const validas = lista.filter((x) => p.opcoes?.includes(x));
+        if (validas.length) limpo[p.id] = validas;
       } else if (p.tipo === "escolha" || p.tipo === "sim_nao") {
         const permitido = p.tipo === "sim_nao" ? ["Sim", "Não"] : p.opcoes ?? [];
         const s = String(v).slice(0, 80);
@@ -935,8 +964,15 @@ export async function handleCardapio(request, env) {
     /* Dependência não satisfeita: o valor sai e a pergunta deixa de ser obrigatória. O
        cliente não vê o campo, então não pode ser cobrado por ele — e piloto que mandasse
        nome de piloto por engano (ou de propósito) não sujaria a planilha do cadastro. */
-    const ativa = (p) =>
-      !p.depende || String(limpo[p.depende.campo] ?? "") === String(p.depende.valor);
+    const ativa = (p) => {
+      if (!p.depende) return true;
+      const resp = limpo[p.depende.campo];
+      /* Resposta de múltipla escolha é ARRAY. Comparar com String() dava
+         "Água,Coca" !== "Água" e a dependência nunca valia. */
+      return Array.isArray(resp)
+        ? resp.includes(p.depende.valor)
+        : String(resp ?? "") === String(p.depende.valor);
+    };
     for (const p of perguntas) if (!ativa(p)) delete limpo[p.id];
 
     const faltando = perguntas.filter((p) => p.obrigatorio && ativa(p) && limpo[p.id] === undefined);
