@@ -29,7 +29,9 @@
    Ver docs/ARQUITETURA.md §8.
    ============================================================ */
 
-import { simbolos, usoLogotipo, usoMontanha } from "./marca.js";
+/* O logotipo com o nome saiu do cabeçalho em 16/09 — a página usa só a montanha. O
+   import dele sairia órfão e faria o próximo leitor procurar um uso que não existe. */
+import { simbolos, usoMontanha } from "./marca.js";
 
 /* Curvas de nível do cabeçalho: geradas fora (soma de senos amostrada e suavizada
    em cúbicas) e embutidas como texto — nada é calculado no cliente. */
@@ -426,7 +428,12 @@ header{position:relative;overflow:hidden;border-bottom:1px solid var(--linha);
 /* curvas de nível: textura só no hero, o formulário fica limpo */
 .topografia{position:absolute;inset:-30% -10% auto -10%;height:150%;color:#FFF;opacity:.055;pointer-events:none}
 header .wrap{position:relative}
-.logo{display:block;width:172px;height:auto;color:#FFF;margin-bottom:26px}
+/* Só a montanha no cabeçalho, e menor — pedido dele em 16/09. O logotipo inteiro com o
+   nome ocupava 172px de largura logo acima de um título em Anton que já diz de quem é o
+   formulário; a montanha sozinha assina sem repetir. A proporção da montanha (1000:379) é
+   quase a mesma do logotipo (2300:813), então largura menor vira altura menor na mesma
+   medida — 120px dá ~45px de altura, contra ~61px de antes. */
+.logo{display:block;width:120px;height:auto;color:#FFF;margin-bottom:22px}
 .sobre{font-size:10.5px;letter-spacing:2.6px;text-transform:uppercase;color:var(--dim);margin-bottom:10px}
 h1{font-size:clamp(30px,8.5vw,42px);max-width:15ch;text-wrap:balance}
 .sub{color:var(--mut);font-size:15px;margin-top:12px}
@@ -565,7 +572,7 @@ footer svg{width:22px;color:#4A4A4A}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media(min-width:620px){
   header{padding:56px 0 40px}
-  .logo{width:196px}
+  .logo{width:132px}
   .op{padding:15px 19px 15px 17px}
 }
 </style>
@@ -577,7 +584,7 @@ ${simbolos()}
 <header>
   ${TOPOGRAFIA}
   <div class="wrap">
-    ${usoLogotipo('class="logo" role="img" aria-label="Desbravando UTV"')}
+    ${usoMontanha('class="logo" role="img" aria-label="Desbravando UTV"')}
     ${form.sobretitulo ? `<p class="sobre">${esc(form.sobretitulo)}</p>` : ""}
     <h1 class="anton">${esc(form.titulo)}</h1>
     ${form.subtitulo ? `<p class="sub">${esc(form.subtitulo)}</p>` : ""}
