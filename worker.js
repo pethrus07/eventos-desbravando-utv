@@ -33,6 +33,7 @@
 
 import UI_HTML from "./ui.html";
 import { handleMcp } from "./mcp.js";
+import { registrar, mudaEstado, resultadoDoStatus } from "./auditoria.js";
 import { handleCardapio, limparPerguntas, respostasCsv, PERGUNTAS_PADRAO } from "./cardapio.js";
 
 const CORS = {
@@ -261,7 +262,41 @@ const LINHAS_PADRAO = [
 ];
 
 export default {
+  /* ENVELOPE DE AUDITORIA (S1 do roadmap, 13/10/2026).
+     O `fetch` é o único ponto por onde TUDO passa — painel, MCP e formulário público —, e
+     por isso o registro mora aqui em vez de nas 71 rotas de escrita: regra espalhada por 71
+     lugares é regra que um dia falta num.
+
+     Só escrita entra no log. GET encheria a tabela e esconderia o que importa: numa segunda
+     de temporada são ~1.300 requisições, quase todas leitura.
+
+     O await é de propósito. Dava para devolver a resposta antes e gravar depois, mas promessa
+     não esperada é CANCELADA no Worker (ver docs/ARQUITETURA.md) — e log que some justo
+     quando a operação foi anormal é pior que log nenhum. O custo é um INSERT no D1.
+
+     O MCP não é registrado aqui: o nome da ferramenta vive no corpo JSON-RPC, não na URL.
+     Ele se registra por dentro, no despacho de tools/call. */
   async fetch(request, env) {
+    const metodo = request.method;
+    if (!mudaEstado(metodo)) return tratar(request, env);
+
+    const caminho = new URL(request.url).pathname;
+    const resposta = await tratar(request, env);
+
+    if (!caminho.startsWith("/mcp") && !caminho.startsWith("/oauth")) {
+      await registrar(env.DB, {
+        papel: papel(request, env) ?? "sem chave",
+        porta: "painel",
+        acao: `${metodo} ${caminho}`,
+        resultado: resultadoDoStatus(resposta.status),
+      });
+    }
+    return resposta;
+  },
+};
+
+async function tratar(request, env) {
+  {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
@@ -397,6 +432,42 @@ export default {
         return json({ ok: true });
       }
       if (method === "DELETE") {
+        /* CONFIRMAÇÃO EM DUAS ETAPAS (S0 do roadmap, 13/10/2026).
+           Esta chamada limpa 13 tabelas em cascata — inclusive `clientes`, que guarda CPF —
+           e não há lixeira: o que sai daqui não volta. Ser admin-only protege contra a
+           equipe, mas não contra um engano do dono nem contra um assistente segurando a
+           chave dele. Então o pedido passa a exigir o NOME do evento, e a primeira tentativa
+           devolve a contagem do que seria apagado: o engano aparece antes do dano, e quem
+           confirma teve de ler o que estava prestes a destruir.
+           O arquivamento, que torna isto raro, é o S5. */
+        const ev = await db.prepare("SELECT nome FROM eventos WHERE id=?").bind(id).first();
+        if (!ev) return json({ erro: "expedição não encontrada" }, 404);
+
+        const b = await request.json().catch(() => ({}));
+        const confirmado = S(b.confirmar, 120).trim();
+        if (confirmado !== ev.nome) {
+          const contar = async (sql) => (await db.prepare(sql).bind(id).first())?.n ?? 0;
+          const resumo = {
+            clientes: await contar("SELECT COUNT(*) n FROM clientes WHERE evento_id=?"),
+            itens_checklist: await contar("SELECT COUNT(*) n FROM itens WHERE evento_id=?"),
+            custos: await contar("SELECT COUNT(*) n FROM custos WHERE evento_id=?"),
+            pagamentos: await contar(
+              "SELECT COUNT(*) n FROM pagamentos WHERE cliente_id IN (SELECT id FROM clientes WHERE evento_id=?)"
+            ),
+          };
+          return json(
+            {
+              erro: "confirmação necessária",
+              detalhe:
+                `Isto apaga a expedição "${ev.nome}" e tudo que depende dela, sem volta. ` +
+                `Para confirmar, repita o nome exato em "confirmar".`,
+              seria_apagado: resumo,
+              nome_esperado: ev.nome,
+            },
+            400
+          );
+        }
+
         await db.prepare("DELETE FROM pagamentos WHERE cliente_id IN (SELECT id FROM clientes WHERE evento_id=?)").bind(id).run();
         await db.prepare("DELETE FROM cliente_notas WHERE cliente_id IN (SELECT id FROM clientes WHERE evento_id=?)").bind(id).run();
         await db.prepare("DELETE FROM alocacoes WHERE quarto_id IN (SELECT id FROM quartos WHERE evento_id=?)").bind(id).run();
@@ -1375,5 +1446,5 @@ export default {
     }
 
     return json({ erro: "não encontrado" }, 404);
-  },
-};
+  }
+}

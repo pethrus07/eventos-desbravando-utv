@@ -336,3 +336,17 @@ CREATE TABLE IF NOT EXISTS mcp_codes (
   papel          TEXT NOT NULL DEFAULT 'equipe',
   expira_em      INTEGER NOT NULL
 );
+
+-- v4.6 · auditoria: quem fez o quê, pelas duas portas (painel e MCP).
+-- Corpo de requisição nunca entra aqui — ver auditoria.js e migracao_v4_6.sql.
+CREATE TABLE IF NOT EXISTS auditoria (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  quando    TEXT NOT NULL DEFAULT (datetime('now')),
+  papel     TEXT NOT NULL,
+  porta     TEXT NOT NULL,
+  acao      TEXT NOT NULL,
+  alvo      TEXT,
+  resumo    TEXT,
+  resultado TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auditoria_quando ON auditoria(quando DESC);
