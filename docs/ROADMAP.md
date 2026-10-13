@@ -27,9 +27,10 @@ erro cresce junto.
 |---|---|
 | ferramentas no conector MCP | **33**, das quais **4 destroem** e nenhuma pede confirmação |
 | rotas de escrita no painel | **71** |
-| checagens de papel `admin` na API | **1**, em 1.379 linhas |
-| `DELETE /api/eventos/:id` | **não checa papel nenhum** — a chave de equipe apaga a expedição em cascata, com CPF dentro |
-| registro de ações | a tabela `historico` existe em produção com **0 linhas**, e **nem está no `schema.sql`** |
+| checagens de papel `admin` na API | **33** guardas `if (!admin) return negado()` |
+| `DELETE /api/eventos/:id` | admin-only (linha 387), mas **em cascata e sem confirmação, sem lixeira e sem registro** |
+| ferramentas `excluir_*` do MCP | as **4** são `role: "both"` — a chave de equipe destrói pelo Claude, sem confirmação e sem rastro |
+| registro de ações | **não existe.** A `historico` de produção (0 linhas, fora do `schema.sql`) é feed de comentário por item, não auditoria — reaproveitar misturaria recado de colega com log de sistema |
 | deriva de schema | 44 tabelas em produção contra **24** no `schema.sql` |
 
 O papel hoje tem **um eixo só: sigilo**. `admin` × `equipe` decide quem vê CPF, custo e CRM.
@@ -46,26 +47,43 @@ Sprint sem portão verificável não termina, só para de ser mencionado. Cada u
 
 ---
 
-## S0 · Fechar a porta aberta
-**13–14/10 · 1–2 h · risco vivo, independe de tudo**
+## ✅ S0 · Destruição pede confirmação
+**Entregue em 13/10/2026** · commit abaixo
 
-A chamada mais destrutiva do sistema não tem guarda. Isso não é parte da negociação nem do
-Briefing: é defeito num sistema com 259 clientes e CPF dentro, operado por três pessoas.
+> **Correção de 13/10, depois de escrever a primeira versão deste arquivo.** Eu havia afirmado
+> aqui que o `DELETE /api/eventos/:id` não checava papel nenhum e que a chave de equipe apagava
+> uma expedição inteira. **É falso.** A rota é admin-only desde sempre (linha 387), e existem
+> **33** guardas de admin na API, não 1 — o erro veio de eu procurar `quem !== "admin"` por grep
+> e tratar o resultado como exaustivo, quando o código usa a variável derivada `admin`. O risco
+> existe, mas é outro e é menor do que eu descrevi. Fica registrado porque número errado em
+> documento de plano vira decisão errada de prioridade.
 
-- guarda de `admin` em `DELETE /api/eventos/:id`
-- confirmação explícita: o nome do evento tem de vir no pedido, senão 400
-- a mesma trava em qualquer outra rota de cascata que apareça na varredura
+O que sobra, conferido:
 
-**Portão:** com a chave de equipe, a chamada responde **403**; com a chave admin sem
-confirmação, **400**; com confirmação, apaga. Os três casos conferidos por `curl`.
+- **o apagamento de expedição é em cascata e não pede confirmação.** São 13 tabelas limpas numa
+  chamada, inclusive `clientes` com CPF, sem lixeira e sem registro. Admin-only protege contra
+  a equipe, não contra um engano do dono nem contra um assistente com a chave dele;
+- **as 4 ferramentas `excluir_*` do MCP são `role: "both"`** — essa é a porta que está mesmo
+  aberta: pelo Claude, com chave de equipe, some item de checklist, tarefa e subtarefa sem
+  confirmação e sem rastro.
 
-## S1 · Saber quem fez o quê
-**15–19/10 · 3–4 h**
+Entra:
+
+- confirmação em duas etapas no apagamento de expedição: o nome do evento tem de vir no pedido
+- `excluir_*` do MCP passa a exigir confirmação, e a de maior alcance sobe para `admin`
+- resposta de erro que **diz o que seria apagado**, para o engano aparecer antes do dano
+
+**Portão:** `DELETE` de expedição sem confirmação responde **400 com a contagem do que seria
+apagado**; com o nome certo, apaga. Pelo MCP, `excluir_tarefa` sem confirmação devolve o resumo
+e **não apaga**; repetida com o token, apaga. Os quatro casos conferidos na mão.
+
+## ✅ S1 · Saber quem fez o quê
+**Entregue em 13/10/2026** · adiantado; a migração ainda não foi aplicada em produção
 
 Sem registro, nenhuma regra dos sprints seguintes é auditável — e hoje não há nenhum. A
 tabela já existe em produção e nunca foi escrita.
 
-- `historico` entra no `schema.sql` (hoje só existe no backup)
+- tabela `auditoria`, nova (a `historico` fica como o feed de comentário que sempre foi)
 - toda escrita, pelas **duas** portas, grava: quando, papel, porta, rota ou ferramenta, alvo e
   um resumo do que mudou
 - aba de histórico no painel, filtrável por dia e por papel

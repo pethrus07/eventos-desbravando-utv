@@ -34,6 +34,8 @@
    Ver docs/ARQUITETURA.md §9.
    ============================================================ */
 
+import { registrar } from "./auditoria.js";
+
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
@@ -91,6 +93,40 @@ async function readToken(token, env) {
 function hhmmMin(s) { const m = String(s || "").match(/^(\d{1,2}):(\d{2})$/); return m ? (+m[1]) * 60 + (+m[2]) : null; }
 function minHhmm(t) { t = ((t % 1440) + 1440) % 1440; return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0"); }
 
+/* ---------- confirmação do que não volta (S0 do roadmap, 13/10/2026) ----------
+
+   As quatro ferramentas `excluir_*` são `role: "both"` e apagam direto, em cascata nos
+   filhos, sem lixeira e sem rastro. É a porta mais aberta do sistema hoje: pelo Claude, com
+   a chave de equipe, some item de checklist com todos os subitens e ninguém sabe quem foi.
+
+   A trava é uma segunda chamada. A primeira NÃO apaga: devolve o título do alvo e a
+   contagem do que vai junto. Essa resposta aparece na conversa, então o humano lê o que
+   está prestes a ser destruído antes de qualquer coisa sumir — é aí que mora a proteção,
+   não no segredo do token: o assistente conhece o título, e deve conhecer mesmo.
+
+   O que isto NÃO resolve: continua sendo apagamento físico. O arquivamento, que faz o
+   engano ser reversível, é o S5. Esta é a trava barata que cabe hoje.
+   Quem pode destruir o quê é decisão do S6 (matriz papel × efeito) — aqui nada muda de papel.
+*/
+async function exigirConfirmacao(db, { titulo, args, filhos = [] }) {
+  if (!titulo) throw new Error("alvo não encontrado");
+  if (String(args.confirmar ?? "").trim() === String(titulo).trim()) return null;
+
+  const seria = {};
+  for (const f of filhos) {
+    const r = await db.prepare(f.sql).bind(f.id).first();
+    if ((r?.n ?? 0) > 0) seria[f.nome] = r.n;
+  }
+  return {
+    confirmacao_necessaria: true,
+    alvo: titulo,
+    seria_apagado: Object.keys(seria).length ? seria : "nada além do próprio item",
+    aviso:
+      `Apagar "${titulo}" não tem volta — não há lixeira neste sistema. ` +
+      `Confirme com a pessoa e chame de novo passando confirmar com o título exato.`,
+  };
+}
+
 const FASE_TIPOS = ["pesquisa", "negociacao", "contratacao", "confirmacao", "execucao", "avaliacao"];
 const FASE_STATUS = new Set(["afazer", "andamento", "concluido", "nao_utilizada"]);
 const ETAPA_SLUGS = new Set(["validacao", "marketing", "vendas", "contratacoes", "pre_expedicao", "operacao_campo", "fechamento"]);
@@ -115,12 +151,12 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, item: { type: "string" }, dia: { type: "string" }, setor: { type: "string" }, responsavel: { type: "string" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] }, horario: { type: "string" }, fornecedor: { type: "string" }, quantidade: { type: "string" }, observacoes: { type: "string" } }, required: ["evento_id", "item"] } },
   { name: "editar_item_checklist", role: "both", description: "Edita campos de um item do checklist (item, dia, setor, responsável, status, horário, fornecedor, quantidade, observações; valor só admin).",
     inputSchema: { type: "object", properties: { item_id: { type: "integer" }, item: { type: "string" }, dia: { type: "string" }, setor: { type: "string" }, responsavel: { type: "string" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] }, horario: { type: "string" }, fornecedor: { type: "string" }, quantidade: { type: "string" }, observacoes: { type: "string" }, valor: { type: "number" } }, required: ["item_id"] } },
-  { name: "excluir_item_checklist", role: "both", description: "Exclui um item do checklist (e suas subtarefas).",
-    inputSchema: { type: "object", properties: { item_id: { type: "integer" } }, required: ["item_id"] } },
+  { name: "excluir_item_checklist", role: "both", description: "Exclui um item do checklist (e suas subtarefas). Apaga de verdade, sem lixeira: a primeira chamada só mostra o que seria apagado; para apagar, repita passando `confirmar` com o título exato.",
+    inputSchema: { type: "object", properties: { item_id: { type: "integer" }, confirmar: { type: "string", description: "Título exato do alvo. Sem ele a ferramenta NÃO apaga: devolve o que seria apagado, para a pessoa confirmar." } }, required: ["item_id"] } },
   { name: "criar_subitem_checklist", role: "both", description: "Adiciona uma subtarefa a um item do checklist.",
     inputSchema: { type: "object", properties: { item_id: { type: "integer" }, titulo: { type: "string" } }, required: ["item_id", "titulo"] } },
-  { name: "excluir_subitem_checklist", role: "both", description: "Exclui uma subtarefa de um item do checklist.",
-    inputSchema: { type: "object", properties: { subitem_id: { type: "integer" } }, required: ["subitem_id"] } },
+  { name: "excluir_subitem_checklist", role: "both", description: "Exclui uma subtarefa de um item do checklist. Apaga de verdade, sem lixeira: a primeira chamada só mostra o que seria apagado; para apagar, repita passando `confirmar` com o título exato.",
+    inputSchema: { type: "object", properties: { subitem_id: { type: "integer" }, confirmar: { type: "string", description: "Título exato do alvo. Sem ele a ferramenta NÃO apaga: devolve o que seria apagado, para a pessoa confirmar." } }, required: ["subitem_id"] } },
   // ----- Tarefas gerais (fora das expedições) -----
   { name: "listar_tarefas", role: "both", description: "Lista as tarefas gerais (não ligadas a uma expedição), com subtarefas.",
     inputSchema: { type: "object", properties: {} } },
@@ -128,14 +164,14 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { titulo: { type: "string" }, setor: { type: "string" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] }, prioridade: { type: "integer" }, data_limite: { type: "string" }, responsavel: { type: "string" }, horario: { type: "string" }, observacoes: { type: "string" } }, required: ["titulo"] } },
   { name: "editar_tarefa", role: "both", description: "Edita uma tarefa geral (título, setor, status, prioridade, prazo, responsável, horário, observações).",
     inputSchema: { type: "object", properties: { tarefa_id: { type: "integer" }, titulo: { type: "string" }, setor: { type: "string" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] }, prioridade: { type: "integer" }, data_limite: { type: "string" }, responsavel: { type: "string" }, horario: { type: "string" }, observacoes: { type: "string" } }, required: ["tarefa_id"] } },
-  { name: "excluir_tarefa", role: "both", description: "Exclui uma tarefa geral (e suas subtarefas).",
-    inputSchema: { type: "object", properties: { tarefa_id: { type: "integer" } }, required: ["tarefa_id"] } },
+  { name: "excluir_tarefa", role: "both", description: "Exclui uma tarefa geral (e suas subtarefas). Apaga de verdade, sem lixeira: a primeira chamada só mostra o que seria apagado; para apagar, repita passando `confirmar` com o título exato.",
+    inputSchema: { type: "object", properties: { tarefa_id: { type: "integer" }, confirmar: { type: "string", description: "Título exato do alvo. Sem ele a ferramenta NÃO apaga: devolve o que seria apagado, para a pessoa confirmar." } }, required: ["tarefa_id"] } },
   { name: "criar_subtarefa", role: "both", description: "Adiciona uma subtarefa a uma tarefa geral.",
     inputSchema: { type: "object", properties: { tarefa_id: { type: "integer" }, titulo: { type: "string" } }, required: ["tarefa_id", "titulo"] } },
   { name: "marcar_subtarefa", role: "both", description: "Marca/desmarca uma subtarefa de uma tarefa geral.",
     inputSchema: { type: "object", properties: { subtarefa_id: { type: "integer" }, concluido: { type: "boolean" } }, required: ["subtarefa_id", "concluido"] } },
-  { name: "excluir_subtarefa", role: "both", description: "Exclui uma subtarefa de uma tarefa geral.",
-    inputSchema: { type: "object", properties: { subtarefa_id: { type: "integer" } }, required: ["subtarefa_id"] } },
+  { name: "excluir_subtarefa", role: "both", description: "Exclui uma subtarefa de uma tarefa geral. Apaga de verdade, sem lixeira: a primeira chamada só mostra o que seria apagado; para apagar, repita passando `confirmar` com o título exato.",
+    inputSchema: { type: "object", properties: { subtarefa_id: { type: "integer" }, confirmar: { type: "string", description: "Título exato do alvo. Sem ele a ferramenta NÃO apaga: devolve o que seria apagado, para a pessoa confirmar." } }, required: ["subtarefa_id"] } },
   // ----- Ciclo Operacional (módulo novo; hoje preenchido só no Playbook) -----
   { name: "listar_itens_ciclo", role: "both", description: "Itens do módulo NOVO (Ciclo de 6 fases) de uma expedição e o status das fases. Filtra por etapa.",
     inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, etapa: { type: "string", enum: [...ETAPA_SLUGS] } }, required: ["evento_id"] } },
@@ -370,6 +406,12 @@ async function runTool(name, args, env, papel) {
     }
     case "excluir_item_checklist": {
       const id = parseInt(args.item_id, 10);
+      const alvo = await db.prepare("SELECT item FROM itens WHERE id=?").bind(id).first();
+      const pedir = await exigirConfirmacao(db, {
+        titulo: alvo?.item, args,
+        filhos: [{ nome: "subitens", id, sql: "SELECT COUNT(*) n FROM subitens WHERE item_id=?" }],
+      });
+      if (pedir) return pedir;
       await db.prepare("DELETE FROM subitens WHERE item_id=?").bind(id).run();
       const r = await db.prepare("DELETE FROM itens WHERE id=?").bind(id).run();
       return { ok: (r.meta.changes || 0) > 0 };
@@ -382,7 +424,11 @@ async function runTool(name, args, env, papel) {
       return { ok: true, subitem_id: r.meta.last_row_id };
     }
     case "excluir_subitem_checklist": {
-      const r = await db.prepare("DELETE FROM subitens WHERE id=?").bind(parseInt(args.subitem_id, 10)).run();
+      const sid = parseInt(args.subitem_id, 10);
+      const alvoS = await db.prepare("SELECT titulo FROM subitens WHERE id=?").bind(sid).first();
+      const pedirS = await exigirConfirmacao(db, { titulo: alvoS?.titulo, args });
+      if (pedirS) return pedirS;
+      const r = await db.prepare("DELETE FROM subitens WHERE id=?").bind(sid).run();
       return { ok: (r.meta.changes || 0) > 0 };
     }
     // ---- Tarefas gerais ----
@@ -410,6 +456,12 @@ async function runTool(name, args, env, papel) {
     }
     case "excluir_tarefa": {
       const id = parseInt(args.tarefa_id, 10);
+      const alvoT = await db.prepare("SELECT titulo FROM tarefas WHERE id=?").bind(id).first();
+      const pedirT = await exigirConfirmacao(db, {
+        titulo: alvoT?.titulo, args,
+        filhos: [{ nome: "subtarefas", id, sql: "SELECT COUNT(*) n FROM subtarefas WHERE tarefa_id=?" }],
+      });
+      if (pedirT) return pedirT;
       await db.prepare("DELETE FROM subtarefas WHERE tarefa_id=?").bind(id).run();
       const r = await db.prepare("DELETE FROM tarefas WHERE id=?").bind(id).run();
       return { ok: (r.meta.changes || 0) > 0 };
@@ -426,7 +478,11 @@ async function runTool(name, args, env, papel) {
       return { ok: (r.meta.changes || 0) > 0 };
     }
     case "excluir_subtarefa": {
-      const r = await db.prepare("DELETE FROM subtarefas WHERE id=?").bind(parseInt(args.subtarefa_id, 10)).run();
+      const stid = parseInt(args.subtarefa_id, 10);
+      const alvoST = await db.prepare("SELECT titulo FROM subtarefas WHERE id=?").bind(stid).first();
+      const pedirST = await exigirConfirmacao(db, { titulo: alvoST?.titulo, args });
+      if (pedirST) return pedirST;
+      const r = await db.prepare("DELETE FROM subtarefas WHERE id=?").bind(stid).run();
       return { ok: (r.meta.changes || 0) > 0 };
     }
     // ---- Operação em Campo: criar ----
@@ -651,12 +707,29 @@ export async function handleMcp(request, env) {
         const args = (msg.params && msg.params.arguments) || {};
         const tool = TOOLS.find(t => t.name === nome);
         if (!tool) return fail(-32602, "ferramenta desconhecida");
-        if (tool.role === "admin" && papel !== "admin")
+        /* O log do MCP mora aqui, e não no envelope do worker.js: na URL só aparece
+           "POST /mcp", e o que interessa — QUAL ferramenta, com qual papel — vive no corpo
+           JSON-RPC. Só escrita entra: `listar_` e `ver_` são leitura e encheriam a tabela.
+           Argumentos não entram: eles carregam id de participante, e o log não duplica dado
+           pessoal (ver auditoria.js). */
+        const escreve = /^(criar|editar|excluir|marcar|concluir|mudar|registrar)_/.test(nome);
+        const anotar = (resultado, alvo = null) =>
+          escreve
+            ? registrar(env.DB, { papel, porta: "mcp", acao: nome, alvo, resultado })
+            : Promise.resolve();
+
+        if (tool.role === "admin" && papel !== "admin") {
+          await anotar("negado");
           return reply({ content: [{ type: "text", text: "Esta informação (dados pessoais/financeiro) exige a chave admin. A conexão atual é de equipe." }], isError: true });
+        }
         try {
           const out = await runTool(nome, args, env, papel);
+          /* Pedido de confirmação não é execução: registrar como "ok" faria o log dizer que
+             algo foi apagado quando nada foi. */
+          await anotar(out && out.confirmacao_necessaria ? "confirmacao" : "ok", out?.alvo ?? null);
           return reply({ content: [{ type: "text", text: JSON.stringify(out, null, 2) }] });
         } catch (e) {
+          await anotar("erro");
           return reply({ content: [{ type: "text", text: "Erro: " + (e.message || String(e)) }], isError: true });
         }
       }
