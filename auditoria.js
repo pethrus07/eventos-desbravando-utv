@@ -51,7 +51,11 @@ export async function registrar(db, { papel, porta, acao, alvo = null, resumo = 
         "INSERT INTO auditoria (papel, porta, acao, alvo, resumo, resultado) VALUES (?,?,?,?,?,?)"
       )
       .bind(
-        String(papel ?? "?").slice(0, 20),
+        /* 60 e nao 20: quando o papel era so "admin"/"equipe" vinte bastavam, mas desde a
+           v4.8 esta coluna guarda NOME DE PESSOA, e "Equipe (chave compartilhada)" chegava
+           cortada em "Equipe (chave compar". Log que trunca identidade e log que nao
+           identifica. */
+        String(papel ?? "?").slice(0, 60),
         String(porta ?? "?").slice(0, 10),
         String(acao ?? "").slice(0, 160),
         alvo == null ? null : String(alvo).slice(0, 160),
