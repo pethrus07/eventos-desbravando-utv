@@ -24,6 +24,7 @@ npx wrangler tail       # acompanha erros ao vivo
 ```bash
 node tools/checar-antes-do-deploy.mjs && npx wrangler deploy -c wrangler.cardapio.toml   # cardápio
 node tools/checar-spa.mjs                                             # a TELA compila?
+node tools/checar-zip.mjs                                             # o .zip ABRE?
 node --import ./tools/html-como-texto.mjs tools/checar-travas.mjs && npx wrangler deploy  # worker + MCP
 ```
 A segunda é o portão do S0 e do S1 do [ROADMAP](docs/ROADMAP.md): confere que apagar pede

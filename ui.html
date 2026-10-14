@@ -461,7 +461,7 @@ function route(){
   clearInterval(pollTimer); pollTimer = null;
 
   var h = location.hash || "#/";
-  var m = h.match(/^#\/e\/(\d+)(?:\/(custos|participantes|simulador|hospedagem|operacao|campo|agenda|cardapio))?$/);
+  var m = h.match(/^#\/e\/(\d+)(?:\/(custos|participantes|simulador|hospedagem|operacao|campo|agenda|comunicacao|cardapio))?$/);
   if (m) return telaEvento(+m[1], m[2] || "");
   if (h === "#/tarefas") return telaTarefas();
   if (h === "#/crm") return telaCRM();
@@ -663,6 +663,7 @@ function renderEvento(aba){
   [["","checklist","Checklist"],["operacao","operacao","Operação"],["campo","campo","Campo"],
    ["agenda","agenda","Agenda"],["custos","custos","Custos"],["participantes","participantes","Participantes"],
    ["simulador","simulador","Simulador"],["cardapio","cardapio","Cardápio"],
+   ["comunicacao","comunicacao","Comunicação"],
    ["hospedagem","hospedagem","Hospedagem"]].forEach(function(t){
     if (podeVer(t[1])) TABS.push([t[0], t[2]]);
   });
@@ -702,6 +703,7 @@ function renderEvento(aba){
   else if (aba === "campo") carregarCampo();
   else if (aba === "agenda") carregarAgenda();
   else if (aba === "cardapio") carregarCardapio();
+  else if (aba === "comunicacao") carregarComunicacao();
   else renderChecklist();
 }
 
@@ -1063,7 +1065,7 @@ function sheetItem(id, diaSugerido){
 function recarregar(){
   return api("/api/eventos/"+EV.evento.id+"/itens").then(function(j){
     EV = j;
-    var m = location.hash.match(/^#\/e\/\d+(?:\/(custos|participantes|simulador|hospedagem|operacao|campo|agenda))?$/);
+    var m = location.hash.match(/^#\/e\/\d+(?:\/(custos|participantes|simulador|hospedagem|operacao|campo|agenda|comunicacao))?$/);
     renderEvento((m && m[1]) || "");
   });
 }
@@ -1349,6 +1351,222 @@ function sheetFornecedor(f){
       .catch(function(e){ toast(e.message,true); });
   };
   setTimeout(function(){ $("ff_nome").focus(); }, 50);
+}
+
+/* ============================================================
+   ZIP sem biblioteca — formato "stored" (sem compressão).
+
+   Por que escrito à mão e não JSZip por CDN: este painel é usado em campo, às vezes com
+   internet ruim, e um CDN fora do ar transformaria "baixar o pacote" em erro silencioso
+   justo no dia da expedição. O repositório também é, por decisão antiga, sem build e sem
+   dependências. O formato armazenado dispensa compressão — são kilobytes de texto — e cabe
+   em cinquenta linhas.
+
+   Estrutura: para cada arquivo, um cabeçalho local + os bytes; no fim, o diretório central e
+   o registro de fim. As datas vão zeradas de propósito: hora de modificação em ZIP usa o
+   formato MS-DOS de 1980 e não vale a conversão para um pacote que nasce e morre no mesmo
+   dia. O descompactador mostra 01/01/1980 e abre normalmente.
+   ============================================================ */
+var CRC_TAB = (function(){
+  var t = new Uint32Array(256), c, i, k;
+  for (i = 0; i < 256; i++){
+    c = i;
+    for (k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(bytes){
+  var c = 0xFFFFFFFF;
+  for (var i = 0; i < bytes.length; i++) c = CRC_TAB[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function zipar(arquivos){
+  var enc = new TextEncoder(), partes = [], central = [], desloc = 0;
+
+  arquivos.forEach(function(a){
+    var nome = enc.encode(a.nome);
+    var dados = typeof a.conteudo === "string" ? enc.encode(a.conteudo) : a.conteudo;
+    var crc = crc32(dados);
+
+    var loc = new DataView(new ArrayBuffer(30));
+    loc.setUint32(0, 0x04034b50, true);   // assinatura do cabeçalho local
+    loc.setUint16(4, 20, true);           // versão mínima
+    /* Bit 11 = "o nome está em UTF-8". Sem ele o descompactador assume CP437 e
+       "comunicação.txt" chega com o nome corrompido — o arquivo abre, o nome não. */
+    loc.setUint16(6, 0x0800, true);
+    loc.setUint16(8, 0, true);            // método 0 = armazenado
+    loc.setUint32(14, crc, true);
+    loc.setUint32(18, dados.length, true);
+    loc.setUint32(22, dados.length, true);
+    loc.setUint16(26, nome.length, true);
+    partes.push(new Uint8Array(loc.buffer), nome, dados);
+
+    var cen = new DataView(new ArrayBuffer(46));
+    cen.setUint32(0, 0x02014b50, true);   // assinatura do diretório central
+    cen.setUint16(4, 20, true);
+    cen.setUint16(6, 20, true);
+    cen.setUint16(8, 0x0800, true);       // mesma bandeira de UTF-8, aqui também
+    cen.setUint16(10, 0, true);
+    cen.setUint32(16, crc, true);
+    cen.setUint32(20, dados.length, true);
+    cen.setUint32(24, dados.length, true);
+    cen.setUint16(28, nome.length, true);
+    cen.setUint32(42, desloc, true);      // onde o cabeçalho local deste arquivo começa
+    central.push(new Uint8Array(cen.buffer), nome);
+
+    desloc += 30 + nome.length + dados.length;
+  });
+
+  var tamCentral = central.reduce(function(s, p){ return s + p.length; }, 0);
+  var fim = new DataView(new ArrayBuffer(22));
+  fim.setUint32(0, 0x06054b50, true);
+  fim.setUint16(8, arquivos.length, true);
+  fim.setUint16(10, arquivos.length, true);
+  fim.setUint32(12, tamCentral, true);
+  fim.setUint32(16, desloc, true);
+
+  return new Blob(partes.concat(central, [new Uint8Array(fim.buffer)]), { type: "application/zip" });
+}
+
+function baixarBlob(blob, nome){
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = nome;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+}
+
+/* ============================================================
+   Aba Comunicação — o briefing das artes dentro da expedição.
+
+   A tela é deliberadamente burra: lista as peças do catálogo e os campos de cada uma. O que
+   o sistema já sabe vem preenchido e marcado como tal, porque dedução e afirmação não são a
+   mesma coisa — e quem lê precisa saber de onde veio cada linha antes de confiar nela.
+   ============================================================ */
+var BRF = null;
+
+function carregarComunicacao(){
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+  api("/api/eventos/" + EV.evento.id + "/briefing").then(function(j){
+    BRF = j; renderComunicacao();
+  }).catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
+}
+
+function renderComunicacao(){
+  if (!BRF || !BRF.existe){ $("main").innerHTML = '<div class="empty">Briefing indisponível.</div>'; return; }
+  var fechado = BRF.status === "fechado";
+  var editar = podeEditar("comunicacao") && !fechado;
+
+  var corpo = BRF.pecas.map(function(p){
+    var campos = p.campos.map(function(c){
+      var id = "bf_" + p.peca + "__" + c.campo;
+      var selo = c.origem === "sistema"
+        ? ' <span class="chip" title="Preenchido pelo sistema a partir do que já existe na expedição">do sistema</span>'
+        : (c.obrigatorio && !c.valor ? ' <span class="chip" style="opacity:.75">obrigatório</span>' : '');
+      return '<div style="margin-top:10px">' +
+        '<label style="font-size:12px;color:var(--mut)">'+esc(c.rotulo)+selo+'</label>' +
+        '<textarea id="'+id+'" rows="'+(String(c.valor||"").length > 60 ? 3 : 1)+'"' +
+          (editar ? '' : ' disabled') + ' placeholder="'+(c.obrigatorio?'obrigatório':'opcional')+'"' +
+          ' style="margin-top:4px">'+esc(c.valor || "")+'</textarea>' +
+      '</div>';
+    }).join("");
+    return '<div class="evcard" style="cursor:default"><b>'+esc(p.nome)+'</b>'+campos+'</div>';
+  }).join("");
+
+  $("main").innerHTML =
+    '<div class="kpis">' +
+      '<div class="kpi"><small>Preenchimento</small><b>'+esc(BRF.preenchimento)+'</b></div>' +
+      '<div class="kpi"><small>O sistema preencheu</small><b>'+BRF.pelo_sistema+'</b></div>' +
+      '<div class="kpi"><small>Faltam</small><b>'+BRF.faltando.length+'</b></div>' +
+    '</div>' +
+    (fechado
+      ? '<div class="empty" style="margin-bottom:12px">Briefing <b>fechado</b> em '+esc(BRF.fechado_em||"")+'. O prazo das peças já está correndo — para mudar algo, fale com a RYZE.</div>'
+      : '<p style="color:var(--mut);font-size:13px;margin-bottom:12px">Preencha o que falta e feche. O prazo das peças começa no fechamento, não no pedido.</p>') +
+    corpo +
+    '<div class="row" style="gap:8px;margin-top:16px">' +
+      (editar ? '<button class="btn" id="bf_salvar" style="flex:1">Salvar</button>' : '') +
+      (editar ? '<button class="btn2" id="bf_fechar">Fechar briefing</button>' : '') +
+      '<button class="btn2" id="bf_zip">Baixar pacote (.zip)</button>' +
+    '</div>';
+
+  if (editar){
+    $("bf_salvar").onclick = function(){ salvarComunicacao().then(function(){ toast("Briefing salvo"); }); };
+    $("bf_fechar").onclick = function(){
+      salvarComunicacao().then(function(){
+        return api("/api/eventos/"+EV.evento.id+"/briefing/fechar", "POST", {});
+      }).then(function(r){
+        if (r.fechado === false){
+          toast("Ainda faltam " + r.faltando.length + " campo(s) obrigatório(s)", true);
+        } else { toast("Briefing fechado — o prazo começou"); }
+        carregarComunicacao();
+      }).catch(function(e){ toast(e.message, true); });
+    };
+  }
+  $("bf_zip").onclick = baixarPacoteComunicacao;
+}
+
+function salvarComunicacao(){
+  var valores = [];
+  BRF.pecas.forEach(function(p){
+    p.campos.forEach(function(c){
+      var el = $("bf_" + p.peca + "__" + c.campo);
+      if (!el || el.disabled) return;
+      var v = el.value.trim();
+      /* Só manda o que MUDOU: reenviar o que o sistema deduziu marcaria tudo como afirmação
+         de pessoa, e a origem de cada campo deixaria de significar alguma coisa. */
+      if (v !== String(c.valor || "")) valores.push({ peca: p.peca, campo: c.campo, valor: v });
+    });
+  });
+  if (!valores.length) return Promise.resolve();
+  return api("/api/eventos/"+EV.evento.id+"/briefing", "PATCH", { valores: valores })
+    .then(function(){ return carregarComunicacaoSilencioso(); });
+}
+
+function carregarComunicacaoSilencioso(){
+  return api("/api/eventos/"+EV.evento.id+"/briefing").then(function(j){ BRF = j; });
+}
+
+function baixarPacoteComunicacao(){
+  if (!BRF) return;
+  var ev = EV.evento, hoje = new Date().toISOString().slice(0, 10);
+  var limpo = (ev.nome || "expedicao").toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+  var arquivos = [{ nome: "briefing.json", conteudo: JSON.stringify({
+    expedicao: ev.nome, evento_id: ev.id, gerado_em: hoje,
+    status: BRF.status, preenchimento: BRF.preenchimento, pecas: BRF.pecas
+  }, null, 2) }];
+
+  BRF.pecas.forEach(function(p){
+    var txt = p.nome + "\n" + p.nome.replace(/./g, "=") + "\n\n" +
+      p.campos.map(function(c){
+        var origem = c.origem === "sistema" ? "  [preenchido pelo sistema]" : "";
+        return c.rotulo + origem + "\n" + (c.valor ? c.valor : "(vazio)") + "\n";
+      }).join("\n");
+    arquivos.push({ nome: "pecas/" + p.peca + ".txt", conteudo: txt });
+  });
+
+  arquivos.push({ nome: "LEIA-ME.txt", conteudo:
+    "PACOTE DE COMUNICACAO\n=====================\n\n" +
+    "Expedicao: " + ev.nome + "\nGerado em: " + hoje + "\nStatus do briefing: " + BRF.status + "\n\n" +
+    "briefing.json  - os dados estruturados, que alimentam a producao das pecas\n" +
+    "pecas/*.txt    - o mesmo conteudo, uma peca por arquivo, para ler sem ferramenta\n\n" +
+    "Os campos marcados como preenchidos pelo sistema vieram do proprio Controle de\n" +
+    "Eventos (dias, programacao, cardapio, grade de camiseta, hospedagem). Os demais\n" +
+    "foram escritos por uma pessoa.\n" +
+    (BRF.status === "fechado"
+      ? "\nEste briefing esta FECHADO: o prazo das pecas comecou a correr.\n"
+      : "\nEste briefing ainda esta ABERTO. O prazo so comeca quando ele for fechado.\n") });
+
+  try {
+    baixarBlob(zipar(arquivos), "briefing-" + limpo + "-" + hoje + ".zip");
+    toast("Pacote baixado");
+  } catch (e) {
+    toast("Não consegui montar o pacote: " + e.message, true);
+  }
 }
 
 /* ============================================================

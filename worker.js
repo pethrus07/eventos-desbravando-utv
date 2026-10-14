@@ -34,6 +34,7 @@
 import UI_HTML from "./ui.html";
 import { handleMcp } from "./mcp.js";
 import { registrar, mudaEstado, resultadoDoStatus } from "./auditoria.js";
+import * as briefing from "./briefing.js";
 import { usuarioDaChave, avaliar, modulosVisiveis, MODULOS, novaChave, limparPermissoes,
          hashDaChave } from "./permissoes.js";
 import { handleCardapio, limparPerguntas, respostasCsv, PERGUNTAS_PADRAO } from "./cardapio.js";
@@ -925,6 +926,29 @@ async function tratar(request, env) {
         return sub ? json({ ok: true, subtarefa: sub }) : json({ erro: "não encontrado" }, 404);
       }
       if (method === "DELETE") { await db.prepare("DELETE FROM subtarefas WHERE id=?").bind(id).run(); return json({ ok: true }); }
+    }
+
+    /* ================= COMUNICAÇÃO · briefing das artes (v4.7) =================
+       As mesmas funções que o conector MCP usa, pela porta do painel. Uma lógica só: se o
+       fechamento valesse diferente aqui e lá, o prazo passaria a depender de por onde a
+       pessoa entrou. */
+    if (path === "/api/catalogo-pecas" && method === "GET") {
+      return json({ pecas: await briefing.catalogo(db) });
+    }
+    if ((m = path.match(/^\/api\/eventos\/(\d+)\/briefing$/))) {
+      const id = +m[1];
+      /* GET abre: ler o briefing é também o momento em que o sistema preenche o que já sabe.
+         Separar "abrir" de "ver" obrigaria a tela a fazer duas chamadas para mostrar a
+         primeira linha, e o pré-preenchimento é só leitura do resto do banco. */
+      if (method === "GET") return json(await briefing.abrir(db, id));
+      if (method === "PATCH") {
+        const b = await request.json().catch(() => ({}));
+        return json(await briefing.preencher(db, id, b.valores));
+      }
+    }
+    if ((m = path.match(/^\/api\/eventos\/(\d+)\/briefing\/fechar$/)) && method === "POST") {
+      const b = await request.json().catch(() => ({}));
+      return json(await briefing.fechar(db, +m[1], b.quem || usuario?.nome || quem));
     }
 
     /* ================= USUÁRIOS E PERMISSÕES (v4.8, admin principal) =================
