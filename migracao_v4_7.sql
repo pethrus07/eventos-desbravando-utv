@@ -1,8 +1,8 @@
 -- v4.7 · BRIEFING DE COMUNICAÇÃO (S2 do docs/ROADMAP.md, 14/10/2026)
 --
--- É a estrutura que torna os R$ 500/mês viáveis. Hoje um pedido de arte nasce numa mensagem,
--- vira conversa, volta como pergunta e só então vira peça — e são essas voltas, não o desenho,
--- que consomem a maior parte das 15,9 h/mês. O briefing elimina o meio.
+-- Hoje um pedido de arte nasce numa mensagem, vira conversa, volta como pergunta e só então
+-- vira peça — e são essas voltas, não o desenho, que consomem a maior parte do tempo.
+-- O briefing elimina o meio.
 --
 -- TRÊS DECISÕES QUE VALE EXPLICAR:
 --

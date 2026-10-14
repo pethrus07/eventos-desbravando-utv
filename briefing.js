@@ -3,7 +3,7 @@
 
    O QUE RESOLVE: hoje um pedido de arte nasce numa mensagem, vira conversa, volta como
    pergunta e só então vira peça. São essas voltas — não o desenho — que consomem a maior
-   parte das 15,9 h/mês que o acordo de R$ 500 precisa derrubar para ~6,5 h.
+   parte do tempo de produção. O briefing elimina as três voltas do meio.
 
    A IDEIA QUE ENCOLHE TUDO: o briefing NÃO é formulário em branco, é um DIFF. Datas, dias,
    programação, cardápio escolhido e participantes já estão no D1. O sistema preenche o que

@@ -3,23 +3,18 @@
 > **Este arquivo é a verdade do que vem pela frente.** Sprint que termina é marcado aqui,
 > no mesmo commit que entrega. Plano que vive só na cabeça volta a ser discutido toda semana.
 
-Escrito em **13/10/2026**, logo depois de o acordo de R$ 500/mês ser aceito.
 
 ---
 
 ## Por que existe
 
-O acordo que vale a partir de **26/10/2026** cobra **R$ 500/mês** por um trabalho que hoje
-consome **15,9 h/mês**. Isso dá R$ 31/h — menos da metade do piso de R$ 70. O valor só fecha
-se o tempo cair para cerca de **6,5 h/mês**, e esse corte não vem de esforço: vem do que está
-neste roadmap.
+O trabalho de comunicação de cada expedição hoje começa numa mensagem, vira conversa, volta
+como pergunta e só então vira peça. São essas voltas — não o desenho — que consomem a maior
+parte do tempo. Este roadmap existe para que a demanda entre **estruturada**, de uma vez, e o
+tempo vá para a produção em vez de ir para o vaivém.
 
-**Cada mês sem o sistema custa cerca de R$ 600** em hora de trabalho não remunerada. O prazo
-não é administrativo — é dinheiro correndo.
-
-Em paralelo, e no mesmo worker, há uma dívida de segurança que o acordo tornou urgente: o
-cliente vai passar a operar mais pelo sistema e menos por mensagem, então a superfície de
-erro cresce junto.
+Em paralelo, e no mesmo worker, há uma dívida de acesso e de rastreabilidade: o cliente vai
+operar mais pelo sistema e menos por mensagem, então a superfície de erro cresce junto.
 
 ## O estado de hoje, medido em 13/10/2026
 
@@ -176,7 +171,6 @@ mesma ação negada no MCP é negada no painel — conferido nas duas portas, n�
 
 **Portão:** um comando produz as 10 peças de uma expedição real, todas medidas, e elas
 aparecem no painel do cliente. **E o tempo gasto nesse lote é cronometrado** — é o número que
-diz se os R$ 500 fecham. Se der mais que 3 h, o modelo precisa de outra volta, não de mais
 esforço.
 
 ---
@@ -246,7 +240,6 @@ voltou a ser a verdade (`f071b70`).
 
 - **S6 (regras nas duas portas) está FEITO** — a produção já tem `pode()`, perfis e sessões.
   O que o cliente pediu em 14/10 é mudar de perfil para individual: **6–10 h de evolução**,
-  não as 40 h de projeto que eu havia orçado.
 - **S0, S1, S2 e S3 foram reaplicados sobre a base certa e PUBLICADOS** em 14/10, versão
   `ffcea15b`. A auditoria foi conferida em produção: um `POST` negado gravou a linha.
 - **S4** (chave da RYZE) perde sentido como estava: a produção tem login com sessão, não
