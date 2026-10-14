@@ -40,6 +40,7 @@ export const MODULOS = [
   { slug: "simulador", nome: "Simulador", grupo: "Dentro da expedição" },
   { slug: "cardapio", nome: "Cardápio", grupo: "Dentro da expedição" },
   { slug: "hospedagem", nome: "Hospedagem", grupo: "Dentro da expedição" },
+  { slug: "comunicacao", nome: "Comunicação (artes)", grupo: "Dentro da expedição" },
 ];
 
 const SLUGS = new Set(MODULOS.map((m) => m.slug));
@@ -66,6 +67,8 @@ const ROTA_MODULO = {
   cardapio: "cardapio",
   quartos: "hospedagem",
   alocacoes: "hospedagem",
+  briefing: "comunicacao",
+  "catalogo-pecas": "comunicacao",
   tarefas: "tarefas",
   subtarefas: "tarefas",
   crm: "crm",
