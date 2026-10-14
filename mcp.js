@@ -35,6 +35,7 @@
    ============================================================ */
 
 import { registrar } from "./auditoria.js";
+import * as briefing from "./briefing.js";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -195,6 +196,21 @@ const TOOLS = [
   { name: "criar_tarefa_campo", role: "both", description: "Cria uma tarefa cronológica num dia da Operação em Campo.",
     inputSchema: { type: "object", properties: { dia_id: { type: "integer" }, nome: { type: "string" }, h_planejado: { type: "string" }, tipo: { type: "string", enum: ["ajustavel", "fixa"] }, responsavel: { type: "string" } }, required: ["dia_id", "nome"] } },
   // ----- Dados sensíveis (só chave ADMIN) -----
+  // ----- Briefing de Comunicação (S2/S3 do ROADMAP) -----
+  { name: "abrir_briefing", role: "both", description: "Abre o briefing de comunicação de uma expedição e devolve o estado. O sistema PRÉ-PREENCHE o que já sabe (dias, programação, cardápio, grade de camiseta, hospedagem) — você só completa o que faltar. Comece por aqui.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" } }, required: ["evento_id"] } },
+  { name: "ver_briefing", role: "both", description: "Mostra o briefing como está: o que já foi preenchido, se veio do sistema ou de uma pessoa, e quais campos obrigatórios ainda faltam.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" } }, required: ["evento_id"] } },
+  { name: "preencher_briefing", role: "both", description: "Grava vários campos do briefing de uma vez. Só aceita campos que existem no catálogo; o que não existir volta na lista de recusados.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" },
+      valores: { type: "array", description: "Lista de {peca, campo, valor}", items: { type: "object", properties: { peca: { type: "string" }, campo: { type: "string" }, valor: { type: "string" } }, required: ["peca", "campo", "valor"] } } },
+      required: ["evento_id", "valores"] } },
+  { name: "fechar_briefing", role: "both", description: "Fecha e TRAVA o briefing. Só fecha se todos os campos obrigatórios estiverem preenchidos. É neste momento que o prazo de 5 dias úteis das peças começa a correr — depois do fecho, mudança conta como rodada de ajuste.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, quem: { type: "string", description: "Quem está fechando" } }, required: ["evento_id"] } },
+  { name: "ver_catalogo_pecas", role: "both", description: "As peças que entram no pacote da expedição, com o que cada uma cobre. É a lista fechada: o que não está aqui é orçado à parte.",
+    inputSchema: { type: "object", properties: {} } },
+  { name: "registrar_pedido_extra", role: "both", description: "Registra um pedido de ORÇAMENTO para algo fora do catálogo. NÃO produz nada e NÃO entra em fila nenhuma: grava o pedido e para. A RYZE responde com o valor, e o trabalho só começa depois da aprovação.",
+    inputSchema: { type: "object", properties: { pedido: { type: "string", description: "O que você precisa, com suas palavras" }, evento_id: { type: "integer" }, quem: { type: "string" } }, required: ["pedido"] } },
   { name: "listar_participantes", role: "admin", description: "[admin] Participantes de uma expedição, com dados pessoais: nome, CPF, telefone, grupo, tipo, UTV, camiseta, contrato e pacote.",
     inputSchema: { type: "object", properties: { evento_id: { type: "integer" } }, required: ["evento_id"] } },
   { name: "ver_custos", role: "admin", description: "[admin] Custos de uma expedição (item, categoria, valor, status, pago, fornecedor) e o total.",
@@ -274,6 +290,19 @@ async function runTool(name, args, env, papel) {
       const r = await db.prepare("UPDATE subitens SET concluido=? WHERE id=?").bind(args.concluido ? 1 : 0, parseInt(args.subitem_id, 10)).run();
       return { ok: (r.meta.changes || 0) > 0 };
     }
+    // ---- Briefing de Comunicação ----
+    case "abrir_briefing": return briefing.abrir(db, eid);
+    case "ver_briefing": return briefing.ver(db, eid);
+    case "preencher_briefing": return briefing.preencher(db, eid, args.valores);
+    case "fechar_briefing": return briefing.fechar(db, eid, args.quem || papel);
+    case "ver_catalogo_pecas": return briefing.catalogo(db);
+    case "registrar_pedido_extra":
+      return briefing.pedirExtra(db, {
+        eid: args.evento_id ? parseInt(args.evento_id, 10) : null,
+        pedido: args.pedido,
+        quem: args.quem || papel,
+      });
+
     case "listar_participantes": {
       const { results } = await db.prepare(`
         SELECT c.id, c.grupo, c.nome, c.cpf, c.telefone, c.tipo, c.camiseta, c.utv, c.nf,
