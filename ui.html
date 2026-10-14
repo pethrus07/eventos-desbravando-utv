@@ -443,7 +443,7 @@ $("lbtn").onclick = function(){
     localStorage.setItem("ev_key", k);
     localStorage.setItem("ev_nome", n); NOME = n;
     $("login").classList.add("hide"); $("app").classList.remove("hide");
-    route();
+    carregarMeus().then(route);
   }).catch(function(e){ KEY=""; toast(e.message, true); });
 };
 $("lkey").addEventListener("keydown", function(e){ if(e.key==="Enter") $("lnome").focus(); });
@@ -466,13 +466,41 @@ function route(){
   if (h === "#/tarefas") return telaTarefas();
   if (h === "#/crm") return telaCRM();
   if (h === "#/fornecedores") return telaFornecedores();
+  if (h === "#/usuarios") return telaUsuarios();
   telaHome();
 }
 
 /* nav das três áreas (home) */
+/* MEUS: o que ESTE usuário enxerga, vindo de /api/meus-modulos (v4.8). Enquanto a migração
+   não roda, fica null e vale o PAPEL de sempre — é o que mantém a tela igual no dia do
+   deploy. `podeVer` e `podeEditar` são as únicas perguntas que o resto da interface faz. */
+var MEUS = null;
+function podeVer(mod){
+  if (!MEUS) return PAPEL === "admin" || ["eventos","checklist","operacao","campo","agenda","hospedagem","tarefas"].indexOf(mod) >= 0;
+  return MEUS.modulos.some(function(m){ return m.slug === mod; });
+}
+function podeEditar(mod){
+  if (!MEUS) return PAPEL === "admin" || ["checklist","operacao","campo","hospedagem","tarefas"].indexOf(mod) >= 0;
+  return MEUS.modulos.some(function(m){ return m.slug === mod && m.editar; });
+}
+
+/* Carrega o que este usuario enxerga. NUNCA rejeita: antes da migracao a rota nao existe,
+   e a interface tem de continuar desenhando exatamente como desenhava. Ha dois pontos de
+   login (o botao e o auto-login do localStorage), e por isso isto e funcao e nao codigo
+   repetido nos dois -- duplicar daria a chance de um sair do passo do outro. */
+function carregarMeus(){
+  return api("/api/meus-modulos")
+    .then(function(mm){ MEUS = mm; })
+    .catch(function(){ MEUS = null; });
+}
+
 function navAreas(cur){
-  var T = [["#/","Eventos"],["#/tarefas","Tarefas"]];
-  if (PAPEL === "admin") T.push(["#/crm","CRM"], ["#/fornecedores","Fornecedores"]);
+  var T = [];
+  if (podeVer("eventos")) T.push(["#/","Eventos"]);
+  if (podeVer("tarefas")) T.push(["#/tarefas","Tarefas"]);
+  if (podeVer("crm")) T.push(["#/crm","CRM"]);
+  if (podeVer("fornecedores")) T.push(["#/fornecedores","Fornecedores"]);
+  if (MEUS ? MEUS.principal : PAPEL === "admin") T.push(["#/usuarios","Usuários"]);
   return '<div class="tabs" style="margin-top:14px;margin-bottom:0">' + T.map(function(t){
     return '<button class="tab'+(cur===t[0]?' on':'')+'" data-nav="'+t[0]+'">'+t[1]+'</button>';
   }).join("") + '</div>';
@@ -629,9 +657,15 @@ function itensFiltrados(){
 
 function renderEvento(aba){
   var ev = EV.evento, s = stats(EV.itens);
-  var TABS = [["","Checklist"],["operacao","Operação"],["campo","Campo"],["agenda","Agenda"]];
-  if (PAPEL === "admin") TABS.push(["custos","Custos"],["participantes","Participantes"],["simulador","Simulador"],["cardapio","Cardápio"]);
-  TABS.push(["hospedagem","Hospedagem"]);
+  /* v4.8: a aba so aparece se o usuario tiver "ver" no modulo. Sem MEUS carregado, o
+     podeVer() devolve exatamente o que o PAPEL devolvia antes — a tela nao muda. */
+  var TABS = [];
+  [["","checklist","Checklist"],["operacao","operacao","Operação"],["campo","campo","Campo"],
+   ["agenda","agenda","Agenda"],["custos","custos","Custos"],["participantes","participantes","Participantes"],
+   ["simulador","simulador","Simulador"],["cardapio","cardapio","Cardápio"],
+   ["hospedagem","hospedagem","Hospedagem"]].forEach(function(t){
+    if (podeVer(t[1])) TABS.push([t[0], t[2]]);
+  });
   var tabsHtml = TABS.map(function(t){
     return '<button class="tab'+(aba===t[0]?' on':'')+'" data-tab="'+t[0]+'">'+t[1]+'</button>';
   }).join("");
@@ -1315,6 +1349,182 @@ function sheetFornecedor(f){
       .catch(function(e){ toast(e.message,true); });
   };
   setTimeout(function(){ $("ff_nome").focus(); }, 50);
+}
+
+/* ============================================================
+   Usuários e Permissões (v4.8) — só o administrador principal.
+
+   Visual: nada de novo. Usa o mesmo `kpis`/`kpi`, `btn`/`btn2`, `empty`, `chip`, `row` e o
+   mesmo `abrirSheet()` das outras telas. Uma identidade nova aqui seria a parte da mudança
+   que o cliente notaria primeiro, e é justamente a que ele pediu para não mexer.
+   ============================================================ */
+var USUARIOS = [], MODULOS_SIS = [];
+
+function telaUsuarios(){
+  $("head").innerHTML =
+    '<h1 class="anton">Usuários e Permissões</h1>' +
+    '<p style="color:var(--mut);font-size:14px;margin-top:8px">Quem entra no sistema e o que cada um pode ver ou editar.</p>' +
+    navAreas("#/usuarios");
+  ligarNav();
+  $("main").innerHTML = '<p style="color:var(--dim)">Carregando…</p>';
+  api("/api/usuarios").then(function(j){
+    USUARIOS = j.usuarios || []; MODULOS_SIS = j.modulos || [];
+    renderUsuarios();
+  }).catch(function(e){ $("main").innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; });
+}
+
+function resumoPerms(u){
+  if (u.principal) return '<span class="chip">acesso total</span>';
+  var ks = Object.keys(u.permissoes || {});
+  if (!ks.length) return '<span class="chip" style="opacity:.6">sem acesso liberado</span>';
+  var edita = ks.filter(function(k){ return u.permissoes[k] === "editar"; }).length;
+  return '<span class="chip">'+ks.length+' módulo'+(ks.length>1?'s':'')+'</span>' +
+         (edita ? ' <span class="chip">'+edita+' com edição</span>' : '');
+}
+
+function renderUsuarios(){
+  var ativos = USUARIOS.filter(function(u){ return u.ativo; }).length;
+  $("main").innerHTML =
+    '<div class="kpis">' +
+      '<div class="kpi"><small>Usuários</small><b>'+USUARIOS.length+'</b></div>' +
+      '<div class="kpi"><small>Ativos</small><b>'+ativos+'</b></div>' +
+      '<div class="kpi"><small>Módulos no sistema</small><b>'+MODULOS_SIS.length+'</b></div>' +
+    '</div>' +
+    '<div id="us_lista"></div>' +
+    '<button class="btn" id="us_add" style="width:100%;margin-top:14px">+ Criar usuário</button>';
+
+  $("us_lista").innerHTML = USUARIOS.map(function(u){
+    return '<div class="evcard" style="cursor:default;opacity:'+(u.ativo?'1':'.55')+'">' +
+      '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px">' +
+        '<div style="min-width:0">' +
+          '<b>'+esc(u.nome)+'</b>' + (u.ativo ? '' : ' <span class="chip">inativo</span>') +
+          '<div style="margin-top:6px">'+resumoPerms(u)+'</div>' +
+          (u.observacao ? '<div style="color:var(--mut);font-size:12px;margin-top:6px">'+esc(u.observacao)+'</div>' : '') +
+        '</div>' +
+        (u.principal ? '<span class="chip">principal</span>'
+                     : '<button class="btn2" data-ued="'+u.id+'">Editar</button>') +
+      '</div></div>';
+  }).join("") || '<div class="empty">Nenhum usuário ainda.</div>';
+
+  $("us_add").onclick = function(){ sheetUsuario(null); };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-ued]"), function(b){
+    b.onclick = function(){
+      var id = +b.getAttribute("data-ued");
+      sheetUsuario(USUARIOS.filter(function(u){ return u.id === id; })[0]);
+    };
+  });
+}
+
+function sheetUsuario(u){
+  var novo = !u;
+  u = u || { nome: "", ativo: true, permissoes: {}, observacao: "" };
+  var grupos = {};
+  MODULOS_SIS.forEach(function(m){ (grupos[m.grupo] = grupos[m.grupo] || []).push(m); });
+
+  var linhas = Object.keys(grupos).map(function(g){
+    return '<div style="color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin:14px 0 6px">'+esc(g)+'</div>' +
+      grupos[g].map(function(m){
+        var v = u.permissoes[m.slug] || "";
+        return '<div class="row" style="justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08)">' +
+          '<span>'+esc(m.nome)+'</span>' +
+          '<span class="row" style="gap:14px">' +
+            '<label class="row" style="gap:5px"><input type="checkbox" data-ver="'+m.slug+'"'+(v?' checked':'')+'> Ver</label>' +
+            '<label class="row" style="gap:5px"><input type="checkbox" data-ed="'+m.slug+'"'+(v==="editar"?' checked':'')+'> Editar</label>' +
+          '</span></div>';
+      }).join("");
+  }).join("");
+
+  abrirSheet(
+    '<h3 class="anton">'+(novo?'Criar usuário':'Editar '+esc(u.nome))+'</h3>' +
+    '<input id="us_nome" placeholder="Nome da pessoa" value="'+esc(u.nome)+'" style="margin-top:12px">' +
+    '<input id="us_obs" placeholder="Observação (opcional)" value="'+esc(u.observacao||"")+'" style="margin-top:8px">' +
+    (novo ? '' : '<label class="row" style="gap:7px;margin-top:10px"><input type="checkbox" id="us_ativo"'+(u.ativo?' checked':'')+'> Usuário ativo</label>') +
+    '<div class="row" style="gap:8px;margin-top:16px">' +
+      '<button class="btn2" id="us_todos">Marcar tudo</button>' +
+      '<button class="btn2" id="us_nada">Desmarcar tudo</button>' +
+    '</div>' +
+    linhas +
+    '<div class="row" style="gap:8px;margin-top:18px">' +
+      '<button class="btn" id="us_salvar" style="flex:1">Salvar</button>' +
+      (novo ? '' : '<button class="btn2" id="us_chave">Gerar nova chave</button>') +
+      '<button class="btn2" data-close>Cancelar</button>' +
+    '</div>'
+  );
+
+  /* "Editar inclui ver" nao e regra so do servidor: a tela tem de MOSTRAR isso acontecendo,
+     senao o administrador marca Editar, ve Ver desmarcado e acha que ficou pela metade. */
+  function sincronizar(){
+    MODULOS_SIS.forEach(function(m){
+      var ed = document.querySelector('[data-ed="'+m.slug+'"]');
+      var ver = document.querySelector('[data-ver="'+m.slug+'"]');
+      if (!ed || !ver) return;
+      if (ed.checked) { ver.checked = true; ver.disabled = true; } else { ver.disabled = false; }
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-ed],[data-ver]"), function(c){
+    c.onchange = sincronizar;
+  });
+  sincronizar();
+
+  function marcarTodos(valor){
+    return function(e){
+      e.preventDefault();
+      Array.prototype.forEach.call(document.querySelectorAll("[data-ed]"), function(c){ c.checked = valor; });
+      Array.prototype.forEach.call(document.querySelectorAll("[data-ver]"), function(c){ c.disabled = false; c.checked = valor; });
+      sincronizar();
+    };
+  }
+  $("us_todos").onclick = marcarTodos(true);
+  $("us_nada").onclick = marcarTodos(false);
+
+  function coletar(){
+    var p = {};
+    MODULOS_SIS.forEach(function(m){
+      if (document.querySelector('[data-ed="'+m.slug+'"]').checked) p[m.slug] = "editar";
+      else if (document.querySelector('[data-ver="'+m.slug+'"]').checked) p[m.slug] = "ver";
+    });
+    return p;
+  }
+
+  $("us_salvar").onclick = function(){
+    var nome = $("us_nome").value.trim();
+    if (!nome) return toast("Informe o nome", true);
+    var corpo = { nome: nome, observacao: $("us_obs").value.trim(), permissoes: coletar() };
+    if (!novo) corpo.ativo = $("us_ativo").checked;
+    var p = novo ? api("/api/usuarios", "POST", corpo) : api("/api/usuarios/"+u.id, "PATCH", corpo);
+    p.then(function(r){
+      fecharSheet();
+      if (r && r.chave) mostrarChave(nome, r.chave);
+      else toast("Usuário atualizado");
+      telaUsuarios();
+    }).catch(function(e){ toast(e.message, true); });
+  };
+
+  if (!novo) $("us_chave").onclick = function(){
+    api("/api/usuarios/"+u.id+"/chave", "POST", {}).then(function(r){
+      fecharSheet(); mostrarChave(u.nome, r.chave);
+    }).catch(function(e){ toast(e.message, true); });
+  };
+}
+
+/* A chave aparece UMA vez — nao e guardada, so o hash dela. Por isso esta tela insiste:
+   fechar sem copiar significa gerar outra, e a antiga ja nao vale. */
+function mostrarChave(nome, chave){
+  abrirSheet(
+    '<h3 class="anton">Chave de '+esc(nome)+'</h3>' +
+    '<p style="color:var(--mut);font-size:13px;margin-top:10px">Copie agora e entregue à pessoa. ' +
+    'Esta chave <b>não fica guardada</b> e não aparece de novo — se perder, é só gerar outra.</p>' +
+    '<div style="margin-top:12px;font-size:18px;letter-spacing:.08em;text-align:center;padding:14px;' +
+    'border:1px solid rgba(255,255,255,.14);border-radius:10px;font-family:ui-monospace,monospace">'+esc(chave)+'</div>' +
+    '<div class="row" style="gap:8px;margin-top:16px">' +
+      '<button class="btn" id="ch_copiar" style="flex:1">Copiar chave</button>' +
+      '<button class="btn2" data-close>Fechar</button>' +
+    '</div>'
+  );
+  $("ch_copiar").onclick = function(){
+    navigator.clipboard.writeText(chave).then(function(){ toast("Chave copiada"); })
+      .catch(function(){ toast("Copie à mão: o navegador bloqueou a área de transferência", true); });
+  };
 }
 
 function telaFornecedores(){
@@ -3244,7 +3454,7 @@ if (KEY){
   $("lnome").value = NOME;
   api("/api/me").then(function(me){
     PAPEL = me.papel || "equipe";
-    $("app").classList.remove("hide"); route();
+    $("app").classList.remove("hide"); carregarMeus().then(route);
   }).catch(function(){ /* logout já tratado no 401 */ 
     $("login").classList.remove("hide");
   });
