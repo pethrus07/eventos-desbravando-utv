@@ -34,6 +34,7 @@
 import UI_HTML from "./ui.html";
 import { handleMcp } from "./mcp.js";
 import { registrar, mudaEstado, resultadoDoStatus } from "./auditoria.js";
+import { usuarioDaChave, avaliar, modulosVisiveis } from "./permissoes.js";
 import { handleCardapio, limparPerguntas, respostasCsv, PERGUNTAS_PADRAO } from "./cardapio.js";
 
 const CORS = {
@@ -322,6 +323,37 @@ async function tratar(request, env) {
 
     const quem = papel(request, env);
     if (!quem) return json({ erro: "chave inválida" }, 401);
+
+    /* PERMISSÃO POR MÓDULO (v4.8, 14/10/2026) — camada NOVA, por cima da antiga.
+
+       A checagem de papel que existe abaixo (`if (!admin) return negado()`, 33 vezes) NÃO foi
+       removida: ela continua sendo o piso. Esta camada só acrescenta restrição, nunca
+       permissão — um usuário com "editar" em custos ainda esbarra no portão de admin se a
+       rota for de admin. Tirar as duas coisas de uma vez seria trocar o piso e o teto no
+       mesmo deploy, num sistema em produção com CPF dentro.
+
+       Se a tabela `usuarios` ainda não existir (código publicado antes da migração, que é o
+       que sempre acontece), `usuarioDaChave` estoura e caímos no modelo antigo. É de
+       propósito: o sistema fica de pé entre um deploy e outro. */
+    let usuario = null;
+    try {
+      /* `env.DB` e não `db`: a const `db` só é declarada mais abaixo, e usá-la aqui seria
+         erro de execução que o `node --check` não pega — só a primeira requisição pegaria. */
+      usuario = await usuarioDaChave(env.DB, request.headers.get("x-app-key") || "", env);
+    } catch { /* tabela ainda não migrada — segue no modelo de papel */ }
+
+    if (usuario) {
+      if (path === "/api/meus-modulos") return json({ nome: usuario.nome, modulos: modulosVisiveis(usuario) });
+      const v = avaliar(usuario, path, method);
+      if (!v.permitido) {
+        await registrar(env.DB, {
+          papel: usuario.nome, porta: "painel", acao: `${method} ${path}`,
+          alvo: v.modulo, resumo: v.motivo, resultado: "negado",
+        });
+        return json({ erro: "sem permissão para este módulo", modulo: v.modulo, exige: v.nivel }, 403);
+      }
+    }
+
     const admin = quem === "admin";
     const db = env.DB;
     const negado = () => json({ erro: "disponível apenas para a chave admin" }, 403);

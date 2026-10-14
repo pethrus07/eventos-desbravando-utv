@@ -301,5 +301,72 @@ const RESPOSTAS_BRIEFING = {
   else ok("S3 · pedido fora do catálogo nasce inerte (0 trabalho criado)");
 }
 
-console.log(falhas.length ? `\n${falhas.length} falha(s). NÃO PUBLIQUE.` : "\nS0 e S1 passam — pode publicar.");
+/* ---------------------------------------------- v4.8 · usuários e permissões */
+import { moduloDaRota, pode, avaliar, modulosVisiveis, MODULOS } from "../permissoes.js";
+
+{
+  /* Rota que ninguém mapeou é NEGADA. Se isto inverter, todo módulo novo nasce aberto. */
+  const desconhecida = moduloDaRota("/api/modulo-que-nao-existe/9");
+  const livre = moduloDaRota("/api/me");
+  const sub = moduloDaRota("/api/eventos/13/custos");
+  if (desconhecida !== false) falhou("v4.8 · rota não mapeada é negada", `devolveu ${desconhecida}`);
+  else if (livre !== null) falhou("v4.8 · /api/me é livre", `devolveu ${livre}`);
+  else if (sub !== "custos") falhou("v4.8 · sub-rota manda sobre a raiz", `devolveu ${sub}`);
+  else ok("v4.8 · rota desconhecida nega · /api/me livre · sub-rota manda");
+}
+
+{
+  const soVer = { nome: "Ana", principal: false, permissoes: { participantes: "ver" } };
+  const edita = { nome: "João", principal: false, permissoes: { participantes: "editar" } };
+  const principal = { nome: "Admin", principal: true, permissoes: {} };
+  const novo = { nome: "Recém-criado", principal: false, permissoes: {} };
+
+  const casos = [
+    [soVer, "/api/clientes/4", "GET", true, "ver permite ler"],
+    [soVer, "/api/clientes/4", "PATCH", false, "ver NÃO permite escrever"],
+    [soVer, "/api/clientes/4", "DELETE", false, "ver NÃO permite apagar"],
+    [edita, "/api/clientes/4", "PATCH", true, "editar permite escrever"],
+    [edita, "/api/clientes/4", "GET", true, "editar inclui ver"],
+    [soVer, "/api/custos/9", "GET", false, "módulo sem permissão é invisível"],
+    [principal, "/api/custos/9", "DELETE", true, "principal passa em tudo"],
+    [novo, "/api/clientes/4", "GET", false, "usuário novo começa sem nada"],
+  ];
+  const erros = casos.filter(([u, c, m, esperado]) => avaliar(u, c, m).permitido !== esperado);
+  if (erros.length) falhou("v4.8 · matriz ver/editar", erros.map((e) => e[4]).join(" · "));
+  else ok(`v4.8 · matriz ver/editar (${casos.length} casos, inclusive "editar inclui ver")`);
+}
+
+{
+  const soVer = { nome: "Ana", principal: false, permissoes: { participantes: "ver", checklist: "editar" } };
+  const vis = modulosVisiveis(soVer);
+  const principal = modulosVisiveis({ principal: true, permissoes: {} });
+  if (vis.length !== 2) falhou("v4.8 · só os módulos liberados aparecem", `${vis.length} visíveis, esperava 2`);
+  else if (vis.find((m) => m.slug === "participantes").editar) falhou("v4.8 · visíveis marca quem edita", "marcou editar em quem só vê");
+  else if (principal.length !== MODULOS.length) falhou("v4.8 · principal vê tudo", `${principal.length} de ${MODULOS.length}`);
+  else ok(`v4.8 · módulo sem permissão não aparece (2 de ${MODULOS.length}; principal vê ${principal.length})`);
+}
+
+{
+  /* Permissão NÃO pode conceder: o portão de admin continua sendo o piso. */
+  const db = banco({ "FROM usuarios WHERE chave_hash": { id: 9, nome: "Ana", principal: 0, ativo: 1, permissoes: '{"custos":"editar"}' } });
+  const r = await worker.fetch(pedir("/api/custos/4", { metodo: "PATCH", chave: CHAVE_EQUIPE, corpo: {} }), { ...env, DB: db });
+  if (r.status !== 403) falhou("v4.8 · permissão não fura o portão de admin", `status ${r.status}, esperava 403`);
+  else ok("v4.8 · permissão não CONCEDE — o portão de admin continua o piso");
+}
+
+{
+  /* A rede de segurança: sem a tabela migrada, o sistema segue no modelo antigo. */
+  const db = {
+    prepare(sql) {
+      if (/FROM usuarios/.test(sql)) throw new Error("no such table: usuarios");
+      return banco(RESPOSTAS_EVENTO).prepare(sql);
+    },
+    feito: [],
+  };
+  const r = await worker.fetch(pedir("/api/eventos/13", { metodo: "DELETE", corpo: {} }), { ...env, DB: db });
+  if (r.status !== 400) falhou("v4.8 · sem a migração, cai no modelo antigo", `status ${r.status}, esperava 400`);
+  else ok("v4.8 · sem a migração aplicada, o sistema continua de pé no modelo antigo");
+}
+
+console.log(falhas.length ? `\n${falhas.length} falha(s). NÃO PUBLIQUE.` : "\nS0, S1, S2, S3 e permissoes passam — pode publicar.");
 process.exit(falhas.length ? 1 : 0);
