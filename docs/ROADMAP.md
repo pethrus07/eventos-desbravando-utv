@@ -232,3 +232,26 @@ núcleo serve os próximos.
 | **Migração de infra no meio da temporada** | S4 cai depois da Origens e antes da virada do ciclo; backup e janela combinada com o cliente |
 | **O cliente não usar o briefing** | é a hipótese central do acordo. O sinal de alerta é a primeira expedição em que o pedido voltar a chegar por mensagem — e a resposta é conversa, não exceção silenciosa |
 | **Expedição fora de hora** | semana de expedição é semana sem sprint. Duas expedições no mesmo mês empurram o roadmap, e isso é esperado |
+
+---
+
+## 🔴 14/10/2026 — este roadmap foi escrito contra o repositório errado
+
+Ao aplicar a `migracao_v4_8` descobriu-se que **o checkout não era a produção**: 53 tabelas
+contra 25, módulo financeiro com 264 contas a receber, anexos, programação, e **login com
+perfis e sessões já prontos**. O fonte foi recuperado do que está no ar e o repositório
+voltou a ser a verdade (`f071b70`).
+
+**Consequências para este plano:**
+
+- **S6 (regras nas duas portas) está FEITO** — a produção já tem `pode()`, perfis e sessões.
+  O que o cliente pediu em 14/10 é mudar de perfil para individual: **6–10 h de evolução**,
+  não as 40 h de projeto que eu havia orçado.
+- **S0, S1, S2 e S3 foram reaplicados sobre a base certa e PUBLICADOS** em 14/10, versão
+  `ffcea15b`. A auditoria foi conferida em produção: um `POST` negado gravou a linha.
+- **S4** (chave da RYZE) perde sentido como estava: a produção tem login com sessão, não
+  chave de papel. Reescrever quando for a vez.
+- **S5** (arquivamento) e **S7** (render em lote) seguem de pé, sem mudança.
+
+🛑 **O risco que continua:** a versão de 08/10 não saiu desta máquina. Enquanto não se souber
+de onde a outra cópia publica, qualquer deploy dela apaga o que foi feito aqui.
