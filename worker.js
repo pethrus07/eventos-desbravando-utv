@@ -1451,6 +1451,28 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
       return json({ ok: true });
     }
     if (method === "DELETE") {
+      /* CONFIRMACAO EM DUAS ETAPAS — reaplicada em 14/10/2026 sobre a base de producao.
+         Esta chamada limpa 15 tabelas em cascata, inclusive `clientes` com CPF, e nao ha
+         lixeira: o que sai daqui nao volta. Permissao protege contra quem nao devia estar
+         aqui; nao protege contra o engano de quem devia, nem contra um assistente com a
+         sessao aberta. A primeira tentativa devolve a contagem do que sumiria — quem
+         confirma teve de ler o que ia destruir. */
+      const evAlvo = await db.prepare("SELECT nome FROM eventos WHERE id=?").bind(id).first();
+      if (!evAlvo) return json({ erro: "expedicao nao encontrada" }, 404);
+      const corpoConf = await request.json().catch(() => ({}));
+      if (String(corpoConf.confirmar ?? "").trim() !== evAlvo.nome) {
+        const contar = async (q) => (await db.prepare(q).bind(id).first())?.n ?? 0;
+        return json({
+          erro: "confirmacao necessaria",
+          detalhe: `Isto apaga a expedicao "${evAlvo.nome}" e tudo que depende dela, sem volta. Para confirmar, repita o nome exato em "confirmar".`,
+          nome_esperado: evAlvo.nome,
+          seria_apagado: {
+            clientes: await contar("SELECT COUNT(*) n FROM clientes WHERE evento_id=?"),
+            custos: await contar("SELECT COUNT(*) n FROM custos WHERE evento_id=?"),
+            pagamentos: await contar("SELECT COUNT(*) n FROM pagamentos WHERE cliente_id IN (SELECT id FROM clientes WHERE evento_id=?)")
+          }
+        }, 400);
+      }
       await db.prepare("DELETE FROM pagamentos WHERE cliente_id IN (SELECT id FROM clientes WHERE evento_id=?)").bind(id).run();
       await db.prepare("DELETE FROM cliente_notas WHERE cliente_id IN (SELECT id FROM clientes WHERE evento_id=?)").bind(id).run();
       await db.prepare("DELETE FROM alocacoes WHERE quarto_id IN (SELECT id FROM quartos WHERE evento_id=?)").bind(id).run();

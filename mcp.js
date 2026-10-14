@@ -2,6 +2,8 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
+import * as briefing from "./briefing.js";
+
 var enc = new TextEncoder();
 var dec = new TextDecoder();
 var CORS = {
@@ -73,6 +75,19 @@ function minHhmm(t) {
 }
 __name(minHhmm, "minHhmm");
 var TOOLS = [
+  { name: "abrir_briefing", role: "both", description: "Abre o briefing de comunicacao de uma expedicao. O sistema PRE-PREENCHE o que ja sabe (dias, programacao, cardapio, camiseta, hospedagem) e voce completa so o que faltar. Comece por aqui.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" } }, required: ["evento_id"] } },
+  { name: "ver_briefing", role: "both", description: "Mostra o briefing: o que ja foi preenchido, se veio do sistema ou de uma pessoa, e quais campos obrigatorios faltam.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" } }, required: ["evento_id"] } },
+  { name: "preencher_briefing", role: "both", description: "Grava varios campos de uma vez. So aceita campos do catalogo; o que nao existir volta na lista de recusados.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, valores: { type: "array", items: { type: "object", properties: { peca: { type: "string" }, campo: { type: "string" }, valor: { type: "string" } }, required: ["peca","campo","valor"] } } }, required: ["evento_id","valores"] } },
+  { name: "fechar_briefing", role: "both", description: "Fecha e TRAVA o briefing. So fecha se todos os obrigatorios estiverem preenchidos. E neste momento que o prazo de 5 dias uteis comeca a correr.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, quem: { type: "string" } }, required: ["evento_id"] } },
+  { name: "ver_catalogo_pecas", role: "both", description: "As pecas que entram no pacote da expedicao. E a lista fechada: o que nao esta aqui e orcado a parte.",
+    inputSchema: { type: "object", properties: {} } },
+  { name: "registrar_pedido_extra", role: "both", description: "Registra um pedido de ORCAMENTO para algo fora do catalogo. NAO produz nada e NAO entra em fila: grava e para. A RYZE responde com o valor.",
+    inputSchema: { type: "object", properties: { pedido: { type: "string" }, evento_id: { type: "integer" }, quem: { type: "string" } }, required: ["pedido"] } },
+
   // ----- Panorama -----
   {
     name: "listar_expedicoes",
@@ -305,6 +320,13 @@ async function runTool(name, args, env, papel2) {
   const admin = papel2 === "admin";
   const eid = args && args.evento_id != null ? parseInt(args.evento_id, 10) : null;
   switch (name) {
+    case "abrir_briefing": return briefing.abrir(db, parseInt(args.evento_id, 10));
+    case "ver_briefing": return briefing.ver(db, parseInt(args.evento_id, 10));
+    case "preencher_briefing": return briefing.preencher(db, parseInt(args.evento_id, 10), args.valores);
+    case "fechar_briefing": return briefing.fechar(db, parseInt(args.evento_id, 10), args.quem || papel2);
+    case "ver_catalogo_pecas": return briefing.catalogo(db);
+    case "registrar_pedido_extra":
+      return briefing.pedirExtra(db, { eid: args.evento_id ? parseInt(args.evento_id, 10) : null, pedido: args.pedido, quem: args.quem || papel2 });
     case "listar_expedicoes": {
       const { results } = await db.prepare(`
         SELECT e.id, e.nome,
