@@ -225,5 +225,81 @@ const RESPOSTAS_TAREFA = {
   else ok("S1 · corpo da requisição não chega ao log");
 }
 
+/* ---------------------------------------------- S2/S3 · briefing de comunicação */
+const CATALOGO = [
+  {
+    slug: "cronograma_dia", nome: "Cronograma por dia", oque: "uma peça por dia",
+    campos: JSON.stringify([
+      { campo: "agenda", rotulo: "Agenda", origem: "sistema", obrigatorio: 1 },
+      { campo: "briefing_hora", rotulo: "Hora do briefing", origem: "pessoa", obrigatorio: 0 },
+    ]),
+  },
+  {
+    slug: "carta", nome: "Carta de boas-vindas", oque: "a carta da chegada",
+    campos: JSON.stringify([{ campo: "texto", rotulo: "Texto", origem: "pessoa", obrigatorio: 1 }]),
+  },
+];
+
+const RESPOSTAS_BRIEFING = {
+  "FROM catalogo_pecas": CATALOGO,
+  "FROM briefing WHERE evento_id": { id: 1, evento_id: 13, status: "aberto", fechado_em: null },
+  "FROM campo_tarefas t": [{ dia: "Sexta", hora: "08h30", nome: "Saída" }],
+  "FROM briefing_campo WHERE briefing_id": [],
+};
+
+{
+  const db = banco(RESPOSTAS_BRIEFING);
+  const out = await chamarMcp("abrir_briefing", { evento_id: 13 }, CHAVE_EQUIPE, db);
+  /* 'sistema' é literal no SQL, não argumento ligado — procurar em `args` falhava sempre. */
+  const deduziu = db.feito.some((f) => /INSERT INTO briefing_campo/.test(f.sql) && /'sistema'/.test(f.sql));
+  if (!out?.existe) falhou("S2 · abrir_briefing responde", JSON.stringify(out).slice(0, 90));
+  else if (!deduziu) falhou("S2 · pré-preenche do que o sistema sabe", "nenhum campo com origem=sistema");
+  else ok("S2 · abrir_briefing pré-preenche do que o sistema já sabe");
+}
+
+{
+  const db = banco(RESPOSTAS_BRIEFING);
+  const out = await chamarMcp(
+    "preencher_briefing",
+    { evento_id: 13, valores: [{ peca: "carta", campo: "texto", valor: "Bem-vindo" }, { peca: "carta", campo: "inventado", valor: "x" }] },
+    CHAVE_EQUIPE, db
+  );
+  if (out?.gravados !== 1) falhou("S2 · campo fora do catálogo é recusado", `gravados=${out?.gravados}`);
+  else if (out.recusados?.length !== 1) falhou("S2 · campo fora do catálogo é recusado", "o inventado passou");
+  else ok("S2 · grava o que existe e DEVOLVE o campo inventado");
+}
+
+{
+  const db = banco(RESPOSTAS_BRIEFING);
+  const out = await chamarMcp("fechar_briefing", { evento_id: 13 }, CHAVE_EQUIPE, db);
+  const travou = db.feito.some((f) => /UPDATE briefing SET status='fechado'/.test(f.sql));
+  if (out?.fechado !== false) falhou("S3 · não fecha com obrigatório vazio", JSON.stringify(out).slice(0, 80));
+  else if (travou) falhou("S3 · não fecha com obrigatório vazio", "travou mesmo assim");
+  else ok(`S3 · não fecha com campo obrigatório vazio (${out.faltando.length} faltando)`);
+}
+
+{
+  const db = banco({
+    ...RESPOSTAS_BRIEFING,
+    "FROM briefing_campo WHERE briefing_id": [
+      { peca: "cronograma_dia", campo: "agenda", valor: "Sexta 08h30", origem: "sistema" },
+      { peca: "carta", campo: "texto", valor: "Bem-vindo", origem: "pessoa" },
+    ],
+  });
+  const out = await chamarMcp("fechar_briefing", { evento_id: 13, quem: "Gustavo" }, CHAVE_EQUIPE, db);
+  const travou = db.feito.some((f) => /UPDATE briefing SET status='fechado'/.test(f.sql));
+  if (out?.fechado !== true || !travou) falhou("S3 · fecha e trava quando completo", JSON.stringify(out).slice(0, 80));
+  else ok("S3 · fecha e trava quando está completo (o prazo começa aqui)");
+}
+
+{
+  const db = banco({});
+  const out = await chamarMcp("registrar_pedido_extra", { pedido: "um banner gigante pro portal" }, CHAVE_EQUIPE, db);
+  const virouTrabalho = db.feito.some((f) => /INSERT INTO (briefing_campo|itens|tarefas)/.test(f.sql));
+  if (out?.status !== "pendente_orcamento") falhou("S3 · pedido extra nasce inerte", JSON.stringify(out).slice(0, 80));
+  else if (virouTrabalho) falhou("S3 · pedido extra nasce inerte", "virou trabalho em alguma tabela");
+  else ok("S3 · pedido fora do catálogo nasce inerte (0 trabalho criado)");
+}
+
 console.log(falhas.length ? `\n${falhas.length} falha(s). NÃO PUBLIQUE.` : "\nS0 e S1 passam — pode publicar.");
 process.exit(falhas.length ? 1 : 0);

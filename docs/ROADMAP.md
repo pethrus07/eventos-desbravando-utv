@@ -94,8 +94,8 @@ certo e a porta certa.
 > **20–26/10 — Expedição Origens. Semana sem sprint.** O sistema vai estar em uso de campo e
 > o Pedro em plantão. Semana de observar, não de mexer.
 
-## S2 · O briefing nasce
-**27/10–02/11 · 8–10 h · é aqui que o dinheiro está**
+## 🟡 S2 · O briefing nasce
+**Núcleo entregue em 14/10** — tabelas, catálogo, pré-preenchimento e as ferramentas. ⚠️ Falta a **aba Briefing no painel** e aplicar a `migracao_v4_7.sql` em produção.
 
 O catálogo de 10 peças deixa de ser texto no acordo e vira estrutura. E o briefing nasce
 **meio preenchido**: datas, dias, programação, cardápio e bebidas já estão no banco — a maior
@@ -109,8 +109,8 @@ parte do tempo gasto hoje é recolher e transcrever informação que o sistema j
 **Portão:** abrir o briefing de uma expedição real e encontrar **pelo menos 60% dos campos já
 preenchidos** sem ninguém ter digitado nada.
 
-## S3 · O Claude do cliente entra
-**03–09/11 · 6–8 h · fecha a promessa de "briefing no ar em novembro"**
+## 🟡 S3 · O Claude do cliente entra
+**Ferramentas entregues em 14/10** — as 5 do briefing + `registrar_pedido_extra` inerte. ⚠️ Falta a **instrução que o cliente cola no Claude dele** e o deploy.
 
 - `abrir_briefing`, `ver_briefing`, `preencher_briefing`, `fechar_briefing`, `baixar_pecas`
 - `fechar_briefing` **valida a completude e trava** — é o instante em que o prazo começa a
