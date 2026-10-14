@@ -67,7 +67,12 @@ var MODULOS = [
   { id: "etapas", nome: "Etapas", grupo: "Cadastros", acoes: ACVCEX },
   { id: "categorias", nome: "Categorias", grupo: "Cadastros", acoes: ACVCEX },
   { id: "centros_custo", nome: "Centros de Custo", grupo: "Cadastros", acoes: ACVCEX },
-  { id: "prazos_padrao", nome: "Prazos Padr\xE3o", grupo: "Cadastros", acoes: ["acessar", "visualizar", "editar"] }
+  { id: "prazos_padrao", nome: "Prazos Padr\xE3o", grupo: "Cadastros", acoes: ["acessar", "visualizar", "editar"] },
+  /* Comunicacao: o briefing das pecas da expedicao. Sem "criar" nem "excluir" porque o
+     briefing nao se cria nem se apaga a mao -- ele nasce com a expedicao e e fechado.
+     Precisa estar AQUI, e nao so na interface: o painel filtra as abas por pode(), entao
+     modulo que o servidor nao conhece e aba que nao aparece para ninguem. */
+  { id: "comunicacao", nome: "Comunica\xE7\xE3o", grupo: "Dentro do evento", desc: "Briefing das pe\xE7as da expedi\xE7\xE3o e download do pacote", acoes: ["acessar", "visualizar", "editar", "exportar"] }
 ];
 var MODULOS_DO_EVENTO = new Set(MODULOS.filter((m) => m.grupo === "Dentro do evento").map((m) => m.id));
 function todasPermissoes() {
