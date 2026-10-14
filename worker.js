@@ -1205,18 +1205,32 @@ var worker_default = {
      O `fetch` é o único ponto por onde tudo passa; só escrita entra no log, e o corpo da
      requisição NUNCA entra (o sistema guarda CPF). Ver auditoria.js. */
   async fetch(request, env) {
-    if (!mudaEstado(request.method)) return tratarPedido(request, env);
-    const caminho = new URL(request.url).pathname;
-    const resposta = await tratarPedido(request, env);
-    if (!caminho.startsWith("/mcp") && !caminho.startsWith("/oauth")) {
-      await registrar(env.DB, {
-        papel: request.headers.get("x-app-key") ? "chave" : "sessão",
-        porta: "painel",
-        acao: `${request.method} ${caminho}`,
-        resultado: resultadoDoStatus(resposta.status),
-      });
+    /* ENVELOPE DE ERRO — 14/10/2026. Até hoje nada aqui era capturado: qualquer exceção subia
+       até o runtime, nenhuma resposta voltava, e o navegador escrevia "Failed to fetch". Foi
+       exatamente o que o cliente viu ao abrir a aba Comunicação (tabela do briefing ausente),
+       e é o pior modo de falhar que existe: a tela some, o erro não diz nada e o monitoramento
+       continua verde, porque o resto do worker responde 200.
+
+       Erro agora vira resposta: 500 com a mensagem em JSON, que é o que o painel sabe mostrar.
+       O corpo da requisição NUNCA entra aqui nem no log (o sistema guarda CPF) — só a mensagem
+       da exceção, cortada. `return await` é obrigatório: sem o await o catch não vê nada. */
+    try {
+      if (!mudaEstado(request.method)) return await tratarPedido(request, env);
+      const caminho = new URL(request.url).pathname;
+      const resposta = await tratarPedido(request, env);
+      if (!caminho.startsWith("/mcp") && !caminho.startsWith("/oauth")) {
+        await registrar(env.DB, {
+          papel: request.headers.get("x-app-key") ? "chave" : "sessão",
+          porta: "painel",
+          acao: `${request.method} ${caminho}`,
+          resultado: resultadoDoStatus(resposta.status),
+        });
+      }
+      return resposta;
+    } catch (e) {
+      console.error("falha não tratada:", (e && e.stack) || e);
+      return json({ erro: "falha interna: " + String((e && e.message) || e).slice(0, 200) }, 500);
     }
-    return resposta;
   }
 };
 
