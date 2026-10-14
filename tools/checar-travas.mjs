@@ -154,5 +154,43 @@ const BASE = {
   else ok("briefing · pedido fora do catálogo nasce inerte (0 trabalho criado)");
 }
 
+/* ---------------------------------------------- exceção vira resposta, nunca tela em branco
+
+   14/10/2026: a aba Comunicação subiu para a produção com o código publicado e a migração do
+   briefing NÃO aplicada. `abrir()` estourava com "no such table: briefing", a exceção subia até
+   o runtime, NENHUMA resposta voltava e o navegador escrevia "Failed to fetch". O cliente viu
+   tela vazia; o monitoramento viu 200 em tudo mais e ficou verde.
+
+   Erro que não vira resposta é erro que ninguém consegue ler. */
+{
+  const db = { prepare() { throw new Error("explodiu de propósito"); } };
+  const r = await worker.fetch(pedir("/api/eventos/27/itens"), { ...env, DB: db });
+  const j = await r.json().catch(() => null);
+  if (r.status !== 500 || !j || !/explodiu/.test(j.erro || ""))
+    falhou("worker · exceção vira 500 em JSON", `status ${r.status}`);
+  else ok("worker · exceção em rota vira 500 com JSON (o painel mostra, em vez de sumir)");
+}
+
+/* ---------------------------------------------- o esquema do briefing não descolou da migração
+
+   `briefing.js` garante as próprias tabelas porque deploy e migração são dois atos e nada
+   obriga os dois a acontecerem. O SQL de lá foi EXTRAÍDO de `migracao_v4_7.sql`; se os dois
+   descolarem, o banco que se auto-cura passa a ser diferente do banco migrado à mão — que é a
+   divergência mais cara de achar depois. */
+{
+  const { readFileSync } = await import("node:fs");
+  const ler = (n) => readFileSync(new URL("../" + n, import.meta.url), "utf8");
+  const limpar = (s) => s.replace(/--[^\n]*/g, " ").replace(/\s+/g, " ").trim();
+  const noJs = limpar(ler("briefing.js"));
+  const faltando = limpar(ler("migracao_v4_7.sql"))
+    .split(";")
+    .map(limpar)
+    .filter((i) => i && /^(CREATE|INSERT)/i.test(i))
+    .filter((i) => !noJs.includes(i));
+  if (faltando.length)
+    falhou("briefing · esquema igual ao da migração", faltando.map((i) => i.slice(0, 60)).join(" | "));
+  else ok("briefing · o esquema embutido é o mesmo da migracao_v4_7.sql");
+}
+
 console.log(falhas.length ? `\n${falhas.length} falha(s). NÃO PUBLIQUE.` : "\nTudo que vale para esta base passa.");
 process.exit(falhas.length ? 1 : 0);

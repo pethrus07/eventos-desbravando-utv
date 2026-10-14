@@ -18,8 +18,114 @@
    código, em vez de uma frase num PDF que ninguém relê.
    ============================================================ */
 
+/* ---------------------------------------------------------------- o esquema, garantido
+
+   As quatro tabelas deste módulo nascem em `migracao_v4_7.sql`. Em 14/10/2026 a aba
+   Comunicação chegou à produção com o código publicado e a migração NÃO aplicada — e o modo
+   de falhar foi o pior possível: `abrir()` estourava com "no such table: briefing", a exceção
+   subia até o runtime, nenhuma resposta voltava, e o navegador escrevia "Failed to fetch".
+   Tela vazia, worker respondendo 200 em todo o resto, monitoramento verde.
+
+   Deploy e migração são dois atos, e nada obrigava os dois a acontecerem. Agora o módulo
+   garante o próprio esquema na primeira leitura: todas as instruções são `IF NOT EXISTS` /
+   `OR IGNORE`, então em banco já migrado isto não faz nada, e catálogo editado no banco não é
+   sobrescrito — ele continua morando lá, como foi decidido.
+
+   O SQL abaixo é EXTRAÍDO de `migracao_v4_7.sql`, não redigitado, e `tools/checar-travas.mjs`
+   confere que os dois não descolaram. */
+const ESQUEMA = [
+  `CREATE TABLE IF NOT EXISTS catalogo_pecas (
+  slug   TEXT PRIMARY KEY,
+  nome   TEXT NOT NULL,
+  oque   TEXT NOT NULL,              -- o que o valor cobre, na linguagem do acordo
+  campos TEXT NOT NULL DEFAULT '[]', -- JSON: [{campo, rotulo, origem, obrigatorio}]
+  ordem  INTEGER NOT NULL DEFAULT 0,
+  ativo  INTEGER NOT NULL DEFAULT 1
+)`,
+  `CREATE TABLE IF NOT EXISTS briefing (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  evento_id   INTEGER NOT NULL UNIQUE,
+  status      TEXT NOT NULL DEFAULT 'aberto',   -- aberto | fechado
+  aberto_em   TEXT NOT NULL DEFAULT (datetime('now')),
+  fechado_em  TEXT,
+  fechado_por TEXT
+)`,
+  `CREATE TABLE IF NOT EXISTS briefing_campo (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  briefing_id INTEGER NOT NULL,
+  peca        TEXT NOT NULL,
+  campo       TEXT NOT NULL,
+  valor       TEXT,
+  origem      TEXT NOT NULL DEFAULT 'pessoa',   -- sistema | pessoa
+  UNIQUE (briefing_id, peca, campo)
+)`,
+  `CREATE INDEX IF NOT EXISTS idx_briefing_campo ON briefing_campo(briefing_id, peca)`,
+  `CREATE TABLE IF NOT EXISTS pedido_extra (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  evento_id     INTEGER,
+  pedido        TEXT NOT NULL,
+  status        TEXT NOT NULL DEFAULT 'pendente_orcamento',  -- pendente_orcamento | orcado | aprovado | recusado
+  valor         INTEGER,
+  criado_em     TEXT NOT NULL DEFAULT (datetime('now')),
+  criado_por    TEXT NOT NULL DEFAULT '',
+  respondido_em TEXT
+)`,
+  `CREATE INDEX IF NOT EXISTS idx_pedido_status ON pedido_extra(status, id DESC)`,
+  `INSERT OR IGNORE INTO catalogo_pecas (slug, nome, oque, ordem, campos) VALUES
+ ('adesivo', 'Adesivo', 'adesivo da expedição, em vetor, pronto para a gráfica', 1,
+  '[{"campo":"local","rotulo":"Local no selo","origem":"pessoa","obrigatorio":1},
+    {"campo":"numeros","rotulo":"Números de UTV","origem":"sistema","obrigatorio":1}]'),
+
+ ('contagem', 'Contagem regressiva', 'a série de contagem até a saída, no padrão de redes', 2,
+  '[{"campo":"data_saida","rotulo":"Data da saída","origem":"sistema","obrigatorio":1},
+    {"campo":"marcos","rotulo":"Quantos dias antes publicar","origem":"pessoa","obrigatorio":0}]'),
+
+ ('cardapio', 'Cardápio', 'o cardápio nos formatos de sempre, a partir do que foi escolhido no formulário', 3,
+  '[{"campo":"refeicoes","rotulo":"Refeições e pratos","origem":"sistema","obrigatorio":1}]'),
+
+ ('formulario', 'Formulário', 'o formulário público da expedição no ar, com as respostas no painel', 4,
+  '[{"campo":"perguntas","rotulo":"O que perguntar","origem":"pessoa","obrigatorio":1},
+    {"campo":"prazo","rotulo":"Prazo de resposta","origem":"pessoa","obrigatorio":0}]'),
+
+ ('camiseta', 'Camiseta', 'as estampas da camiseta da expedição, frente e costas', 5,
+  '[{"campo":"frase","rotulo":"Frase ou palavra das costas","origem":"pessoa","obrigatorio":1},
+    {"campo":"tamanhos","rotulo":"Grade de tamanhos","origem":"sistema","obrigatorio":0}]'),
+
+ ('cronograma_geral', 'Cronograma geral', 'a visão da expedição inteira numa peça', 6,
+  '[{"campo":"dias","rotulo":"Dias e trechos","origem":"sistema","obrigatorio":1}]'),
+
+ ('cronograma_dia', 'Cronograma por dia', 'uma peça por dia de expedição, montada da programação do sistema', 7,
+  '[{"campo":"agenda","rotulo":"Agenda de cada dia","origem":"sistema","obrigatorio":1},
+    {"campo":"briefing_hora","rotulo":"Hora do briefing diário","origem":"pessoa","obrigatorio":0}]'),
+
+ ('carta', 'Carta de boas-vindas', 'a carta entregue ao participante na chegada', 8,
+  '[{"campo":"texto","rotulo":"Texto da carta","origem":"pessoa","obrigatorio":1},
+    {"campo":"assinatura","rotulo":"Quem assina","origem":"pessoa","obrigatorio":0}]'),
+
+ ('conduta', 'Off-road consciente', 'o código de conduta na identidade da expedição', 9,
+  '[{"campo":"itens","rotulo":"Itens do código","origem":"pessoa","obrigatorio":0}]'),
+
+ ('guia_logistico', 'Guia logístico', 'o guia com roteiro, pontos de apoio e orientações práticas', 10,
+  '[{"campo":"hospedagem","rotulo":"Hospedagem","origem":"sistema","obrigatorio":1},
+    {"campo":"pontos_apoio","rotulo":"Pontos de apoio","origem":"pessoa","obrigatorio":1},
+    {"campo":"o_que_levar","rotulo":"O que levar","origem":"pessoa","obrigatorio":1}]')`,
+];
+let esquemaOk = false;
+async function garantirEsquema(db) {
+  if (esquemaOk) return;
+  // Caminho normal (banco já migrado): uma leitura barata e nada mais.
+  const tem = await db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='briefing'")
+    .first()
+    .catch(() => null);
+  if (!tem) for (const sql of ESQUEMA) await db.prepare(sql).run();
+  esquemaOk = true;
+}
+
+
 /** Catálogo ativo, em ordem. Vem do banco de propósito — ver migracao_v4_7.sql. */
 export async function catalogo(db) {
+  await garantirEsquema(db);
   const { results } = await db
     .prepare("SELECT slug, nome, oque, campos FROM catalogo_pecas WHERE ativo=1 ORDER BY ordem, slug")
     .all();
@@ -40,13 +146,30 @@ export async function catalogo(db) {
 
 const vazio = (v) => v == null || String(v).trim() === "";
 
+/* Os dias da expedição: primeiro a Operação em Campo, que é onde eles existem com rótulo e
+   data. Quando ela não foi preenchida — como na Origens, que tem 75 clientes e zero dias —
+   ainda dá para dizer o PERÍODO a partir do próprio evento, e isso vale mais que nada: o
+   briefing abre com a moldura certa e a pessoa completa o miolo em vez de começar do zero. */
 async function dosDiasDeCampo(db, eid) {
   const { results } = await db
     .prepare("SELECT rotulo, data FROM campo_dias WHERE evento_id=? ORDER BY ordem, id")
     .bind(eid)
     .all();
-  if (!results?.length) return null;
-  return results.map((d) => [d.rotulo, d.data].filter(Boolean).join(" · ")).join("\n");
+  if (results?.length) return results.map((d) => [d.rotulo, d.data].filter(Boolean).join(" · ")).join("\n");
+
+  const ev = await db
+    .prepare("SELECT data_evento, data_evento_fim, hospedagem_diarias FROM eventos WHERE id=?")
+    .bind(eid)
+    .first();
+  if (vazio(ev?.data_evento)) return null;
+  const fim = vazio(ev.data_evento_fim) ? null : ev.data_evento_fim;
+  const noites = Number(ev.hospedagem_diarias) || 0;
+  return (
+    `Início: ${ev.data_evento}` +
+    (fim ? ` · Fim: ${fim}` : "") +
+    (noites ? ` · ${noites} noite${noites > 1 ? "s" : ""} de hospedagem` : "") +
+    "\n(os dias ainda não foram cadastrados em Operação em Campo)"
+  );
 }
 
 async function daAgendaPorDia(db, eid) {
@@ -68,11 +191,15 @@ async function daAgendaPorDia(db, eid) {
     .join("\n");
 }
 
-/* A tabela `eventos` tem só id, nome, criado_em e arquivado — não guarda data nenhuma.
-   A data de saída da expedição vive no PRIMEIRO dia da Operação em Campo. Escrevi
-   `eventos.data_inicio` na primeira versão e teria falhado calado, porque o DEDUZ engole
-   erro de dedução de propósito: o preço de inventar campo é a dedução sumir sem avisar. */
+/* A data da expedição vive em `eventos.data_evento`. Escrevi este campo duas vezes errado,
+   e as duas pelo mesmo motivo: li a descrição do banco em vez do banco.
+   1ª — `eventos.data_inicio`, coluna que não existe em lugar nenhum;
+   2ª — o primeiro dia de `campo_dias`, que é o modelo do repositório antigo e está vazio
+        para a Origens, onde a data está preenchida em `eventos.data_evento` desde julho.
+   O `campo_dias` fica como segunda opção porque algumas expedições só têm os dias lá. */
 async function daDataDoEvento(db, eid) {
+  const ev = await db.prepare("SELECT data_evento FROM eventos WHERE id=?").bind(eid).first();
+  if (!vazio(ev?.data_evento)) return ev.data_evento;
   const d = await db
     .prepare("SELECT data FROM campo_dias WHERE evento_id=? AND COALESCE(data,'') <> '' ORDER BY ordem, id LIMIT 1")
     .bind(eid)
@@ -137,6 +264,7 @@ const DEDUZ = {
  * Não sobrescreve nada que uma PESSOA tenha escrito — dedução não ganha de afirmação.
  */
 export async function abrir(db, eid) {
+  await garantirEsquema(db);
   let b = await db.prepare("SELECT * FROM briefing WHERE evento_id=?").bind(eid).first();
   if (!b) {
     await db.prepare("INSERT INTO briefing (evento_id) VALUES (?)").bind(eid).run();
@@ -174,6 +302,7 @@ export async function abrir(db, eid) {
 
 /** O estado do briefing: o que está preenchido, por quem, e o que falta. */
 export async function ver(db, eid) {
+  await garantirEsquema(db);
   const b = await db.prepare("SELECT * FROM briefing WHERE evento_id=?").bind(eid).first();
   if (!b) return { existe: false, dica: "Chame abrir_briefing primeiro." };
 
@@ -219,6 +348,7 @@ export async function ver(db, eid) {
 
 /** Grava em lote. Recusa briefing fechado: depois do fecho, mudança é rodada, não edição. */
 export async function preencher(db, eid, valores) {
+  await garantirEsquema(db);
   const b = await db.prepare("SELECT * FROM briefing WHERE evento_id=?").bind(eid).first();
   if (!b) throw new Error("não há briefing aberto para esta expedição");
   if (b.status === "fechado")
@@ -254,6 +384,7 @@ export async function preencher(db, eid, valores) {
 
 /** Fecha: valida a completude e TRAVA. É aqui que o prazo começa. */
 export async function fechar(db, eid, quem) {
+  await garantirEsquema(db);
   const estado = await ver(db, eid);
   if (!estado.existe) throw new Error("não há briefing para esta expedição");
   if (estado.status === "fechado") return { ...estado, aviso: "já estava fechado" };
@@ -286,6 +417,7 @@ export async function fechar(db, eid, quem) {
  * escrita num documento, é a ausência do verbo.
  */
 export async function pedirExtra(db, { eid = null, pedido, quem }) {
+  await garantirEsquema(db);
   const texto = String(pedido || "").trim();
   if (!texto) throw new Error("descreva o que você precisa");
   const r = await db
