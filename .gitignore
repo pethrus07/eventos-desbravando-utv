@@ -21,3 +21,7 @@ backup*.json
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Fonte baixado da produção pela tools/recuperar-da-producao.mjs — é material de recuperação,
+# não fonte. O que vale vira worker.js/mcp.js/ui.html por decisão humana, com commit próprio.
+recuperado/
