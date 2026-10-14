@@ -94,8 +94,8 @@ certo e a porta certa.
 > **20–26/10 — Expedição Origens. Semana sem sprint.** O sistema vai estar em uso de campo e
 > o Pedro em plantão. Semana de observar, não de mexer.
 
-## 🟡 S2 · O briefing nasce
-**Núcleo entregue em 14/10** — tabelas, catálogo, pré-preenchimento e as ferramentas. ⚠️ Falta a **aba Briefing no painel** e aplicar a `migracao_v4_7.sql` em produção.
+## ✅ S2 · O briefing nasce
+**Entregue em 14/10** — tabelas, catálogo no banco, pré-preenchimento, aba **Comunicação** no painel e pacote `.zip` sem dependência. ⚠️ Falta aplicar a `migracao_v4_7.sql` em produção.
 
 O catálogo de 10 peças deixa de ser texto no acordo e vira estrutura. E o briefing nasce
 **meio preenchido**: datas, dias, programação, cardápio e bebidas já estão no banco — a maior
@@ -109,8 +109,8 @@ parte do tempo gasto hoje é recolher e transcrever informação que o sistema j
 **Portão:** abrir o briefing de uma expedição real e encontrar **pelo menos 60% dos campos já
 preenchidos** sem ninguém ter digitado nada.
 
-## 🟡 S3 · O Claude do cliente entra
-**Ferramentas entregues em 14/10** — as 5 do briefing + `registrar_pedido_extra` inerte. ⚠️ Falta a **instrução que o cliente cola no Claude dele** e o deploy.
+## ✅ S3 · O Claude do cliente entra
+**Entregue em 14/10** — as 6 ferramentas e o guia em [`docs/COMO-USAR-O-BRIEFING.md`](COMO-USAR-O-BRIEFING.md). ⚠️ Falta o deploy.
 
 - `abrir_briefing`, `ver_briefing`, `preencher_briefing`, `fechar_briefing`, `baixar_pecas`
 - `fechar_briefing` **valida a completude e trava** — é o instante em que o prazo começa a
@@ -132,6 +132,8 @@ dois. E a infra sai do preço pelo acordo.
 - `RYZE_KEY` → papel `ryze`, **sem dado pessoal por padrão** (operador não é controlador —
   tira o Pedro da linha de frente da LGPD, e isso está escrito no acordo)
 - escalada explícita e registrada quando precisar depurar com dado real
+- *(o MCP por usuário saiu do escopo em 14/10: na prática só o Gustavo, admin, usa o conector,
+  então o conector segue resolvendo por papel e o token dele não muda)*
 - migração de Workers, D1 e R2 para a conta Cloudflare do cliente
 - combinar **antes** quem fica com cada chave depois da migração
 
@@ -178,6 +180,23 @@ diz se os R$ 500 fecham. Se der mais que 3 h, o modelo precisa de outra volta, n
 esforço.
 
 ---
+
+---
+
+## Onde isto está em 14/10/2026
+
+Entregues e **não publicados**: S0, S1, S2, S3 e o módulo de Usuários e Permissões, que não
+estava no roadmap — entrou a pedido do cliente em 14/10 e absorveu o S6.
+
+**Nada em produção.** Três migrações esperam: `v4_6` (auditoria), `v4_7` (briefing) e `v4_8`
+(usuários). As três camadas foram escritas para funcionar **antes** da migração, caindo no
+comportamento antigo — é o que permite publicar o código e migrar depois, sem janela.
+
+Quatro travas guardam o deploy: `checar-antes-do-deploy` (cardápio), `checar-spa` (a tela
+compila), `checar-zip` (o pacote abre) e `checar-travas` (21 casos). Todas verdes.
+
+Segue de pé: **S5** (arquivamento), **S7** (render em lote das peças a partir do briefing
+fechado — hoje o `.zip` entrega o briefing, não as artes prontas).
 
 ## A conta
 
