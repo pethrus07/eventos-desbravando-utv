@@ -20,6 +20,36 @@ npx wrangler deploy     # PUBLICA EM PRODUÇÃO — é o sistema no ar de verdad
 npx wrangler tail       # acompanha erros ao vivo
 ```
 
+### 🛑 Antes de publicar, rode as travas
+```bash
+node tools/checar-antes-do-deploy.mjs && npx wrangler deploy -c wrangler.cardapio.toml   # cardápio
+node tools/checar-spa.mjs                                             # a TELA compila?
+node tools/checar-zip.mjs                                             # o .zip ABRE?
+node --import ./tools/html-como-texto.mjs tools/checar-travas.mjs && npx wrangler deploy  # worker + MCP
+```
+A segunda é o portão do S0 e do S1 do [ROADMAP](docs/ROADMAP.md): confere que apagar pede
+confirmação nas duas portas e que toda escrita deixa rastro, sem o corpo da requisição ir
+junto (o sistema guarda CPF). O `--import` existe porque o `worker.js` faz
+`import UI_HTML from "./ui.html"`, que é do Wrangler — sem o hook, nenhum teste alcança o
+worker. **Regra nova entra na trava no mesmo commit**, senão ela deixa de cobrir o que passou
+a existir.
+A `checar-spa.mjs` existe porque erro de sintaxe no `ui.html` **não derruba o Worker** — ele
+segue respondendo 200 e servindo a página. Derruba a TELA: o navegador para no primeiro erro
+e o painel fica em branco, com o monitoramento verde. É o pior tipo de defeito.
+
+**Não publique com a trava vermelha.** Ela existe por um defeito que chegou à produção em
+09/09/2026: **acento grave dentro de comentário CSS fecha o template literal** que carrega a
+página, o CSS vira código e o worker responde `Error 1101`. O formulário de cadastro dos
+clientes — o que coleta CPF — ficou fora do ar até o deploy seguinte.
+
+A armadilha já estava documentada em dois outros templates e me pegou de novo, porque o
+comentário onde cabe o acento grave é justamente o que explica CSS. **Cuidado não escala;
+verificação sim.** A trava importa o módulo (pega o erro de sintaxe), renderiza um formulário
+com todos os tipos de campo e confere que o CSS não vazou para fora do `<style>`.
+
+Tipo de campo novo entra na lista `AMOSTRAS` da trava **junto com o código**, senão ela deixa
+de cobrir o que passou a existir.
+
 ## Banco (D1 "eventos")
 - Estrutura em `schema.sql`; mudanças incrementais em `migracao_*.sql`.
 - Aplicar migração: `npx wrangler d1 execute eventos --remote --file=migracao_x.sql`

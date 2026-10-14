@@ -1,22 +1,37 @@
 /* ============================================================
    FORMULÁRIO DE CARDÁPIO — parte pública (sem chave)
 
-   Rotas tratadas aqui, antes do portão de autenticação do worker:
+   O QUE É: o motor de formulário público do sistema. O nome ficou da
+   primeira versão, mas hoje ele serve qualquer coisa que o cliente
+   precise perguntar — o jantar das quatro noites, a avaliação da
+   expedição e o CADASTRO com CPF, RG e endereço. O que muda de um
+   para o outro é só a lista de perguntas gravada em cardapio_forms.
+
+   Rotas tratadas aqui, antes do portão de autenticação do worker
+   (é público de propósito: quem responde é o cliente, sem chave):
 
      GET  /cardapio/<slug>                     página do formulário
      POST /cardapio/<slug>                     grava a resposta
      GET  /cardapio/<slug>/planilha.csv?t=TOK  CSV para a planilha
 
+   Criar e editar formulário NÃO é aqui: é o painel, em /api/cardapio/*
+   no worker.js, com a chave admin.
+
    O CSV tem token próprio de propósito: a planilha do Google puxa o
    endereço em texto puro (=IMPORTDATA), então não pode ser a APP_KEY.
-   Token vazado expõe respostas de cardápio, não o sistema — e trocar
-   é um clique no painel.
+   Num formulário de cardápio, token vazado expõe preferência de jantar;
+   no de cadastro, expõe CPF e RG de todos — trocar o token é um clique
+   no painel, e é o que se faz quando o cadastro termina.
 
    A página é servida montada no servidor: quem responde abre o link no
    celular, no meio do mato, com sinal ruim. Sem framework, sem build.
+
+   Ver docs/ARQUITETURA.md §8.
    ============================================================ */
 
-import { simbolos, usoLogotipo, usoMontanha } from "./marca.js";
+/* O logotipo com o nome saiu do cabeçalho em 16/09 — a página usa só a montanha. O
+   import dele sairia órfão e faria o próximo leitor procurar um uso que não existe. */
+import { simbolos, usoMontanha } from "./marca.js";
 
 /* Curvas de nível do cabeçalho: geradas fora (soma de senos amostrada e suavizada
    em cúbicas) e embutidas como texto — nada é calculado no cliente. */
@@ -51,6 +66,33 @@ function limparCpf(bruto) {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
+/**
+ * E-mail: validação DELIBERADAMENTE frouxa. O contrato sai por e-mail, então o campo
+ * precisa pegar o erro de digitação — mas regra apertada demais recusa e-mail válido e
+ * trava a reserva de um cliente real, estrago muito maior do que um endereço torto que a
+ * gente conserta perguntando. Exige só o que todo e-mail tem: uma arroba, algo antes dela,
+ * e um domínio com ponto. Guarda em minúsculas, senão a mesma pessoa entra duas vezes na
+ * planilha com grafia diferente.
+ */
+function limparEmail(bruto) {
+  const e = String(bruto ?? "").trim().toLowerCase().slice(0, 200);
+  return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(e) ? e : null;
+}
+
+/**
+ * Telefone: 10 ou 11 dígitos (fixo ou celular), devolvido como (00) 0000-0000 ou
+ * (00) 00000-0000. Com dois campos de telefone no mesmo formulário — o da pessoa e o de
+ * emergência — formato homogêneo deixou de ser estética: é o que permite discar da planilha
+ * sem reler. Aceita e descarta o 55 do começo, que muita gente cola do WhatsApp.
+ */
+function limparTelefone(bruto) {
+  let d = String(bruto ?? "").replace(/[^0-9]/g, "");
+  if (d.length > 11 && d.startsWith("55")) d = d.slice(2);
+  if (d.length !== 10 && d.length !== 11) return null;
+  const meio = d.length === 11 ? 5 : 4;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 2 + meio)}-${d.slice(2 + meio)}`;
+}
+
 /** CEP: oito dígitos, devolvidos como 00000-000. Sem consulta externa — a página tem de
     abrir e funcionar com sinal ruim, e endereço vindo de fora chega errado em zona rural. */
 function limparCep(bruto) {
@@ -82,7 +124,7 @@ function rotulosCheios(perguntas) {
   });
 }
 
-const TIPOS = new Set(["texto", "numero", "escolha", "multi", "sim_nao", "obs", "nota", "cpf", "cep"]);
+const TIPOS = new Set(["texto", "numero", "escolha", "multi", "sim_nao", "obs", "nota", "cpf", "cep", "email", "informe", "telefone", "aviso"]);
 
 /* `nota` é escala de avaliação (1..escala), não número livre: nota é comparável entre
    respostas e cabe num toque, enquanto `numero` aceita 0 a 999 e é digitado. A escala
@@ -90,6 +132,12 @@ const TIPOS = new Set(["texto", "numero", "escolha", "multi", "sim_nao", "obs", 
    decide — 5 é o padrão porque é o que o cliente pediu ("nota") e o que fecha numa
    linha no celular. */
 const NOTA_ESCALA_PADRAO = 5;
+
+/* Tipos que NÃO são pergunta: só desenham texto. Não aceitam valor no POST e não viram
+   coluna na planilha. Estava escrito em dois lugares como `=== "informe"`, e o `aviso`
+   novo entrou na página mas não nas duas exceções — virou coluna de planilha com a frase
+   inteira no cabeçalho. Um conjunto só resolve, e o próximo tipo de texto entra aqui. */
+const SEM_RESPOSTA = new Set(["informe", "aviso"]);
 
 /* Acento -> letra simples, para gerar o id da pergunta a partir do rotulo. Mapa
    explicito em vez de normalize+intervalo de marcas combinantes: o intervalo fica
@@ -227,6 +275,14 @@ function campoHtml(p) {
   let controle = "";
   if (p.tipo === "obs") {
     controle = `<textarea name="${esc(p.id)}" rows="3" maxlength="800" placeholder="Escreva aqui"${req}></textarea>`;
+  } else if (p.tipo === "email") {
+    controle =
+      `<input type="email" inputmode="email" autocomplete="email" autocapitalize="off" ` +
+      `spellcheck="false" maxlength="200" placeholder="voce@email.com"${req} name="${esc(p.id)}">`;
+  } else if (p.tipo === "telefone") {
+    controle =
+      `<input type="tel" inputmode="tel" autocomplete="tel" maxlength="16" ` +
+      `placeholder="(00) 00000-0000" data-mascara="tel"${req} name="${esc(p.id)}">`;
   } else if (p.tipo === "cpf") {
     controle =
       `<input type="text" inputmode="numeric" autocomplete="off" maxlength="14" ` +
@@ -260,6 +316,26 @@ function campoHtml(p) {
   } else {
     controle = `<input type="text" maxlength="200" placeholder="Escreva aqui"${req} name="${esc(p.id)}">`;
   }
+  /* `informe` não é pergunta: é informação dentro do formulário (o valor do pacote, uma
+     condição de pagamento). Não tem controle, não conta na barra de progresso e NÃO VIRA
+     COLUNA na planilha — coluna vazia com título de aviso é o tipo de sujeira que faz quem
+     lê a planilha desconfiar do resto. */
+  /* `aviso` é recado de fecho: pequeno, mas com peso. Não virou `nota_rodape` porque
+     aquela linha é a promessa de privacidade, no tom mais apagado da página — e
+     "aproveite com responsabilidade, se beber não pilote" não é letra miúda de rodapé,
+     é recado que precisa ser lido. Também não virou `informe`, cujo título é Anton em
+     caixa alta e ficaria gritando. Fica no meio: corpo pequeno, cor cheia, filete. */
+  if (p.tipo === "aviso") {
+    return `<p class="aviso-fecho" data-aviso="${esc(p.id)}">${esc(p.rotulo)}</p>`;
+  }
+
+  if (p.tipo === "informe") {
+    return `<div class="informe" data-informe="${esc(p.id)}">
+      <span class="informe-rot">${esc(p.rotulo)}</span>
+      ${p.ajuda ? `<p class="informe-txt">${esc(p.ajuda)}</p>` : ""}
+    </div>`;
+  }
+
   /* Campo condicional nasce escondido e SEM required: se nascesse obrigatório e oculto, o
      navegador barraria o envio apontando para um campo que ninguém vê. Quem devolve o
      required é o script, quando a condição passa a valer. */
@@ -352,7 +428,13 @@ header{position:relative;overflow:hidden;border-bottom:1px solid var(--linha);
 /* curvas de nível: textura só no hero, o formulário fica limpo */
 .topografia{position:absolute;inset:-30% -10% auto -10%;height:150%;color:#FFF;opacity:.055;pointer-events:none}
 header .wrap{position:relative}
-.logo{display:block;width:172px;height:auto;color:#FFF;margin-bottom:26px}
+/* Só a montanha no cabeçalho, e menor — pedido dele em 16/09. O logotipo inteiro com o
+   nome ocupava 172px de largura logo acima de um título em Anton que já diz de quem é o
+   formulário; a montanha sozinha assina sem repetir. A proporção da montanha (1000:379) é
+   quase a mesma do logotipo (2300:813), então largura menor vira altura menor na mesma
+   medida. Ficou em 92px (~35px de altura, contra ~61px do logotipo) — 120px foi o primeiro
+   passo e ele pediu menor em 16/09. */
+.logo{display:block;width:92px;height:auto;color:#FFF;margin-bottom:20px}
 .sobre{font-size:10.5px;letter-spacing:2.6px;text-transform:uppercase;color:var(--dim);margin-bottom:10px}
 h1{font-size:clamp(30px,8.5vw,42px);max-width:15ch;text-wrap:balance}
 .sub{color:var(--mut);font-size:15px;margin-top:12px}
@@ -376,7 +458,10 @@ h1{font-size:clamp(30px,8.5vw,42px);max-width:15ch;text-wrap:balance}
 .opc{font-style:normal;font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);
   border:1px solid var(--linha);border-radius:99px;padding:2px 7px;margin-left:8px;vertical-align:2px}
 .ajuda{display:block;color:var(--dim);font-size:13px;margin-top:3px}
-input[type=text],input[type=number],textarea{width:100%;margin-top:10px;background:var(--cartao);
+/* Seletor por exclusão, não por lista de tipos: era [type=text],[type=number] e o campo
+   de e-mail entrou sem estilo nenhum — caixa branca do navegador no meio de um formulário
+   escuro. Lista de tipos permitidos esquece o tipo que ainda não existe. */
+input:not([type=radio]):not([type=checkbox]),textarea{width:100%;margin-top:10px;background:var(--cartao);
   border:1px solid var(--linha);color:var(--txt);border-radius:12px;padding:14px 15px;
   font-family:inherit;font-size:16px;transition:border-color .15s}
 input:hover,textarea:hover{border-color:var(--linha2)}
@@ -435,6 +520,19 @@ textarea{resize:vertical;line-height:1.5}
 .pontas{display:flex;justify-content:space-between;gap:12px;margin-top:9px;
   font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--dim)}
 
+/* ---------- informe ----------
+   Painel, não texto solto: o valor do pacote é o número que a pessoa está aceitando e
+   precisa ler como declaração, não como observação em letra miúda. */
+.informe{margin:24px 0 4px;background:var(--cartao);border:1px solid var(--linha2);
+  border-radius:14px;padding:18px 19px}
+.informe-rot{display:block;font-family:'Anton',sans-serif;font-weight:400;
+  text-transform:uppercase;letter-spacing:-.2px;font-size:22px;line-height:1.15;color:#FFF}
+.informe-txt{margin-top:9px;font-size:14.5px;line-height:1.55;color:var(--mut)}
+
+/* ---------- aviso de fecho ---------- */
+.aviso-fecho{margin:26px 0 2px;padding:13px 0 13px 15px;border-left:3px solid #FFF;
+  font-size:14px;line-height:1.5;font-weight:600;color:#FFF}
+
 /* ---------- envio ---------- */
 .enviar{border-top:1px solid var(--linha);padding-top:26px;margin-top:36px}
 .btn{width:100%;display:inline-flex;align-items:center;justify-content:center;gap:12px;
@@ -475,7 +573,7 @@ footer svg{width:22px;color:#4A4A4A}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media(min-width:620px){
   header{padding:56px 0 40px}
-  .logo{width:196px}
+  .logo{width:104px}
   .op{padding:15px 19px 15px 17px}
 }
 </style>
@@ -487,7 +585,7 @@ ${simbolos()}
 <header>
   ${TOPOGRAFIA}
   <div class="wrap">
-    ${usoLogotipo('class="logo" role="img" aria-label="Desbravando UTV"')}
+    ${usoMontanha('class="logo" role="img" aria-label="Desbravando UTV"')}
     ${form.sobretitulo ? `<p class="sobre">${esc(form.sobretitulo)}</p>` : ""}
     <h1 class="anton">${esc(form.titulo)}</h1>
     ${form.subtitulo ? `<p class="sub">${esc(form.subtitulo)}</p>` : ""}
@@ -528,8 +626,12 @@ ${simbolos()}
   function condicionais(){
     Array.prototype.forEach.call(f.querySelectorAll("[data-de]"), function(c){
       var de = c.getAttribute("data-de"), esperado = c.getAttribute("data-de-valor");
-      var marcado = f.querySelector('[name="' + de + '"]:checked');
-      var vale = marcado ? marcado.value === esperado : false;
+      /* querySelectorAll, não querySelector: numa pergunta de múltipla escolha o primeiro
+         marcado não é o único, e olhar só ele fazia a dependência valer apenas para a
+         opção que vem primeiro na lista. Serve para escolha única e múltipla. */
+      var marcados = f.querySelectorAll('[name="' + de + '"]:checked');
+      var vale = false;
+      for (var k = 0; k < marcados.length; k++) if (marcados[k].value === esperado) vale = true;
       c.hidden = !vale;
       var campo = c.querySelector("input,textarea,select");
       if (campo){
@@ -597,6 +699,14 @@ ${simbolos()}
         el.value = d.length > 9 ? d.slice(0,3)+"."+d.slice(3,6)+"."+d.slice(6,9)+"-"+d.slice(9)
                  : d.length > 6 ? d.slice(0,3)+"."+d.slice(3,6)+"."+d.slice(6)
                  : d.length > 3 ? d.slice(0,3)+"."+d.slice(3)
+                 : d;
+      } else if (tipo === "tel") {
+        if (d.length > 11 && d.slice(0,2) === "55") d = d.slice(2);
+        d = d.slice(0, 11);
+        var m = d.length > 10 ? 7 : 6;
+        el.value = d.length > m ? "(" + d.slice(0,2) + ") " + d.slice(2, m) + "-" + d.slice(m)
+                 : d.length > 2 ? "(" + d.slice(0,2) + ") " + d.slice(2)
+                 : d.length > 0 ? "(" + d
                  : d;
       } else {
         d = d.slice(0, 8);
@@ -691,6 +801,9 @@ const celula = (v, sep = ";") => {
  * que já tinha chegado — a planilha é o registro.
  */
 export function respostasCsv(perguntas, linhas, sep = ";") {
+  /* Tipo sem resposta sai fora: não é pergunta e viraria coluna vazia — no caso do
+     `aviso`, uma coluna cujo cabeçalho é a frase inteira do recado. */
+  perguntas = perguntas.filter((p) => !SEM_RESPOSTA.has(p.tipo));
   const lidas = linhas.map((l) => {
     try {
       return { criado_em: l.criado_em, v: JSON.parse(l.respostas || "{}") };
@@ -816,15 +929,30 @@ export async function handleCardapio(request, env) {
     // só entra o que o formulário perguntou, no formato que ele definiu
     const limpo = {};
     for (const p of perguntas) {
+      /* Nada que venha com o id de um tipo sem resposta entra. Pela tela é impossível
+         responder (não há controle), mas quem chama a API direto conseguiria gravar texto
+         arbitrário nessa chave. */
+      if (SEM_RESPOSTA.has(p.tipo)) continue;
       const v = corpo.respostas[p.id];
       if (v === undefined || v === null || v === "") continue;
       if (p.tipo === "multi") {
         const lista = (Array.isArray(v) ? v : [v]).map((x) => String(x).slice(0, 80)).filter(Boolean).slice(0, 30);
-        if (lista.length) limpo[p.id] = lista.filter((x) => p.opcoes?.includes(x));
+        /* O filtro pelas opções válidas vem ANTES da decisão de "foi respondida": estava
+           depois, e uma resposta só com opção inexistente gravava lista VAZIA — que não é
+           `undefined`, então passava pela checagem de obrigatório. Formulário obrigatório
+           aceito sem resposta nenhuma. */
+        const validas = lista.filter((x) => p.opcoes?.includes(x));
+        if (validas.length) limpo[p.id] = validas;
       } else if (p.tipo === "escolha" || p.tipo === "sim_nao") {
         const permitido = p.tipo === "sim_nao" ? ["Sim", "Não"] : p.opcoes ?? [];
         const s = String(v).slice(0, 80);
         if (permitido.includes(s)) limpo[p.id] = s;
+      } else if (p.tipo === "email") {
+        const e = limparEmail(v);
+        if (e) limpo[p.id] = e;
+      } else if (p.tipo === "telefone") {
+        const t = limparTelefone(v);
+        if (t) limpo[p.id] = t;
       } else if (p.tipo === "cpf" || p.tipo === "cep") {
         const v2 = p.tipo === "cpf" ? limparCpf(v) : limparCep(v);
         /* Inválido é tratado como NÃO respondido: se o campo é obrigatório, a mensagem
@@ -844,8 +972,15 @@ export async function handleCardapio(request, env) {
     /* Dependência não satisfeita: o valor sai e a pergunta deixa de ser obrigatória. O
        cliente não vê o campo, então não pode ser cobrado por ele — e piloto que mandasse
        nome de piloto por engano (ou de propósito) não sujaria a planilha do cadastro. */
-    const ativa = (p) =>
-      !p.depende || String(limpo[p.depende.campo] ?? "") === String(p.depende.valor);
+    const ativa = (p) => {
+      if (!p.depende) return true;
+      const resp = limpo[p.depende.campo];
+      /* Resposta de múltipla escolha é ARRAY. Comparar com String() dava
+         "Água,Coca" !== "Água" e a dependência nunca valia. */
+      return Array.isArray(resp)
+        ? resp.includes(p.depende.valor)
+        : String(resp ?? "") === String(p.depende.valor);
+    };
     for (const p of perguntas) if (!ativa(p)) delete limpo[p.id];
 
     const faltando = perguntas.filter((p) => p.obrigatorio && ativa(p) && limpo[p.id] === undefined);
@@ -856,7 +991,11 @@ export async function handleCardapio(request, env) {
     }
     if (!Object.keys(limpo).length) return json({ erro: "nada foi respondido" }, 400);
 
-    // nome/contato saem das duas primeiras perguntas de texto, só para a lista do painel
+    /* nome/contato são cópia desnormalizada das duas primeiras perguntas de
+       texto: a lista do painel precisa ordenar e mostrar quem respondeu sem
+       abrir o JSON de cada linha. É heurística, e falha de propósito para o
+       lado seguro — num formulário que não comece por nome, essas duas colunas
+       saem erradas, mas a resposta em si continua íntegra em `respostas`. */
     const textos = perguntas.filter((p) => p.tipo === "texto");
     const nome = String(limpo[textos[0]?.id] ?? "").slice(0, 120);
     const contato = String(limpo[textos[1]?.id] ?? "").slice(0, 120);
