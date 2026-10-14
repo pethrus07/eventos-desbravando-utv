@@ -24,6 +24,7 @@ npx wrangler tail       # acompanha erros ao vivo
 ```bash
 node tools/checar-antes-do-deploy.mjs && npx wrangler deploy -c wrangler.cardapio.toml   # cardápio
 node tools/checar-spa.mjs                                             # a TELA compila?
+node --import ./tools/html-como-texto.mjs tools/checar-tela.mjs       # a TELA ABRE?
 node tools/checar-zip.mjs                                             # o .zip ABRE?
 node --import ./tools/html-como-texto.mjs tools/checar-travas.mjs && npx wrangler deploy  # worker + MCP
 ```
@@ -36,6 +37,16 @@ a existir.
 A `checar-spa.mjs` existe porque erro de sintaxe no `ui.html` **não derruba o Worker** — ele
 segue respondendo 200 e servindo a página. Derruba a TELA: o navegador para no primeiro erro
 e o painel fica em branco, com o monitoramento verde. É o pior tipo de defeito.
+
+A `checar-tela.mjs` existe porque **compilar não é funcionar**. Em 14/10/2026 a aba
+Comunicação foi publicada chamando `podeEditar("comunicacao")`, função que não existe aqui (o
+nome certo é `pode(mod, acao)`). O arquivo compilava, o worker respondia 200, as três travas
+passavam — e o cliente abriu a aba e não viu nada, porque o `.catch` da própria tela engolia o
+`ReferenceError` e desenhava um `<div class="empty">` discreto. Faltava **alguém abrir a
+tela**: esta trava sobe o worker sobre o `schema.sql` num servidor local, abre o painel num
+Chromium (desktop e celular) e clica em todas as abas, reprovando em qualquer erro de console,
+requisição que não completa, ou mensagem de erro aparecendo no lugar do conteúdo. O navegador
+vem do checkout do `qa-parresia`; este repositório segue sem dependências próprias.
 
 **Não publique com a trava vermelha.** Ela existe por um defeito que chegou à produção em
 09/09/2026: **acento grave dentro de comentário CSS fecha o template literal** que carrega a
