@@ -59,8 +59,13 @@ if (r.status !== 0) {
 /* Funções chamadas e nunca definidas: o `--check` não pega, porque só olha sintaxe. Aqui é
    só para os nomes que ESTE projeto usa como ponto de entrada de tela e de rota — a lista é
    curta de propósito, para não virar um analisador caseiro que grita errado. */
-const ESSENCIAIS = ["telaHome", "telaEvento", "telaTarefas", "telaCRM", "telaFornecedores", "telaUsuarios",
-                    "carregarMeus", "podeVer", "podeEditar", "abrirSheet", "api", "esc", "toast"];
+/* Reancorado em 14/10/2026 nas telas que a PRODUÇÃO realmente tem. A lista anterior citava
+   `telaUsuarios`, `podeVer` e `podeEditar`, que eram da versão deste checkout — construída
+   sem saber que o sistema no ar já tinha `telaAcessos` e `telaSemAcesso` fazendo o mesmo
+   trabalho, e melhor. Trava ancorada no que não está no ar mede a coisa errada. */
+const ESSENCIAIS = ["telaHome", "telaEvento", "telaTarefas", "telaCRM", "telaFornecedores",
+                    "telaAcessos", "telaSemAcesso", "telaPainelGeral",
+                    "abrirSheet", "api", "esc", "toast"];
 const faltando = ESSENCIAIS.filter((n) => !new RegExp(`function\\s+${n}\\s*\\(`).test(js));
 if (faltando.length) {
   console.log(`  FALHA  função de tela chamada mas não definida: ${faltando.join(", ")}`);

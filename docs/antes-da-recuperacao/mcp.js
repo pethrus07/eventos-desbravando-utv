@@ -1,0 +1,784 @@
+/* ============================================================
+   CONECTOR MCP · Desbravando UTV — v4.2.2
+   Servidor MCP remoto + OAuth 2.1, tudo no mesmo Worker.
+
+   O QUE É: MCP é o protocolo que deixa um assistente de IA usar as
+   ferramentas de um sistema. Este arquivo é o servidor: em vez de
+   abrir o painel, o dono pergunta ao Claude "o que falta no checklist
+   da Urubici?" ou manda registrar o horário real de uma tarefa de
+   campo, e o Claude fala com o D1 pelas 31 ferramentas de TOOLS.
+
+   PARA QUEM SERVE: o dono e a equipe — é a MESMA chave do app, com o
+   MESMO limite de papel. As 4 ferramentas de admin (participantes com
+   CPF, custos, fornecedores, CRM) nem aparecem no tools/list de uma
+   conexão de equipe; as 27 "both" que têm pedaço sensível o escondem
+   por dentro (resumo_expedicao sem custos, ver_checklist sem valor).
+
+   DOIS CLIENTES, DUAS AUTENTICAÇÕES, o mesmo endpoint /mcp:
+     · claude.ai na web ("custom connector") exige OAuth — daí o
+       servidor OAuth inteiro aqui dentro;
+     · Claude Code e afins mandam a chave direto, em x-app-key ou
+       como Authorization: Bearer <chave>.
+
+   Fluxo OAuth (o claude.ai cuida do lado dele):
+     1. POST /mcp sem token  → 401 + WWW-Authenticate (aponta pro metadata)
+     2. GET  /.well-known/oauth-protected-resource
+     3. GET  /.well-known/oauth-authorization-server
+     4. POST /oauth/register           (Dynamic Client Registration)
+     5. GET/POST /oauth/authorize      (tela de login: chave de acesso → code)
+     6. POST /oauth/token              (code + PKCE → access_token assinado)
+     7. POST /mcp  Authorization: Bearer <token>
+
+   Login = a mesma chave do app: APP_KEY (papel admin) ou TEAM_KEY (equipe).
+
+   Ver docs/ARQUITETURA.md §9.
+   ============================================================ */
+
+import { registrar } from "./auditoria.js";
+import * as briefing from "./briefing.js";
+
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+  "Access-Control-Allow-Headers": "content-type,authorization,mcp-protocol-version",
+};
+const jsonHdr = { "content-type": "application/json; charset=utf-8", ...CORS };
+
+/* ---------- cripto (Web Crypto) ---------- */
+function b64urlBytes(bytes) {
+  let s = ""; for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function bytesFromB64url(str) {
+  str = String(str).replace(/-/g, "+").replace(/_/g, "/"); while (str.length % 4) str += "=";
+  const bin = atob(str); const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u;
+}
+function randToken(n = 32) { const u = new Uint8Array(n); crypto.getRandomValues(u); return b64urlBytes(u); }
+async function hmac(data, key) {
+  const k = await crypto.subtle.importKey("raw", enc.encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return b64urlBytes(new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(data))));
+}
+async function sha256b64url(data) {
+  return b64urlBytes(new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(data))));
+}
+/* Chave que assina os tokens. Cai na APP_KEY quando não há MCP_SIGNING_KEY
+   para o conector funcionar sem um secret a mais — e o literal só existe
+   para o `wrangler dev`, onde não há secret nenhum. Em produção, se as duas
+   faltarem, o segredo vira público e o token passa a ser forjável. */
+function signingKey(env) { return env.MCP_SIGNING_KEY || env.APP_KEY || "dev-mcp-key"; }
+
+/* Token = JSON em base64url + HMAC-SHA256, sem nada no banco. Stateless de
+   propósito: o Worker escala a zero e não vale manter sessão em tabela. O
+   preço é não haver revogação individual — o que invalida TODOS os tokens
+   de uma vez é trocar a chave que assina (acima). */
+async function makeToken(payload, env) {
+  const body = b64urlBytes(enc.encode(JSON.stringify(payload)));
+  return body + "." + (await hmac(body, signingKey(env)));
+}
+async function readToken(token, env) {
+  const parts = String(token || "").split(".");
+  if (parts.length !== 2) return null;
+  if ((await hmac(parts[0], signingKey(env))) !== parts[1]) return null;
+  try {
+    const p = JSON.parse(dec.decode(bytesFromB64url(parts[0])));
+    if (p.exp && p.exp * 1000 < Date.now()) return null;
+    return p;
+  } catch { return null; }
+}
+
+/* ---------- horários (reajuste de campo) ---------- */
+function hhmmMin(s) { const m = String(s || "").match(/^(\d{1,2}):(\d{2})$/); return m ? (+m[1]) * 60 + (+m[2]) : null; }
+function minHhmm(t) { t = ((t % 1440) + 1440) % 1440; return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0"); }
+
+/* ---------- confirmação do que não volta (S0 do roadmap, 13/10/2026) ----------
+
+   As quatro ferramentas `excluir_*` são `role: "both"` e apagam direto, em cascata nos
+   filhos, sem lixeira e sem rastro. É a porta mais aberta do sistema hoje: pelo Claude, com
+   a chave de equipe, some item de checklist com todos os subitens e ninguém sabe quem foi.
+
+   A trava é uma segunda chamada. A primeira NÃO apaga: devolve o título do alvo e a
+   contagem do que vai junto. Essa resposta aparece na conversa, então o humano lê o que
+   está prestes a ser destruído antes de qualquer coisa sumir — é aí que mora a proteção,
+   não no segredo do token: o assistente conhece o título, e deve conhecer mesmo.
+
+   O que isto NÃO resolve: continua sendo apagamento físico. O arquivamento, que faz o
+   engano ser reversível, é o S5. Esta é a trava barata que cabe hoje.
+   Quem pode destruir o quê é decisão do S6 (matriz papel × efeito) — aqui nada muda de papel.
+*/
+async function exigirConfirmacao(db, { titulo, args, filhos = [] }) {
+  if (!titulo) throw new Error("alvo não encontrado");
+  if (String(args.confirmar ?? "").trim() === String(titulo).trim()) return null;
+
+  const seria = {};
+  for (const f of filhos) {
+    const r = await db.prepare(f.sql).bind(f.id).first();
+    if ((r?.n ?? 0) > 0) seria[f.nome] = r.n;
+  }
+  return {
+    confirmacao_necessaria: true,
+    alvo: titulo,
+    seria_apagado: Object.keys(seria).length ? seria : "nada além do próprio item",
+    aviso:
+      `Apagar "${titulo}" não tem volta — não há lixeira neste sistema. ` +
+      `Confirme com a pessoa e chame de novo passando confirmar com o título exato.`,
+  };
+}
+
+const FASE_TIPOS = ["pesquisa", "negociacao", "contratacao", "confirmacao", "execucao", "avaliacao"];
+const FASE_STATUS = new Set(["afazer", "andamento", "concluido", "nao_utilizada"]);
+const ETAPA_SLUGS = new Set(["validacao", "marketing", "vendas", "contratacoes", "pre_expedicao", "operacao_campo", "fechamento"]);
+
+/* ============================================================
+   Ferramentas MCP (operacional; sem CPF/financeiro)
+   ============================================================ */
+const TOOLS = [
+  // ----- Panorama -----
+  { name: "listar_expedicoes", role: "both", description: "Lista as expedições ativas com progresso do CHECKLIST (itens concluídos) e quantos itens têm no módulo novo (Ciclo). Comece sempre por aqui para achar o evento_id.",
+    inputSchema: { type: "object", properties: {} } },
+  { name: "resumo_expedicao", role: "both", description: "Resumo de uma expedição: progresso do checklist, das 7 etapas do Ciclo, Operação em Campo, contagem de participantes e (só admin) custo total.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" } }, required: ["evento_id"] } },
+  // ----- Checklist (a operação real de hoje; ambos os papéis) -----
+  { name: "ver_checklist", role: "both", description: "Itens do CHECKLIST de uma expedição — é onde está a operação real hoje. Traz dia, item, setor, status, responsável, horário, fornecedor, prazo e subtarefas. Filtra por dia/status/setor.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, dia: { type: "string" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] }, setor: { type: "string" } }, required: ["evento_id"] } },
+  { name: "marcar_item_checklist", role: "both", description: "Muda o status de um item do checklist (afazer/andamento/concluido).",
+    inputSchema: { type: "object", properties: { item_id: { type: "integer" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] } }, required: ["item_id", "status"] } },
+  { name: "concluir_subitem_checklist", role: "both", description: "Marca/desmarca uma subtarefa de um item do checklist.",
+    inputSchema: { type: "object", properties: { subitem_id: { type: "integer" }, concluido: { type: "boolean" } }, required: ["subitem_id", "concluido"] } },
+  { name: "criar_item_checklist", role: "both", description: "Adiciona um item ao checklist de uma expedição.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, item: { type: "string" }, dia: { type: "string" }, setor: { type: "string" }, responsavel: { type: "string" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] }, horario: { type: "string" }, fornecedor: { type: "string" }, quantidade: { type: "string" }, observacoes: { type: "string" } }, required: ["evento_id", "item"] } },
+  { name: "editar_item_checklist", role: "both", description: "Edita campos de um item do checklist (item, dia, setor, responsável, status, horário, fornecedor, quantidade, observações; valor só admin).",
+    inputSchema: { type: "object", properties: { item_id: { type: "integer" }, item: { type: "string" }, dia: { type: "string" }, setor: { type: "string" }, responsavel: { type: "string" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] }, horario: { type: "string" }, fornecedor: { type: "string" }, quantidade: { type: "string" }, observacoes: { type: "string" }, valor: { type: "number" } }, required: ["item_id"] } },
+  { name: "excluir_item_checklist", role: "both", description: "Exclui um item do checklist (e suas subtarefas). Apaga de verdade, sem lixeira: a primeira chamada só mostra o que seria apagado; para apagar, repita passando `confirmar` com o título exato.",
+    inputSchema: { type: "object", properties: { item_id: { type: "integer" }, confirmar: { type: "string", description: "Título exato do alvo. Sem ele a ferramenta NÃO apaga: devolve o que seria apagado, para a pessoa confirmar." } }, required: ["item_id"] } },
+  { name: "criar_subitem_checklist", role: "both", description: "Adiciona uma subtarefa a um item do checklist.",
+    inputSchema: { type: "object", properties: { item_id: { type: "integer" }, titulo: { type: "string" } }, required: ["item_id", "titulo"] } },
+  { name: "excluir_subitem_checklist", role: "both", description: "Exclui uma subtarefa de um item do checklist. Apaga de verdade, sem lixeira: a primeira chamada só mostra o que seria apagado; para apagar, repita passando `confirmar` com o título exato.",
+    inputSchema: { type: "object", properties: { subitem_id: { type: "integer" }, confirmar: { type: "string", description: "Título exato do alvo. Sem ele a ferramenta NÃO apaga: devolve o que seria apagado, para a pessoa confirmar." } }, required: ["subitem_id"] } },
+  // ----- Tarefas gerais (fora das expedições) -----
+  { name: "listar_tarefas", role: "both", description: "Lista as tarefas gerais (não ligadas a uma expedição), com subtarefas.",
+    inputSchema: { type: "object", properties: {} } },
+  { name: "criar_tarefa", role: "both", description: "Cria uma tarefa geral.",
+    inputSchema: { type: "object", properties: { titulo: { type: "string" }, setor: { type: "string" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] }, prioridade: { type: "integer" }, data_limite: { type: "string" }, responsavel: { type: "string" }, horario: { type: "string" }, observacoes: { type: "string" } }, required: ["titulo"] } },
+  { name: "editar_tarefa", role: "both", description: "Edita uma tarefa geral (título, setor, status, prioridade, prazo, responsável, horário, observações).",
+    inputSchema: { type: "object", properties: { tarefa_id: { type: "integer" }, titulo: { type: "string" }, setor: { type: "string" }, status: { type: "string", enum: ["afazer", "andamento", "concluido"] }, prioridade: { type: "integer" }, data_limite: { type: "string" }, responsavel: { type: "string" }, horario: { type: "string" }, observacoes: { type: "string" } }, required: ["tarefa_id"] } },
+  { name: "excluir_tarefa", role: "both", description: "Exclui uma tarefa geral (e suas subtarefas). Apaga de verdade, sem lixeira: a primeira chamada só mostra o que seria apagado; para apagar, repita passando `confirmar` com o título exato.",
+    inputSchema: { type: "object", properties: { tarefa_id: { type: "integer" }, confirmar: { type: "string", description: "Título exato do alvo. Sem ele a ferramenta NÃO apaga: devolve o que seria apagado, para a pessoa confirmar." } }, required: ["tarefa_id"] } },
+  { name: "criar_subtarefa", role: "both", description: "Adiciona uma subtarefa a uma tarefa geral.",
+    inputSchema: { type: "object", properties: { tarefa_id: { type: "integer" }, titulo: { type: "string" } }, required: ["tarefa_id", "titulo"] } },
+  { name: "marcar_subtarefa", role: "both", description: "Marca/desmarca uma subtarefa de uma tarefa geral.",
+    inputSchema: { type: "object", properties: { subtarefa_id: { type: "integer" }, concluido: { type: "boolean" } }, required: ["subtarefa_id", "concluido"] } },
+  { name: "excluir_subtarefa", role: "both", description: "Exclui uma subtarefa de uma tarefa geral. Apaga de verdade, sem lixeira: a primeira chamada só mostra o que seria apagado; para apagar, repita passando `confirmar` com o título exato.",
+    inputSchema: { type: "object", properties: { subtarefa_id: { type: "integer" }, confirmar: { type: "string", description: "Título exato do alvo. Sem ele a ferramenta NÃO apaga: devolve o que seria apagado, para a pessoa confirmar." } }, required: ["subtarefa_id"] } },
+  // ----- Ciclo Operacional (módulo novo; hoje preenchido só no Playbook) -----
+  { name: "listar_itens_ciclo", role: "both", description: "Itens do módulo NOVO (Ciclo de 6 fases) de uma expedição e o status das fases. Filtra por etapa.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, etapa: { type: "string", enum: [...ETAPA_SLUGS] } }, required: ["evento_id"] } },
+  { name: "criar_item_ciclo", role: "both", description: "Cria um item no Ciclo (só nome+categoria); o sistema gera as 6 fases automaticamente.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, etapa: { type: "string", enum: [...ETAPA_SLUGS] }, categoria: { type: "string" }, nome: { type: "string" } }, required: ["evento_id", "etapa", "nome"] } },
+  { name: "marcar_microtarefa", role: "both", description: "Marca/desmarca uma microtarefa do Ciclo como concluída.",
+    inputSchema: { type: "object", properties: { micro_id: { type: "integer" }, concluido: { type: "boolean" } }, required: ["micro_id", "concluido"] } },
+  { name: "mudar_status_fase", role: "both", description: "Muda o status de uma fase do Ciclo (afazer, andamento, concluido, nao_utilizada).",
+    inputSchema: { type: "object", properties: { fase_id: { type: "integer" }, status: { type: "string", enum: ["afazer", "andamento", "concluido", "nao_utilizada"] } }, required: ["fase_id", "status"] } },
+  // ----- Operação em Campo + Agenda -----
+  { name: "ver_campo", role: "both", description: "Operação em Campo: dias, tarefas cronológicas (previsto/realizado, tipo, status).",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" } }, required: ["evento_id"] } },
+  { name: "agenda_do_dia", role: "both", description: "Agenda cronológica: tarefas de campo + entregas (Execução) com horário. Filtra por dia.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, dia: { type: "string" } }, required: ["evento_id"] } },
+  { name: "registrar_horario_realizado", role: "both", description: "Registra o horário real de uma tarefa de campo e conclui; com reajustar=true, cascateia o atraso/adianto nas próximas tarefas Ajustáveis.",
+    inputSchema: { type: "object", properties: { tarefa_id: { type: "integer" }, h_realizado: { type: "string", description: "HH:MM" }, reajustar: { type: "boolean" } }, required: ["tarefa_id", "h_realizado"] } },
+  { name: "concluir_subtarefa_campo", role: "both", description: "Marca/desmarca uma subtarefa (check) de uma tarefa de campo.",
+    inputSchema: { type: "object", properties: { sub_id: { type: "integer" }, concluido: { type: "boolean" } }, required: ["sub_id", "concluido"] } },
+  { name: "criar_dia_campo", role: "both", description: "Cria um dia na Operação em Campo de uma expedição.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, rotulo: { type: "string" }, data: { type: "string" } }, required: ["evento_id", "rotulo"] } },
+  { name: "criar_tarefa_campo", role: "both", description: "Cria uma tarefa cronológica num dia da Operação em Campo.",
+    inputSchema: { type: "object", properties: { dia_id: { type: "integer" }, nome: { type: "string" }, h_planejado: { type: "string" }, tipo: { type: "string", enum: ["ajustavel", "fixa"] }, responsavel: { type: "string" } }, required: ["dia_id", "nome"] } },
+  // ----- Dados sensíveis (só chave ADMIN) -----
+  // ----- Briefing de Comunicação (S2/S3 do ROADMAP) -----
+  { name: "abrir_briefing", role: "both", description: "Abre o briefing de comunicação de uma expedição e devolve o estado. O sistema PRÉ-PREENCHE o que já sabe (dias, programação, cardápio, grade de camiseta, hospedagem) — você só completa o que faltar. Comece por aqui.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" } }, required: ["evento_id"] } },
+  { name: "ver_briefing", role: "both", description: "Mostra o briefing como está: o que já foi preenchido, se veio do sistema ou de uma pessoa, e quais campos obrigatórios ainda faltam.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" } }, required: ["evento_id"] } },
+  { name: "preencher_briefing", role: "both", description: "Grava vários campos do briefing de uma vez. Só aceita campos que existem no catálogo; o que não existir volta na lista de recusados.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" },
+      valores: { type: "array", description: "Lista de {peca, campo, valor}", items: { type: "object", properties: { peca: { type: "string" }, campo: { type: "string" }, valor: { type: "string" } }, required: ["peca", "campo", "valor"] } } },
+      required: ["evento_id", "valores"] } },
+  { name: "fechar_briefing", role: "both", description: "Fecha e TRAVA o briefing. Só fecha se todos os campos obrigatórios estiverem preenchidos. É neste momento que o prazo de 5 dias úteis das peças começa a correr — depois do fecho, mudança conta como rodada de ajuste.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, quem: { type: "string", description: "Quem está fechando" } }, required: ["evento_id"] } },
+  { name: "ver_catalogo_pecas", role: "both", description: "As peças que entram no pacote da expedição, com o que cada uma cobre. É a lista fechada: o que não está aqui é orçado à parte.",
+    inputSchema: { type: "object", properties: {} } },
+  { name: "registrar_pedido_extra", role: "both", description: "Registra um pedido de ORÇAMENTO para algo fora do catálogo. NÃO produz nada e NÃO entra em fila nenhuma: grava o pedido e para. A RYZE responde com o valor, e o trabalho só começa depois da aprovação.",
+    inputSchema: { type: "object", properties: { pedido: { type: "string", description: "O que você precisa, com suas palavras" }, evento_id: { type: "integer" }, quem: { type: "string" } }, required: ["pedido"] } },
+  { name: "listar_participantes", role: "admin", description: "[admin] Participantes de uma expedição, com dados pessoais: nome, CPF, telefone, grupo, tipo, UTV, camiseta, contrato e pacote.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" } }, required: ["evento_id"] } },
+  { name: "ver_custos", role: "admin", description: "[admin] Custos de uma expedição (item, categoria, valor, status, pago, fornecedor) e o total.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" } }, required: ["evento_id"] } },
+  { name: "listar_fornecedores", role: "admin", description: "[admin] Fornecedores cadastrados (globais), com contato e cidade.",
+    inputSchema: { type: "object", properties: {} } },
+  { name: "ver_crm", role: "admin", description: "[admin] Contatos do CRM (leads/clientes): nome, telefone, cidade, etapa do funil, interesse e próxima ação. Filtra por etapa.",
+    inputSchema: { type: "object", properties: { etapa: { type: "string", enum: ["lead", "contato", "proposta", "confirmado", "pos_evento", "perdido"] } } } },
+];
+function toolsParaPapel(papel) {
+  return TOOLS.filter(t => t.role !== "admin" || papel === "admin").map(({ role, ...t }) => t);
+}
+
+async function runTool(name, args, env, papel) {
+  const db = env.DB;
+  const admin = papel === "admin";
+  const eid = (args && args.evento_id != null) ? parseInt(args.evento_id, 10) : null;
+  switch (name) {
+    case "listar_expedicoes": {
+      const { results } = await db.prepare(`
+        SELECT e.id, e.nome,
+          (SELECT COUNT(*) FROM itens i WHERE i.evento_id=e.id) AS checklist,
+          (SELECT COUNT(*) FROM itens i WHERE i.evento_id=e.id AND i.status='concluido') AS checklist_ok,
+          (SELECT COUNT(*) FROM op_itens o WHERE o.evento_id=e.id) AS itens_ciclo
+        FROM eventos e WHERE e.arquivado=0 ORDER BY e.id DESC`).all();
+      return (results || []).map(r => ({
+        id: r.id, nome: r.nome,
+        checklist_total: r.checklist, checklist_concluidos: r.checklist_ok,
+        checklist_progresso: r.checklist ? Math.round(r.checklist_ok / r.checklist * 100) + "%" : "—",
+        itens_no_ciclo_novo: r.itens_ciclo,
+      }));
+    }
+    case "resumo_expedicao": {
+      const ev = await db.prepare("SELECT id, nome FROM eventos WHERE id=?").bind(eid).first();
+      if (!ev) throw new Error("expedição não encontrada");
+      const chk = await db.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN status='concluido' THEN 1 ELSE 0 END) AS ok, SUM(CASE WHEN status='andamento' THEN 1 ELSE 0 END) AS andamento FROM itens WHERE evento_id=?").bind(eid).first();
+      const { results: et } = await db.prepare(`
+        SELECT o.etapa, COUNT(DISTINCT o.id) AS itens, COUNT(f.id) AS fases,
+          SUM(CASE WHEN f.status IN ('concluido','nao_utilizada') THEN 1 ELSE 0 END) AS fases_ok
+        FROM op_itens o LEFT JOIN op_fases f ON f.item_id=o.id WHERE o.evento_id=? GROUP BY o.etapa`).bind(eid).all();
+      const campo = await db.prepare(`
+        SELECT COUNT(DISTINCT d.id) AS dias, COUNT(t.id) AS tarefas,
+          SUM(CASE WHEN t.status='concluido' THEN 1 ELSE 0 END) AS tarefas_ok
+        FROM campo_dias d LEFT JOIN campo_tarefas t ON t.dia_id=d.id WHERE d.evento_id=?`).bind(eid).first();
+      const p = await db.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN tipo='crianca' THEN 1 ELSE 0 END) AS criancas, SUM(CASE WHEN staff=1 THEN 1 ELSE 0 END) AS staff FROM clientes WHERE evento_id=?").bind(eid).first();
+      const out = {
+        expedicao: ev,
+        checklist: { total: chk.total || 0, concluidos: chk.ok || 0, em_andamento: chk.andamento || 0 },
+        ciclo_novo_por_etapa: et, operacao_campo: campo,
+        participantes: { total: p.total || 0, criancas: p.criancas || 0, staff: p.staff || 0 },
+      };
+      if (admin) {
+        const c = await db.prepare("SELECT COALESCE(SUM(valor),0) AS total, COALESCE(SUM(valor_pago),0) AS pago FROM custos WHERE evento_id=?").bind(eid).first();
+        out.custos = { total: c.total || 0, pago: c.pago || 0 };
+      }
+      return out;
+    }
+    case "ver_checklist": {
+      let sql = "SELECT id, dia, item, setor, status, prioridade, responsavel, data_limite, horario, fornecedor, quantidade, observacoes" + (admin ? ", valor" : "") + " FROM itens WHERE evento_id=?";
+      const bind = [eid];
+      if (args.dia) { sql += " AND dia=?"; bind.push(String(args.dia)); }
+      if (args.status) { sql += " AND status=?"; bind.push(String(args.status)); }
+      if (args.setor) { sql += " AND setor=?"; bind.push(String(args.setor)); }
+      sql += " ORDER BY ordem, id";
+      const { results } = await db.prepare(sql).bind(...bind).all();
+      const { results: subs } = await db.prepare(
+        "SELECT s.id, s.item_id, s.titulo, s.concluido FROM subitens s JOIN itens i ON i.id=s.item_id WHERE i.evento_id=? ORDER BY s.ordem, s.id").bind(eid).all();
+      const sp = {}; for (const s of (subs || [])) (sp[s.item_id] = sp[s.item_id] || []).push({ id: s.id, titulo: s.titulo, concluido: !!s.concluido });
+      return (results || []).map(i => ({ ...i, subitens: sp[i.id] || [] }));
+    }
+    case "marcar_item_checklist": {
+      if (!["afazer", "andamento", "concluido"].includes(args.status)) throw new Error("status inválido");
+      const r = await db.prepare("UPDATE itens SET status=?, atualizado_em=datetime('now'), atualizado_por='Claude' WHERE id=?").bind(args.status, parseInt(args.item_id, 10)).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    case "concluir_subitem_checklist": {
+      const r = await db.prepare("UPDATE subitens SET concluido=? WHERE id=?").bind(args.concluido ? 1 : 0, parseInt(args.subitem_id, 10)).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    // ---- Briefing de Comunicação ----
+    case "abrir_briefing": return briefing.abrir(db, eid);
+    case "ver_briefing": return briefing.ver(db, eid);
+    case "preencher_briefing": return briefing.preencher(db, eid, args.valores);
+    case "fechar_briefing": return briefing.fechar(db, eid, args.quem || papel);
+    case "ver_catalogo_pecas": return briefing.catalogo(db);
+    case "registrar_pedido_extra":
+      return briefing.pedirExtra(db, {
+        eid: args.evento_id ? parseInt(args.evento_id, 10) : null,
+        pedido: args.pedido,
+        quem: args.quem || papel,
+      });
+
+    case "listar_participantes": {
+      const { results } = await db.prepare(`
+        SELECT c.id, c.grupo, c.nome, c.cpf, c.telefone, c.tipo, c.camiseta, c.utv, c.nf,
+               c.contrato_enviado, c.contrato_assinado, c.pacote, c.staff,
+               (SELECT COALESCE(SUM(p.valor),0) FROM pagamentos p WHERE p.cliente_id=c.id) AS pago
+        FROM clientes c WHERE c.evento_id=? ORDER BY c.grupo, c.nome`).bind(eid).all();
+      return results || [];
+    }
+    case "ver_custos": {
+      const { results } = await db.prepare(`
+        SELECT c.id, c.item, c.categoria, c.quantidade, c.valor, c.status, c.valor_pago, c.forma_pagamento, f.nome AS fornecedor
+        FROM custos c LEFT JOIN fornecedores f ON f.id=c.fornecedor_id WHERE c.evento_id=? ORDER BY c.ordem, c.id`).bind(eid).all();
+      const total = (results || []).reduce((a, x) => a + (x.valor || 0), 0);
+      const pago = (results || []).reduce((a, x) => a + (x.valor_pago || 0), 0);
+      return { total, pago, custos: results || [] };
+    }
+    case "listar_fornecedores": {
+      const { results } = await db.prepare("SELECT id, nome, categoria, contato, telefone, cidade FROM fornecedores ORDER BY nome COLLATE NOCASE").all();
+      return results || [];
+    }
+    case "ver_crm": {
+      let sql = "SELECT id, nome, grupo, telefone, cidade, origem, etapa, interesse, valor_potencial, proxima_acao, proxima_data FROM crm_contatos";
+      const bind = [];
+      if (args.etapa) { sql += " WHERE etapa=?"; bind.push(String(args.etapa)); }
+      sql += " ORDER BY nome COLLATE NOCASE";
+      const { results } = await db.prepare(sql).bind(...bind).all();
+      return results || [];
+    }
+    case "agenda_do_dia": {
+      const { results: ct } = await db.prepare(`
+        SELECT t.id, t.nome, t.h_planejado AS horario, t.h_realizado, t.tipo, t.status, d.rotulo AS dia, d.ordem AS dia_ordem
+        FROM campo_tarefas t JOIN campo_dias d ON d.id=t.dia_id WHERE d.evento_id=?`).bind(eid).all();
+      const { results: mi } = await db.prepare(`
+        SELECT m.id, m.titulo AS nome, m.horario, m.responsavel, m.tipo, m.concluido, m.data AS dia, i.nome AS item
+        FROM op_microtarefas m JOIN op_fases f ON f.id=m.fase_id AND f.tipo='execucao'
+        JOIN op_itens i ON i.id=f.item_id WHERE i.evento_id=? AND m.horario<>''`).bind(eid).all();
+      let ent = [];
+      for (const t of (ct || [])) ent.push({ origem: "campo", id: t.id, dia: t.dia, dia_ordem: t.dia_ordem, horario: t.horario, h_realizado: t.h_realizado, nome: t.nome, tipo: t.tipo, status: t.status });
+      for (const x of (mi || [])) ent.push({ origem: "item", id: x.id, dia: x.dia || "Sem dia", dia_ordem: 9999, horario: x.horario, nome: x.nome, item: x.item, tipo: x.tipo, status: x.concluido ? "concluido" : "afazer", responsavel: x.responsavel });
+      const dia = args && args.dia ? String(args.dia).toLowerCase() : null;
+      if (dia) ent = ent.filter(e => String(e.dia).toLowerCase().includes(dia));
+      ent.sort((a, b) => (a.dia_ordem - b.dia_ordem) || String(a.dia).localeCompare(String(b.dia)) || String(a.horario).localeCompare(String(b.horario)));
+      return ent;
+    }
+    case "listar_itens_ciclo": {
+      let sql = "SELECT id, etapa, categoria, nome, homologado FROM op_itens WHERE evento_id=?";
+      const bind = [eid];
+      if (args && args.etapa && ETAPA_SLUGS.has(args.etapa)) { sql += " AND etapa=?"; bind.push(args.etapa); }
+      sql += " ORDER BY ordem, id";
+      const { results: itens } = await db.prepare(sql).bind(...bind).all();
+      const { results: fases } = await db.prepare(
+        "SELECT f.id, f.item_id, f.tipo, f.status FROM op_fases f JOIN op_itens o ON o.id=f.item_id WHERE o.evento_id=? ORDER BY f.ordem").bind(eid).all();
+      const fp = {}; for (const f of (fases || [])) (fp[f.item_id] = fp[f.item_id] || []).push({ fase_id: f.id, tipo: f.tipo, status: f.status });
+      return (itens || []).map(i => ({ ...i, fases: fp[i.id] || [] }));
+    }
+    case "ver_campo": {
+      const { results: dias } = await db.prepare("SELECT id, rotulo, ordem FROM campo_dias WHERE evento_id=? ORDER BY ordem, id").bind(eid).all();
+      const { results: tar } = await db.prepare(
+        "SELECT t.id, t.dia_id, t.nome, t.h_planejado, t.h_realizado, t.tipo, t.status FROM campo_tarefas t JOIN campo_dias d ON d.id=t.dia_id WHERE d.evento_id=? ORDER BY t.ordem, t.id").bind(eid).all();
+      const tp = {}; for (const t of (tar || [])) (tp[t.dia_id] = tp[t.dia_id] || []).push(t);
+      return (dias || []).map(d => ({ ...d, tarefas: tp[d.id] || [] }));
+    }
+    case "criar_item_ciclo": {
+      const etapa = args.etapa;
+      if (!ETAPA_SLUGS.has(etapa)) throw new Error("etapa inválida");
+      const nome = String(args.nome || "").slice(0, 200).trim();
+      if (!nome) throw new Error("informe o nome do item");
+      const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM op_itens WHERE evento_id=?").bind(eid).first();
+      const r = await db.prepare("INSERT INTO op_itens (evento_id, etapa, categoria, nome, ordem, atualizado_por) VALUES (?,?,?,?,?, 'Claude')")
+        .bind(eid, etapa, String(args.categoria || "").slice(0, 120), nome, (mx ? mx.mo : 0) + 1).run();
+      const iid = r.meta.last_row_id;
+      for (let i = 0; i < FASE_TIPOS.length; i++)
+        await db.prepare("INSERT INTO op_fases (item_id, tipo, ordem, status) VALUES (?,?,?, 'afazer')").bind(iid, FASE_TIPOS[i], i + 1).run();
+      return { ok: true, item_id: iid, fases_criadas: FASE_TIPOS.length };
+    }
+    case "marcar_microtarefa": {
+      const r = await db.prepare("UPDATE op_microtarefas SET concluido=? WHERE id=?").bind(args.concluido ? 1 : 0, parseInt(args.micro_id, 10)).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    case "mudar_status_fase": {
+      if (!FASE_STATUS.has(args.status)) throw new Error("status inválido");
+      const r = await db.prepare("UPDATE op_fases SET status=?, atualizado_em=datetime('now'), atualizado_por='Claude' WHERE id=?")
+        .bind(args.status, parseInt(args.fase_id, 10)).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    case "registrar_horario_realizado": {
+      const id = parseInt(args.tarefa_id, 10);
+      const t = await db.prepare("SELECT t.*, d.evento_id AS eid FROM campo_tarefas t JOIN campo_dias d ON d.id=t.dia_id WHERE t.id=?").bind(id).first();
+      if (!t) throw new Error("tarefa não encontrada");
+      const hr = String(args.h_realizado || "").slice(0, 20);
+      await db.prepare("UPDATE campo_tarefas SET h_realizado=?, status='concluido', atualizado_em=datetime('now'), atualizado_por='Claude' WHERE id=?").bind(hr, id).run();
+      let reajustadas = 0;
+      const pm = hhmmMin(t.h_planejado), rm = hhmmMin(hr);
+      if (args.reajustar && pm != null && rm != null && rm !== pm) {
+        const delta = rm - pm;
+        const { results } = await db.prepare(
+          "SELECT t.id, t.tipo, t.h_planejado FROM campo_tarefas t JOIN campo_dias d ON d.id=t.dia_id WHERE d.evento_id=? ORDER BY d.ordem, t.ordem, t.id").bind(t.eid).all();
+        let passou = false;
+        for (const r of (results || [])) {
+          if (r.id === id) { passou = true; continue; }
+          if (!passou || r.tipo !== "ajustavel") continue;
+          const bm = hhmmMin(r.h_planejado); if (bm == null) continue;
+          await db.prepare("UPDATE campo_tarefas SET h_planejado=?, atualizado_em=datetime('now') WHERE id=?").bind(minHhmm(bm + delta), r.id).run();
+          reajustadas++;
+        }
+      }
+      return { ok: true, reajustadas };
+    }
+    case "concluir_subtarefa_campo": {
+      const r = await db.prepare("UPDATE campo_subtarefas SET concluido=? WHERE id=?").bind(args.concluido ? 1 : 0, parseInt(args.sub_id, 10)).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    // ---- Checklist CRUD ----
+    case "criar_item_checklist": {
+      const item = String(args.item || "").slice(0, 300).trim(); if (!item) throw new Error("informe o item");
+      const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM itens WHERE evento_id=?").bind(eid).first();
+      const st = ["afazer", "andamento", "concluido"].includes(args.status) ? args.status : "afazer";
+      const r = await db.prepare("INSERT INTO itens (evento_id, ordem, dia, item, setor, status, responsavel, horario, fornecedor, quantidade, observacoes, atualizado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?, 'Claude')")
+        .bind(eid, (mx ? mx.mo : 0) + 1, String(args.dia || ""), item, String(args.setor || ""), st, String(args.responsavel || ""), String(args.horario || ""), String(args.fornecedor || ""), String(args.quantidade || ""), String(args.observacoes || "")).run();
+      return { ok: true, item_id: r.meta.last_row_id };
+    }
+    case "editar_item_checklist": {
+      const o = {};
+      for (const c of ["item", "dia", "setor", "responsavel", "horario", "fornecedor", "quantidade", "observacoes"]) if (c in args) o[c] = String(args[c] || "").slice(0, 600);
+      if ("status" in args && ["afazer", "andamento", "concluido"].includes(args.status)) o.status = args.status;
+      if (admin && "valor" in args) o.valor = args.valor == null ? null : Number(args.valor);
+      const keys = Object.keys(o); if (!keys.length) throw new Error("nada para atualizar");
+      const r = await db.prepare(`UPDATE itens SET ${keys.map(k => k + "=?").join(", ")}, atualizado_em=datetime('now'), atualizado_por='Claude' WHERE id=?`).bind(...keys.map(k => o[k]), parseInt(args.item_id, 10)).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    case "excluir_item_checklist": {
+      const id = parseInt(args.item_id, 10);
+      const alvo = await db.prepare("SELECT item FROM itens WHERE id=?").bind(id).first();
+      const pedir = await exigirConfirmacao(db, {
+        titulo: alvo?.item, args,
+        filhos: [{ nome: "subitens", id, sql: "SELECT COUNT(*) n FROM subitens WHERE item_id=?" }],
+      });
+      if (pedir) return pedir;
+      await db.prepare("DELETE FROM subitens WHERE item_id=?").bind(id).run();
+      const r = await db.prepare("DELETE FROM itens WHERE id=?").bind(id).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    case "criar_subitem_checklist": {
+      const t = String(args.titulo || "").slice(0, 200).trim(); if (!t) throw new Error("informe o título");
+      const iid = parseInt(args.item_id, 10);
+      const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM subitens WHERE item_id=?").bind(iid).first();
+      const r = await db.prepare("INSERT INTO subitens (item_id, ordem, titulo, concluido) VALUES (?,?,?,0)").bind(iid, (mx ? mx.mo : 0) + 1, t).run();
+      return { ok: true, subitem_id: r.meta.last_row_id };
+    }
+    case "excluir_subitem_checklist": {
+      const sid = parseInt(args.subitem_id, 10);
+      const alvoS = await db.prepare("SELECT titulo FROM subitens WHERE id=?").bind(sid).first();
+      const pedirS = await exigirConfirmacao(db, { titulo: alvoS?.titulo, args });
+      if (pedirS) return pedirS;
+      const r = await db.prepare("DELETE FROM subitens WHERE id=?").bind(sid).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    // ---- Tarefas gerais ----
+    case "listar_tarefas": {
+      const { results } = await db.prepare("SELECT * FROM tarefas ORDER BY CASE status WHEN 'concluido' THEN 1 ELSE 0 END, ordem, COALESCE(prioridade,999), id").all();
+      const { results: subs } = await db.prepare("SELECT * FROM subtarefas ORDER BY ordem, id").all();
+      const sp = {}; for (const s of (subs || [])) (sp[s.tarefa_id] = sp[s.tarefa_id] || []).push({ id: s.id, titulo: s.titulo, concluido: !!s.concluido });
+      return (results || []).map(t => ({ id: t.id, titulo: t.titulo, setor: t.setor, status: t.status, prioridade: t.prioridade, data_limite: t.data_limite, responsavel: t.responsavel, horario: t.horario, observacoes: t.observacoes, subtarefas: sp[t.id] || [] }));
+    }
+    case "criar_tarefa": {
+      const tit = String(args.titulo || "").slice(0, 300).trim(); if (!tit) throw new Error("informe o título");
+      const st = ["afazer", "andamento", "concluido"].includes(args.status) ? args.status : "afazer";
+      const r = await db.prepare("INSERT INTO tarefas (titulo, setor, status, prioridade, data_limite, responsavel, horario, observacoes, atualizado_por) VALUES (?,?,?,?,?,?,?,?, 'Claude')")
+        .bind(tit, String(args.setor || ""), st, args.prioridade != null ? parseInt(args.prioridade, 10) : null, String(args.data_limite || ""), String(args.responsavel || ""), String(args.horario || ""), String(args.observacoes || "")).run();
+      return { ok: true, tarefa_id: r.meta.last_row_id };
+    }
+    case "editar_tarefa": {
+      const o = {};
+      for (const c of ["titulo", "setor", "data_limite", "responsavel", "horario", "observacoes"]) if (c in args) o[c] = String(args[c] || "").slice(0, 600);
+      if ("status" in args && ["afazer", "andamento", "concluido"].includes(args.status)) o.status = args.status;
+      if ("prioridade" in args) o.prioridade = args.prioridade == null ? null : parseInt(args.prioridade, 10);
+      const keys = Object.keys(o); if (!keys.length) throw new Error("nada para atualizar");
+      const r = await db.prepare(`UPDATE tarefas SET ${keys.map(k => k + "=?").join(", ")}, atualizado_em=datetime('now'), atualizado_por='Claude' WHERE id=?`).bind(...keys.map(k => o[k]), parseInt(args.tarefa_id, 10)).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    case "excluir_tarefa": {
+      const id = parseInt(args.tarefa_id, 10);
+      const alvoT = await db.prepare("SELECT titulo FROM tarefas WHERE id=?").bind(id).first();
+      const pedirT = await exigirConfirmacao(db, {
+        titulo: alvoT?.titulo, args,
+        filhos: [{ nome: "subtarefas", id, sql: "SELECT COUNT(*) n FROM subtarefas WHERE tarefa_id=?" }],
+      });
+      if (pedirT) return pedirT;
+      await db.prepare("DELETE FROM subtarefas WHERE tarefa_id=?").bind(id).run();
+      const r = await db.prepare("DELETE FROM tarefas WHERE id=?").bind(id).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    case "criar_subtarefa": {
+      const t = String(args.titulo || "").slice(0, 200).trim(); if (!t) throw new Error("informe o título");
+      const tid = parseInt(args.tarefa_id, 10);
+      const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM subtarefas WHERE tarefa_id=?").bind(tid).first();
+      const r = await db.prepare("INSERT INTO subtarefas (tarefa_id, ordem, titulo, concluido) VALUES (?,?,?,0)").bind(tid, (mx ? mx.mo : 0) + 1, t).run();
+      return { ok: true, subtarefa_id: r.meta.last_row_id };
+    }
+    case "marcar_subtarefa": {
+      const r = await db.prepare("UPDATE subtarefas SET concluido=? WHERE id=?").bind(args.concluido ? 1 : 0, parseInt(args.subtarefa_id, 10)).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    case "excluir_subtarefa": {
+      const stid = parseInt(args.subtarefa_id, 10);
+      const alvoST = await db.prepare("SELECT titulo FROM subtarefas WHERE id=?").bind(stid).first();
+      const pedirST = await exigirConfirmacao(db, { titulo: alvoST?.titulo, args });
+      if (pedirST) return pedirST;
+      const r = await db.prepare("DELETE FROM subtarefas WHERE id=?").bind(stid).run();
+      return { ok: (r.meta.changes || 0) > 0 };
+    }
+    // ---- Operação em Campo: criar ----
+    case "criar_dia_campo": {
+      const rot = String(args.rotulo || "").slice(0, 160).trim(); if (!rot) throw new Error("informe o rótulo");
+      const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM campo_dias WHERE evento_id=?").bind(eid).first();
+      const r = await db.prepare("INSERT INTO campo_dias (evento_id, rotulo, data, ordem) VALUES (?,?,?,?)").bind(eid, rot, String(args.data || ""), (mx ? mx.mo : 0) + 1).run();
+      return { ok: true, dia_id: r.meta.last_row_id };
+    }
+    case "criar_tarefa_campo": {
+      const nome = String(args.nome || "").slice(0, 200).trim(); if (!nome) throw new Error("informe o nome");
+      const did = parseInt(args.dia_id, 10);
+      const tipo = ["ajustavel", "fixa"].includes(args.tipo) ? args.tipo : "ajustavel";
+      const mx = await db.prepare("SELECT COALESCE(MAX(ordem),0) AS mo FROM campo_tarefas WHERE dia_id=?").bind(did).first();
+      const r = await db.prepare("INSERT INTO campo_tarefas (dia_id, nome, h_planejado, tipo, status, ordem, responsavel, atualizado_por) VALUES (?,?,?,?, 'afazer', ?, ?, 'Claude')")
+        .bind(did, nome, String(args.h_planejado || ""), tipo, (mx ? mx.mo : 0) + 1, String(args.responsavel || "")).run();
+      return { ok: true, tarefa_id: r.meta.last_row_id };
+    }
+    default: throw new Error("ferramenta desconhecida: " + name);
+  }
+}
+
+/* ============================================================
+   OAuth 2.1
+   ============================================================ */
+function papelDaChave(chave, env) {
+  if (env.APP_KEY && chave === env.APP_KEY) return "admin";
+  if (env.TEAM_KEY && chave === env.TEAM_KEY) return "equipe";
+  return null;
+}
+
+function telaLogin(origin, params, erro) {
+  const hidden = ["client_id", "redirect_uri", "state", "code_challenge", "code_challenge_method", "scope", "response_type", "resource"]
+    .map(k => `<input type="hidden" name="${k}" value="${escAttr(params.get(k) || "")}">`).join("");
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Conectar ao Claude · Desbravando</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0B0B0B;color:#fff;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px}
+.box{width:100%;max-width:400px;background:#171717;border:1px solid #2B2B2B;border-radius:18px;padding:30px 26px}
+.brand{font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:#8A8A8A;margin-bottom:12px}
+h1{font-size:26px;line-height:1.1;margin-bottom:8px}
+p{color:#C7C7C7;font-size:14px;margin-bottom:18px}
+label{display:block;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8A8A8A;margin:0 0 6px}
+input[type=password]{width:100%;background:#0F0F0F;border:1px solid #2B2B2B;color:#fff;border-radius:10px;padding:12px 13px;font-size:15px}
+input[type=password]:focus{outline:none;border-color:#fff}
+button{width:100%;margin-top:18px;background:#fff;color:#000;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:700;cursor:pointer}
+.erro{background:#2a1414;border:1px solid #6b2222;color:#EB5757;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:14px;font-weight:600}
+.foot{color:#5E5E5E;font-size:12px;margin-top:16px;text-align:center}
+</style></head><body>
+<form class="box" method="POST" action="${origin}/oauth/authorize">
+  <div class="brand">Desbravando UTV</div>
+  <h1>Conectar ao Claude</h1>
+  <p>Autorize o Claude a acessar o sistema operacional das expedições. Informe a chave de acesso da equipe.</p>
+  ${erro ? `<div class="erro">${escAttr(erro)}</div>` : ""}
+  <label for="chave">Chave de acesso</label>
+  <input id="chave" name="chave" type="password" autocomplete="off" placeholder="Chave da equipe ou admin" autofocus>
+  ${hidden}
+  <button type="submit">Autorizar</button>
+  <div class="foot">Você só precisa fazer isso uma vez.</div>
+</form></body></html>`;
+}
+function escAttr(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+/* ============================================================
+   Roteador — retorna Response ou null (não é rota MCP/OAuth)
+   ============================================================ */
+export async function handleMcp(request, env) {
+  const url = new URL(request.url);
+  const path = url.pathname;
+  const origin = url.origin;
+  const db = env.DB;
+
+  const isMcpPath = path === "/mcp" || path === "/api/mcp" || path === "/oauth/register" || path === "/oauth/authorize" ||
+    path === "/oauth/token" || path === "/.well-known/oauth-protected-resource" ||
+    path === "/.well-known/oauth-authorization-server";
+  if (!isMcpPath) return null;
+
+  if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
+
+  /* ---- metadata: recurso protegido (RFC 9728) ---- */
+  if (path === "/.well-known/oauth-protected-resource") {
+    return new Response(JSON.stringify({
+      resource: origin + "/mcp",
+      authorization_servers: [origin],
+      scopes_supported: ["operacoes"],
+      bearer_methods_supported: ["header"],
+    }), { headers: jsonHdr });
+  }
+
+  /* ---- metadata: authorization server (RFC 8414) ---- */
+  if (path === "/.well-known/oauth-authorization-server") {
+    return new Response(JSON.stringify({
+      issuer: origin,
+      authorization_endpoint: origin + "/oauth/authorize",
+      token_endpoint: origin + "/oauth/token",
+      registration_endpoint: origin + "/oauth/register",
+      response_types_supported: ["code"],
+      grant_types_supported: ["authorization_code", "refresh_token"],
+      code_challenge_methods_supported: ["S256"],
+      token_endpoint_auth_methods_supported: ["none"],
+      scopes_supported: ["operacoes"],
+    }), { headers: jsonHdr });
+  }
+
+  /* ---- Dynamic Client Registration (RFC 7591) ----
+     Grava SEM chave nenhuma, porque é assim que o registro dinâmico
+     funciona: o claude.ai precisa se cadastrar antes de existir qualquer
+     credencial. Registrar não dá acesso a nada — o acesso só nasce no
+     /oauth/authorize, que pede a chave do app. O custo é que mcp_clients
+     cresce sem limite e ninguém varre; hoje é lixo inofensivo. */
+  if (path === "/oauth/register" && request.method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const uris = Array.isArray(b.redirect_uris) ? b.redirect_uris.filter(u => typeof u === "string").slice(0, 10) : [];
+    const client_id = "cli_" + randToken(18);
+    await db.prepare("INSERT INTO mcp_clients (client_id, redirect_uris, nome) VALUES (?,?,?)")
+      .bind(client_id, JSON.stringify(uris), String(b.client_name || "").slice(0, 120)).run();
+    return new Response(JSON.stringify({
+      client_id,
+      redirect_uris: uris,
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      client_id_issued_at: Math.floor(Date.now() / 1000),
+    }), { status: 201, headers: jsonHdr });
+  }
+
+  /* ---- Authorize: tela de login (GET) e submit (POST) ---- */
+  if (path === "/oauth/authorize") {
+    if (request.method === "GET") {
+      const p = url.searchParams;
+      const cli = await db.prepare("SELECT * FROM mcp_clients WHERE client_id=?").bind(p.get("client_id") || "").first();
+      if (!cli) return new Response("client_id inválido", { status: 400, headers: CORS });
+      const uris = JSON.parse(cli.redirect_uris || "[]");
+      if (uris.length && !uris.includes(p.get("redirect_uri"))) return new Response("redirect_uri não registrada", { status: 400, headers: CORS });
+      if (p.get("response_type") !== "code") return new Response("response_type deve ser code", { status: 400, headers: CORS });
+      return new Response(telaLogin(origin, p, null), { headers: { "content-type": "text/html; charset=utf-8", ...CORS } });
+    }
+    if (request.method === "POST") {
+      const form = new URLSearchParams(await request.text());
+      const papel = papelDaChave(form.get("chave") || "", env);
+      const client_id = form.get("client_id") || "";
+      const redirect_uri = form.get("redirect_uri") || "";
+      const cli = await db.prepare("SELECT * FROM mcp_clients WHERE client_id=?").bind(client_id).first();
+      if (!cli) return new Response("client_id inválido", { status: 400, headers: CORS });
+      if (!papel) return new Response(telaLogin(origin, form, "Chave incorreta. Tente de novo."), { status: 401, headers: { "content-type": "text/html; charset=utf-8", ...CORS } });
+      const code = randToken(24);
+      await db.prepare("INSERT INTO mcp_codes (code, client_id, redirect_uri, code_challenge, papel, expira_em) VALUES (?,?,?,?,?,?)")
+        .bind(code, client_id, redirect_uri, form.get("code_challenge") || "", papel, Math.floor(Date.now() / 1000) + 600).run();
+      const back = new URL(redirect_uri);
+      back.searchParams.set("code", code);
+      if (form.get("state")) back.searchParams.set("state", form.get("state"));
+      return new Response(null, { status: 302, headers: { Location: back.toString(), ...CORS } });
+    }
+  }
+
+  /* ---- Token ---- */
+  if (path === "/oauth/token" && request.method === "POST") {
+    const form = new URLSearchParams(await request.text());
+    const grant = form.get("grant_type");
+    if (grant === "authorization_code") {
+      const code = form.get("code") || "";
+      const row = await db.prepare("SELECT * FROM mcp_codes WHERE code=?").bind(code).first();
+      if (!row) return oauthErr("invalid_grant", "código inválido");
+      await db.prepare("DELETE FROM mcp_codes WHERE code=?").bind(code).run();
+      if (row.expira_em < Math.floor(Date.now() / 1000)) return oauthErr("invalid_grant", "código expirado");
+      if (row.client_id !== (form.get("client_id") || "")) return oauthErr("invalid_grant", "client_id não confere");
+      if (row.redirect_uri !== (form.get("redirect_uri") || "")) return oauthErr("invalid_grant", "redirect_uri não confere");
+      if (row.code_challenge) {
+        const ver = form.get("code_verifier") || "";
+        if ((await sha256b64url(ver)) !== row.code_challenge) return oauthErr("invalid_grant", "PKCE inválido");
+      }
+      return tokenResponse(row.papel, env);
+    }
+    if (grant === "refresh_token") {
+      const p = await readToken(form.get("refresh_token"), env);
+      if (!p || p.typ !== "refresh") return oauthErr("invalid_grant", "refresh_token inválido");
+      return tokenResponse(p.papel, env);
+    }
+    return oauthErr("unsupported_grant_type", "grant_type não suportado");
+  }
+
+  /* ---- Endpoint MCP (/mcp e alias /api/mcp) ---- */
+  if (path === "/mcp" || path === "/api/mcp") {
+    if (request.method === "GET")
+      return new Response(JSON.stringify({ erro: "use POST (Streamable HTTP)" }), { status: 405, headers: jsonHdr });
+    // Aceita as DUAS autenticações: OAuth (claude.ai web) OU x-app-key/Bearer com a chave do app (Claude Code)
+    const auth = request.headers.get("authorization") || "";
+    const bearer = auth.replace(/^Bearer\s+/i, "");
+    const claims = await readToken(bearer, env);
+    let papel = (claims && claims.typ === "access") ? claims.papel : null;
+    if (!papel) papel = papelDaChave(request.headers.get("x-app-key") || "", env);
+    if (!papel) papel = papelDaChave(bearer, env);
+    if (!papel) {
+      return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "não autorizado" }, id: null }), {
+        status: 401,
+        headers: { ...jsonHdr, "WWW-Authenticate": `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"` },
+      });
+    }
+    const msg = await request.json().catch(() => null);
+    if (!msg || msg.jsonrpc !== "2.0") return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code: -32700, message: "parse error" }, id: null }), { headers: jsonHdr });
+    const id = msg.id;
+    const reply = (result) => new Response(JSON.stringify({ jsonrpc: "2.0", id, result }), { headers: jsonHdr });
+    const fail = (code, message) => new Response(JSON.stringify({ jsonrpc: "2.0", id, error: { code, message } }), { headers: jsonHdr });
+
+    try {
+      if (msg.method === "initialize") {
+        return reply({
+          protocolVersion: (msg.params && msg.params.protocolVersion) || "2025-06-18",
+          capabilities: { tools: {} },
+          serverInfo: { name: "Desbravando · Operações", version: "1.0.0" },
+          instructions: "Sistema de gestão das expedições de UTV da Desbravando. IMPORTANTE: a operação real de cada expedição vive no CHECKLIST — use 'ver_checklist' (e criar/editar/excluir item) para o que a equipe faz no dia a dia. Também há 'listar_tarefas' (tarefas gerais, fora das expedições), um módulo novo de Ciclo (6 fases por item) + Operação em Campo (dias/tarefas), hoje preenchido só no template 'Playbook'. Sempre comece por 'listar_expedicoes' para achar o evento_id. Com a chave admin há acesso total, inclusive participantes (CPF), custos, fornecedores e CRM; com a chave de equipe, só a operação, sem dados pessoais.",
+        });
+      }
+      if (msg.method === "notifications/initialized" || (typeof msg.method === "string" && msg.method.startsWith("notifications/")))
+        return new Response(null, { status: 202, headers: CORS });
+      if (msg.method === "ping") return reply({});
+      if (msg.method === "tools/list") return reply({ tools: toolsParaPapel(papel) });
+      if (msg.method === "tools/call") {
+        const nome = msg.params && msg.params.name;
+        const args = (msg.params && msg.params.arguments) || {};
+        const tool = TOOLS.find(t => t.name === nome);
+        if (!tool) return fail(-32602, "ferramenta desconhecida");
+        /* O log do MCP mora aqui, e não no envelope do worker.js: na URL só aparece
+           "POST /mcp", e o que interessa — QUAL ferramenta, com qual papel — vive no corpo
+           JSON-RPC. Só escrita entra: `listar_` e `ver_` são leitura e encheriam a tabela.
+           Argumentos não entram: eles carregam id de participante, e o log não duplica dado
+           pessoal (ver auditoria.js). */
+        const escreve = /^(criar|editar|excluir|marcar|concluir|mudar|registrar)_/.test(nome);
+        const anotar = (resultado, alvo = null) =>
+          escreve
+            ? registrar(env.DB, { papel, porta: "mcp", acao: nome, alvo, resultado })
+            : Promise.resolve();
+
+        if (tool.role === "admin" && papel !== "admin") {
+          await anotar("negado");
+          return reply({ content: [{ type: "text", text: "Esta informação (dados pessoais/financeiro) exige a chave admin. A conexão atual é de equipe." }], isError: true });
+        }
+        try {
+          const out = await runTool(nome, args, env, papel);
+          /* Pedido de confirmação não é execução: registrar como "ok" faria o log dizer que
+             algo foi apagado quando nada foi. */
+          await anotar(out && out.confirmacao_necessaria ? "confirmacao" : "ok", out?.alvo ?? null);
+          return reply({ content: [{ type: "text", text: JSON.stringify(out, null, 2) }] });
+        } catch (e) {
+          await anotar("erro");
+          return reply({ content: [{ type: "text", text: "Erro: " + (e.message || String(e)) }], isError: true });
+        }
+      }
+      return fail(-32601, "método não suportado: " + msg.method);
+    } catch (e) {
+      return fail(-32603, "erro interno: " + (e.message || String(e)));
+    }
+  }
+
+  return new Response("método não permitido", { status: 405, headers: CORS });
+}
+
+function oauthErr(error, desc) {
+  return new Response(JSON.stringify({ error, error_description: desc }), { status: 400, headers: jsonHdr });
+}
+async function tokenResponse(papel, env) {
+  const now = Math.floor(Date.now() / 1000);
+  const access = await makeToken({ typ: "access", papel, exp: now + 3600 }, env);
+  const refresh = await makeToken({ typ: "refresh", papel, exp: now + 60 * 60 * 24 * 30 }, env);
+  return new Response(JSON.stringify({
+    access_token: access, token_type: "Bearer", expires_in: 3600, refresh_token: refresh, scope: "operacoes",
+  }), { headers: jsonHdr });
+}

@@ -77,11 +77,16 @@ const js = escritos.find(([n]) => n.endsWith(".js"));
 if (js) {
   const texto = readFileSync(join(SAIDA, js[0]), "utf8");
   const marcas = [...texto.matchAll(/^\/\/ ([\w.-]+\.js)$/gm)].map((m) => ({ nome: m[1], em: m.index }));
-  const limpar = (s) =>
-    s.replace(/^var __defProp[^\n]*\n/gm, "")
-     .replace(/^var __name = [^\n]*\n/gm, "")
-     .replace(/^__name\([^)]*\);\n/gm, "")
-     .replace(/\n{3,}/g, "\n\n");
+  /* O preâmbulo `__defProp`/`__name` do esbuild FICA, e as chamadas `__name(...)` também.
+     A primeira versão deste script tirava a definição e tentava tirar as 106 chamadas por
+     expressão regular; sobraram algumas e o módulo estourava com "__name is not defined" —
+     na importação, não na publicação, que seria pior. São duas linhas inertes que só dão
+     nome a função anônima: limpar isso não melhora nada e pode quebrar tudo. */
+  const PREAMBULO =
+    "/* Preâmbulo do esbuild, preservado da versão publicada — ver tools/recuperar-da-producao.mjs */\n" +
+    "var __defProp = Object.defineProperty;\n" +
+    "var __name = (target, value) => __defProp(target, \"name\", { value, configurable: true });\n\n";
+  const limpar = (s) => PREAMBULO + s.replace(/\n{3,}/g, "\n\n").replace(/^\n+/, "");
 
   const porModulo = {};
   for (let i = 0; i < marcas.length; i++) {
