@@ -34,7 +34,8 @@
 import UI_HTML from "./ui.html";
 import { handleMcp } from "./mcp.js";
 import { registrar, mudaEstado, resultadoDoStatus } from "./auditoria.js";
-import { usuarioDaChave, avaliar, modulosVisiveis } from "./permissoes.js";
+import { usuarioDaChave, avaliar, modulosVisiveis, MODULOS, novaChave, limparPermissoes,
+         hashDaChave } from "./permissoes.js";
 import { handleCardapio, limparPerguntas, respostasCsv, PERGUNTAS_PADRAO } from "./cardapio.js";
 
 const CORS = {
@@ -924,6 +925,79 @@ async function tratar(request, env) {
         return sub ? json({ ok: true, subtarefa: sub }) : json({ erro: "não encontrado" }, 404);
       }
       if (method === "DELETE") { await db.prepare("DELETE FROM subtarefas WHERE id=?").bind(id).run(); return json({ ok: true }); }
+    }
+
+    /* ================= USUÁRIOS E PERMISSÕES (v4.8, admin principal) =================
+
+       Só o administrador principal chega aqui, e isso não é uma guarda escrita: a rota não
+       pertence a módulo nenhum, e `avaliar()` nega o que não está no mapa. O principal passa
+       porque passa em tudo, por desenho. A linha abaixo é a rede para o caso de a tabela
+       `usuarios` ainda não existir — aí não há "principal", e vale o papel antigo. */
+    if (path === "/api/usuarios" || path.startsWith("/api/usuarios/")) {
+      if (usuario ? !usuario.principal : !admin) return negado();
+
+      if (path === "/api/usuarios" && method === "GET") {
+        const { results } = await db.prepare(
+          "SELECT id, nome, ativo, principal, permissoes, observacao, criado_em FROM usuarios ORDER BY principal DESC, nome"
+        ).all();
+        return json({
+          modulos: MODULOS,
+          /* A chave NUNCA sai daqui, nem o hash: hash é material de ataque offline. */
+          usuarios: (results ?? []).map((u) => ({
+            id: u.id, nome: u.nome, ativo: !!u.ativo, principal: !!u.principal,
+            observacao: u.observacao, criado_em: u.criado_em,
+            permissoes: (() => { try { return JSON.parse(u.permissoes || "{}"); } catch { return {}; } })(),
+          })),
+        });
+      }
+
+      if (path === "/api/usuarios" && method === "POST") {
+        const b = await request.json().catch(() => ({}));
+        const nome = S(b.nome, 80).trim();
+        if (!nome) return json({ erro: "informe o nome" }, 400);
+
+        /* Usuário novo nasce SEM NADA liberado, como o briefing pede. Permissão vem depois,
+           por escolha de alguém — nunca por omissão. */
+        const perms = limparPermissoes(b.permissoes);
+        const chave = novaChave();
+        const hash = await hashDaChave(chave);
+        const r = await db.prepare(
+          "INSERT INTO usuarios (nome, chave_hash, permissoes, observacao, criado_por) VALUES (?,?,?,?,?)"
+        ).bind(nome, hash, JSON.stringify(perms), S(b.observacao, 200), usuario?.nome ?? quem).run();
+
+        /* A chave aparece UMA vez. Não há como recuperá-la depois — só gerar outra. */
+        return json({ ok: true, id: r.meta.last_row_id, chave,
+          aviso: "Guarde esta chave agora: ela não é armazenada e não aparece de novo." });
+      }
+
+      if ((m = path.match(/^\/api\/usuarios\/(\d+)$/)) && method === "PATCH") {
+        const id = +m[1];
+        const alvo = await db.prepare("SELECT principal FROM usuarios WHERE id=?").bind(id).first();
+        if (!alvo) return json({ erro: "usuário não encontrado" }, 404);
+        if (alvo.principal) return json({ erro: "o administrador principal não é editável" }, 400);
+
+        const b = await request.json().catch(() => ({}));
+        const campos = [], vals = [];
+        if ("nome" in b) { const n = S(b.nome, 80).trim(); if (!n) return json({ erro: "nome vazio" }, 400); campos.push("nome=?"); vals.push(n); }
+        if ("ativo" in b) { campos.push("ativo=?"); vals.push(B(b.ativo)); }
+        if ("observacao" in b) { campos.push("observacao=?"); vals.push(S(b.observacao, 200)); }
+        if ("permissoes" in b) { campos.push("permissoes=?"); vals.push(JSON.stringify(limparPermissoes(b.permissoes))); }
+        if (!campos.length) return json({ erro: "nada para atualizar" }, 400);
+        await db.prepare(`UPDATE usuarios SET ${campos.join(", ")} WHERE id=?`).bind(...vals, id).run();
+        return json({ ok: true });
+      }
+
+      if ((m = path.match(/^\/api\/usuarios\/(\d+)\/chave$/)) && method === "POST") {
+        const id = +m[1];
+        const alvo = await db.prepare("SELECT principal FROM usuarios WHERE id=?").bind(id).first();
+        if (!alvo) return json({ erro: "usuário não encontrado" }, 404);
+        if (alvo.principal) return json({ erro: "a chave do administrador principal é a APP_KEY e não se troca por aqui" }, 400);
+        const chave = novaChave();
+        await db.prepare("UPDATE usuarios SET chave_hash=? WHERE id=?").bind(await hashDaChave(chave), id).run();
+        return json({ ok: true, chave, aviso: "A chave anterior parou de funcionar agora." });
+      }
+
+      return json({ erro: "não encontrado" }, 404);
     }
 
     /* ================= MINI CRM (admin) ================= */

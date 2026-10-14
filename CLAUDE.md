@@ -23,6 +23,7 @@ npx wrangler tail       # acompanha erros ao vivo
 ### 🛑 Antes de publicar, rode as travas
 ```bash
 node tools/checar-antes-do-deploy.mjs && npx wrangler deploy -c wrangler.cardapio.toml   # cardápio
+node tools/checar-spa.mjs                                             # a TELA compila?
 node --import ./tools/html-como-texto.mjs tools/checar-travas.mjs && npx wrangler deploy  # worker + MCP
 ```
 A segunda é o portão do S0 e do S1 do [ROADMAP](docs/ROADMAP.md): confere que apagar pede
@@ -31,6 +32,10 @@ junto (o sistema guarda CPF). O `--import` existe porque o `worker.js` faz
 `import UI_HTML from "./ui.html"`, que é do Wrangler — sem o hook, nenhum teste alcança o
 worker. **Regra nova entra na trava no mesmo commit**, senão ela deixa de cobrir o que passou
 a existir.
+A `checar-spa.mjs` existe porque erro de sintaxe no `ui.html` **não derruba o Worker** — ele
+segue respondendo 200 e servindo a página. Derruba a TELA: o navegador para no primeiro erro
+e o painel fica em branco, com o monitoramento verde. É o pior tipo de defeito.
+
 **Não publique com a trava vermelha.** Ela existe por um defeito que chegou à produção em
 09/09/2026: **acento grave dentro de comentário CSS fecha o template literal** que carrega a
 página, o CSS vira código e o worker responde `Error 1101`. O formulário de cadastro dos

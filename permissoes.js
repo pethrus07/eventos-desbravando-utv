@@ -150,6 +150,34 @@ export function pode(usuario, modulo, nivel = "ver") {
   return nivel === "ver" && tem === "ver";
 }
 
+/**
+ * Chave nova, legível para ditar por telefone e aleatória o bastante para não ser adivinhada.
+ * 20 caracteres de um alfabeto sem `0/O` e `1/I/l`, que é onde a leitura em voz alta erra.
+ * São 32^20 combinações — mais do que suficiente, e o que protege de verdade é não haver
+ * como enumerar usuários: chave errada e usuário inexistente dão exatamente o mesmo 401.
+ */
+export function novaChave() {
+  const alfabeto = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(20));
+  const s = [...bytes].map((b) => alfabeto[b % alfabeto.length]).join("");
+  return s.match(/.{1,5}/g).join("-"); // XXXXX-XXXXX-XXXXX-XXXXX
+}
+
+/**
+ * Normaliza o que veio da tela: só módulos que existem, só níveis que existem.
+ * Vale tanto contra erro de digitação quanto contra alguém mandando `{"__proto__": ...}`
+ * direto na API — o que entra no banco é sempre um objeto novo, montado aqui.
+ */
+export function limparPermissoes(bruto) {
+  const saida = {};
+  if (!bruto || typeof bruto !== "object") return saida;
+  for (const m of MODULOS) {
+    const v = bruto[m.slug];
+    if (v === "ver" || v === "editar") saida[m.slug] = v;
+  }
+  return saida;
+}
+
 /** Os módulos que este usuário enxerga — é o que a interface usa para esconder o resto. */
 export function modulosVisiveis(usuario) {
   return MODULOS.filter((m) => pode(usuario, m.slug, "ver")).map((m) => ({
@@ -161,6 +189,11 @@ export function modulosVisiveis(usuario) {
 /** O veredito de uma requisição: usuário × rota × método. */
 export function avaliar(usuario, caminho, metodo) {
   const modulo = moduloDaRota(caminho);
+  /* O principal passa ANTES do mapa, não depois. O briefing pede acesso irrestrito, e a
+     gestão de usuários é justamente uma rota que não pertence a módulo nenhum: se ele
+     passasse pelo mapa, o próprio administrador seria barrado da tela que o cadastra.
+     É também o que garante que rota nova nunca tranca o dono fora do sistema. */
+  if (usuario?.principal) return { permitido: true, modulo: moduloDaRota(caminho) || null };
   if (modulo === null) return { permitido: true, modulo: null };
   if (modulo === false) return { permitido: false, modulo: null, motivo: "rota não mapeada a nenhum módulo" };
   const nivel = ehEscrita(metodo) ? "editar" : "ver";
