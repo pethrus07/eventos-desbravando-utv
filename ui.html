@@ -723,7 +723,7 @@ function carregarComunicacao(){
 function renderComunicacao(){
   if (!BRF || !BRF.existe){ $("main").innerHTML = '<div class="empty">Briefing indisponível.</div>'; return; }
   var fechado = BRF.status === "fechado";
-  var editar = podeEditar("comunicacao") && !fechado;
+  var editar = pode("comunicacao", "editar") && !fechado;
 
   var corpo = BRF.pecas.map(function(p){
     var campos = p.campos.map(function(c){
@@ -771,6 +771,20 @@ function renderComunicacao(){
     };
   }
   $("bf_zip").onclick = baixarPacoteComunicacao;
+  crescerCampos();
+}
+
+/* `rows` é chute: o mesmo texto que cabe em 1 linha no desktop ocupa 4 no celular, e o campo
+   corta o que o sistema deduziu bem na hora em que a pessoa precisa conferir. Aqui a altura
+   vem do conteúdo renderizado, não de uma contagem de caracteres. */
+function crescerCampos(){
+  var ts = document.querySelectorAll("#main textarea");
+  for (var i = 0; i < ts.length; i++){
+    var t = ts[i];
+    t.style.height = "auto";
+    t.style.height = (t.scrollHeight + 2) + "px";
+    t.oninput = function(){ this.style.height = "auto"; this.style.height = (this.scrollHeight + 2) + "px"; };
+  }
 }
 
 function salvarComunicacao(){
