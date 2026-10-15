@@ -511,7 +511,10 @@ CREATE TABLE usuarios (
   nome           TEXT NOT NULL,
   email          TEXT NOT NULL UNIQUE COLLATE NOCASE,
   senha_hash     TEXT NOT NULL,
-  perfil_id      INTEGER NOT NULL,
+  -- v4.9: NULO quer dizer permissão individual, na coluna abaixo. Exatamente um dos dois
+  -- vale por pessoa; o servidor recusa mandar os dois (ver migracao_v4_9.sql).
+  perfil_id      INTEGER,
+  permissoes     TEXT NOT NULL DEFAULT '[]',
   ativo          INTEGER NOT NULL DEFAULT 1,
   falhas_login   INTEGER NOT NULL DEFAULT 0,  -- tentativas erradas seguidas
   bloqueado_ate  TEXT NOT NULL DEFAULT '',    -- 5 erros seguidos bloqueiam 15 min

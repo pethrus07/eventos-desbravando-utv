@@ -154,6 +154,77 @@ const BASE = {
   else ok("briefing · pedido fora do catálogo nasce inerte (0 trabalho criado)");
 }
 
+/* ---------------------------------------------- v4.9 · permissão por pessoa
+
+   O modo novo mexe em autenticação, que é onde erro não dá aviso: ou abre demais, ou tranca
+   quem deveria entrar. Três coisas valem trava. */
+{
+  // Os dois modos juntos é pedido ambíguo. Adivinhar qual vale é como nasce permissão que
+  // ninguém entende depois.
+  const db = banco({ "SELECT id FROM perfis": { id: 2 } });
+  const r = await worker.fetch(pedir("/api/usuarios", "POST", {
+    nome: "Ana", email: "ana@x.com", senha: "12345678", perfil_id: 2, permissoes: ["financeiro.visualizar"],
+  }), { ...env, DB: db });
+  const j = await r.json();
+  const criou = db.feito.some((f) => /INSERT INTO usuarios/.test(f.sql));
+  if (r.status !== 400 || criou) falhou("acessos · perfil E permissões juntos é recusado", `status ${r.status}`);
+  else ok("acessos · mandar perfil e permissões juntos é recusado (não escolhe por conta própria)");
+}
+
+{
+  const db = banco({});
+  const r = await worker.fetch(pedir("/api/usuarios", "POST", {
+    nome: "Ana", email: "ana@x.com", senha: "12345678",
+  }), { ...env, DB: db });
+  const criou = db.feito.some((f) => /INSERT INTO usuarios/.test(f.sql));
+  if (r.status !== 400 || criou) falhou("acessos · usuário sem nenhum acesso é recusado", `status ${r.status}`);
+  else ok("acessos · usuário sem perfil e sem permissão é recusado (conta que não abre nada)");
+}
+
+{
+  // A trava que importa de verdade: permissão individual NUNCA é administrador, nem quando a
+  // lista pede. Admin só vem de perfil, que é o que torna possível auditar quem o tem.
+  const db = banco({
+    "FROM sessoes s JOIN usuarios u": {
+      id: 7, nome: "Ana", email: "ana@x.com", ativo: 1,
+      perms_usuario: JSON.stringify(["financeiro.acessar", "financeiro.visualizar", "eventos.excluir"]),
+      perfil_id: null, perfil_nome: null, perfil_admin: null, permissoes: null,
+    },
+  });
+  const sessao = new Request("http://local/api/me", { headers: { "x-app-key": "sess_qualquer" } });
+  const me = await (await worker.fetch(sessao, { ...env, DB: db })).json();
+  if (me.admin !== false || me.papel === "admin")
+    falhou("acessos · permissão individual não vira admin", JSON.stringify(me).slice(0, 90));
+  else if (!me.permissoes.includes("financeiro.visualizar") || me.permissoes.includes("participantes.excluir"))
+    falhou("acessos · permissão individual é exatamente a lista da pessoa", (me.permissoes || []).join(","));
+  else ok(`acessos · permissão individual vale sem perfil e nunca é admin (${me.permissoes.length} permissões)`);
+}
+
+{
+  /* O que /api/me devolve é o que a tela MOSTRA. O que vale mesmo é o portão da rota: se ele
+     não olhar a permissão individual, a pessoa vê um painel sem Financeiro e alcança o
+     Financeiro por endereço direto. Área que some da tela e responde na API não está
+     protegida, está escondida. */
+  const quem = {
+    id: 7, nome: "Ana", email: "ana@x.com", ativo: 1,
+    perms_usuario: JSON.stringify(["participantes.visualizar"]),
+    perfil_id: null, perfil_nome: null, perfil_admin: null, permissoes: null,
+  };
+  const chamar = async (caminho) => {
+    const db = banco({ "FROM sessoes s JOIN usuarios u": quem });
+    const r = await worker.fetch(
+      new Request("http://local" + caminho, { headers: { "x-app-key": "sess_qualquer" } }),
+      { ...env, DB: db }
+    );
+    return r.status;
+  };
+  const barrado = await chamar("/api/eventos/1/custos");
+  const passou = await chamar("/api/eventos/1/clientes");
+  if (barrado !== 403) falhou("acessos · área não liberada é barrada na API", `custos devolveu ${barrado}`);
+  else if (passou === 403) falhou("acessos · área liberada responde", `clientes devolveu 403`);
+  else ok("acessos · o portão da rota lê a permissão individual (403 no Financeiro, passa em Participantes)");
+}
+
 /* ---------------------------------------------- exceção vira resposta, nunca tela em branco
 
    14/10/2026: a aba Comunicação subiu para a produção com o código publicado e a migração do

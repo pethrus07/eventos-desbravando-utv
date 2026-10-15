@@ -178,6 +178,26 @@ await percorrer("celular", { width: 390, height: 844 });
     if (!chegou) problemas.push("acessos · 'criar um perfil' não abre o editor de perfil");
     else console.log("  acessos · do formulário de usuário dá para criar um perfil  ok");
   }
+
+  /* v4.9: escolher as áreas da pessoa tem que ser possível NO CADASTRO DELA, que é onde o
+     Gustavo procurou. A matriz nasce escondida e aparece ao escolher o modo — se ficar
+     escondida, a opção existe no menu e não serve para nada. */
+  await page.evaluate(() => { location.hash = "#/acessos"; });
+  await page.waitForSelector("#usr_novo", { timeout: 10000 });
+  await page.click("#usr_novo");
+  await page.waitForSelector("#us_perfil", { timeout: 10000 });
+  const temModo = await page.locator('#us_perfil option[value="ind"]').count();
+  if (!temModo) {
+    problemas.push("acessos · o cadastro de usuário não oferece escolher as áreas só desta pessoa");
+  } else {
+    await page.selectOption("#us_perfil", "ind");
+    await page.waitForTimeout(400);
+    const visivel = await page.locator("#us_perms").isVisible();
+    const caixas = await page.locator("#us_perms [data-perm]").count();
+    if (!visivel || caixas < 10)
+      problemas.push(`acessos · a matriz da pessoa não apareceu (visível=${visivel}, ${caixas} caixas)`);
+    else console.log(`  acessos · dá para marcar as áreas da própria pessoa (${caixas} caixas)  ok`);
+  }
   await ctx.close();
 }
 

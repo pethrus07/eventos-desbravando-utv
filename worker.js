@@ -164,20 +164,27 @@ async function autenticar(request, env, db) {
   const key = request.headers.get("x-app-key") || "";
   if (key.startsWith("sess_")) {
     const tokenHash = await sha256Hex(key);
+    /* v4.9: o JOIN com perfis virou LEFT JOIN. Usuário de permissão individual não tem
+       perfil, e com o JOIN interno ele simplesmente NÃO APARECERIA — a sessão seria tratada
+       como inválida e a pessoa levaria "sessão expirada" sem nenhuma explicação possível. */
     const r = await db.prepare(`
-      SELECT u.id, u.nome, u.email, u.ativo, p.id AS perfil_id, p.nome AS perfil_nome,
-             p.admin AS perfil_admin, p.permissoes
-      FROM sessoes s JOIN usuarios u ON u.id=s.usuario_id JOIN perfis p ON p.id=u.perfil_id
+      SELECT u.id, u.nome, u.email, u.ativo, u.permissoes AS perms_usuario,
+             p.id AS perfil_id, p.nome AS perfil_nome, p.admin AS perfil_admin, p.permissoes
+      FROM sessoes s JOIN usuarios u ON u.id=s.usuario_id LEFT JOIN perfis p ON p.id=u.perfil_id
       WHERE s.token_hash=? AND s.expira_em > datetime('now')`).bind(tokenHash).first();
     if (!r || !r.ativo) return null;
+    /* ADMIN SÓ VEM DE PERFIL. Permissão individual nunca é administrador, nem que a lista
+       traga todas as permissões: para acesso total, a pessoa entra no Administrador Geral.
+       Um caminho só para o poder total é o que torna possível auditar quem o tem. */
     const admin = !!r.perfil_admin;
+    const individual = !r.perfil_id;
     return {
       tipo: "usuario",
       admin,
       tokenHash,
       usuario: { id: r.id, nome: r.nome, email: r.email },
-      perfil: { id: r.perfil_id, nome: r.perfil_nome, admin },
-      perms: new Set(admin ? [] : lerPermissoes(r.permissoes))
+      perfil: individual ? null : { id: r.perfil_id, nome: r.perfil_nome, admin },
+      perms: new Set(admin ? [] : lerPermissoes(individual ? r.perms_usuario : r.permissoes))
     };
   }
   const p = papel(request, env);
@@ -370,7 +377,11 @@ async function rotaLogin(request, db) {
     return falha();
   }
   if (!u.ativo) return json({ erro: "usu\xE1rio inativo \u2014 fale com o administrador" }, 403);
-  if (!u.pid) return json({ erro: "usu\xE1rio sem perfil de acesso \u2014 fale com o administrador" }, 403);
+  /* v4.9: sem perfil deixou de ser erro \u2014 \u00e9 o modo de permiss\u00e3o individual. O que continua
+     sendo erro \u00e9 n\u00e3o ter NENHUM dos dois, que \u00e9 conta sem acesso a nada: deixar entrar s\u00f3
+     para mostrar um painel vazio n\u00e3o ajuda ningu\u00e9m. */
+  if (!u.pid && !lerPermissoes(u.permissoes).length)
+    return json({ erro: "usu\xE1rio sem nenhum acesso liberado \u2014 fale com o administrador" }, 403);
   const token = novoToken();
   await db.prepare("DELETE FROM sessoes WHERE expira_em <= datetime('now')").run();
   await db.prepare(`INSERT INTO sessoes (token_hash, usuario_id, expira_em) VALUES (?,?, datetime('now', '+${SESSAO_DIAS} days'))`).bind(await sha256Hex(token), u.id).run();
@@ -394,8 +405,9 @@ async function rotasAcessos(request, path, method, db, auth) {
       FROM perfis p ORDER BY p.admin DESC, p.nome COLLATE NOCASE`).all();
     for (const p of perfis) p.permissoes = p.admin ? todasPermissoes() : lerPermissoes(p.permissoes);
     const { results: usuarios } = await db.prepare(`
-      SELECT id, nome, email, perfil_id, ativo, ultimo_acesso, criado_em FROM usuarios
+      SELECT id, nome, email, perfil_id, permissoes, ativo, ultimo_acesso, criado_em FROM usuarios
       ORDER BY ativo DESC, nome COLLATE NOCASE`).all();
+    for (const u of usuarios) u.permissoes = u.perfil_id ? [] : lerPermissoes(u.permissoes);
     return json({ perfis, usuarios, modulos: MODULOS, acoes: ACOES_PADRAO, eu: auth.usuario ? auth.usuario.id : null });
   }
   if (path === "/api/perfis" && method === "POST") {
@@ -437,9 +449,16 @@ async function rotasAcessos(request, path, method, db, auth) {
     if (!nome) return json({ erro: "informe o nome" }, 400);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ erro: "informe um e-mail v\xE1lido" }, 400);
     if (senha.length < SENHA_MIN) return json({ erro: `a senha precisa ter pelo menos ${SENHA_MIN} caracteres` }, 400);
-    if (!perfilId || !await db.prepare("SELECT id FROM perfis WHERE id=?").bind(perfilId).first()) return json({ erro: "escolha o perfil de acesso" }, 400);
+    /* v4.9 · dois modos, e exatamente um por pessoa: perfil OU lista só dela. Mandar os dois
+       é pedido ambíguo, e adivinhar qual vale é como se cria permissão que ninguém entende
+       depois. Recusar é mais barato que escolher por conta própria. */
+    const perms = normalizarPermissoes(b.permissoes);
+    if (perfilId && perms.length) return json({ erro: "escolha UMA coisa: um perfil ou as permiss\xF5es desta pessoa" }, 400);
+    if (perfilId && !await db.prepare("SELECT id FROM perfis WHERE id=?").bind(perfilId).first()) return json({ erro: "perfil n\xE3o encontrado" }, 400);
+    if (!perfilId && !perms.length) return json({ erro: "escolha um perfil de acesso ou marque as \xE1reas desta pessoa" }, 400);
     if (await db.prepare("SELECT id FROM usuarios WHERE email=?").bind(email).first()) return json({ erro: "j\xE1 existe um usu\xE1rio com esse e-mail" }, 400);
-    const r = await db.prepare("INSERT INTO usuarios (nome, email, senha_hash, perfil_id, ativo) VALUES (?,?,?,?,?)").bind(nome, email, await hashSenha(senha), perfilId, "ativo" in b ? B(b.ativo) : 1).run();
+    const r = await db.prepare("INSERT INTO usuarios (nome, email, senha_hash, perfil_id, permissoes, ativo) VALUES (?,?,?,?,?,?)")
+      .bind(nome, email, await hashSenha(senha), perfilId || null, JSON.stringify(perfilId ? [] : perms), "ativo" in b ? B(b.ativo) : 1).run();
     return json({ ok: true, id: r.meta.last_row_id });
   }
   if (m = path.match(/^\/api\/usuarios\/(\d+)$/)) {
@@ -460,12 +479,25 @@ async function rotasAcessos(request, path, method, db, auth) {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email)) return json({ erro: "informe um e-mail v\xE1lido" }, 400);
         if (await db.prepare("SELECT id FROM usuarios WHERE email=? AND id<>?").bind(o.email, id).first()) return json({ erro: "j\xE1 existe um usu\xE1rio com esse e-mail" }, 400);
       }
-      if ("perfil_id" in b) {
-        o.perfil_id = I(b.perfil_id);
-        const p = o.perfil_id && await db.prepare("SELECT admin FROM perfis WHERE id=?").bind(o.perfil_id).first();
+      /* v4.9 \u00b7 trocar de modo \u00e9 uma edi\u00e7\u00e3o s\u00f3: mandar `perfil_id` nulo com `permissoes`
+         preenchidas passa a pessoa para o acesso individual, e o contr\u00e1rio devolve ela ao
+         perfil. Os dois campos s\u00e3o gravados juntos para o banco nunca guardar os dois modos
+         ao mesmo tempo \u2014 estado que n\u00e3o pode existir \u00e9 estado que n\u00e3o se cria. */
+      if ("perfil_id" in b || "permissoes" in b) {
+        const novoPerfil = I(b.perfil_id);
+        const novasPerms = "permissoes" in b ? normalizarPermissoes(b.permissoes) : [];
+        if (novoPerfil && novasPerms.length)
+          return json({ erro: "escolha UMA coisa: um perfil ou as permiss\xF5es desta pessoa" }, 400);
+        if (!novoPerfil && !novasPerms.length)
+          return json({ erro: "escolha um perfil de acesso ou marque as \xE1reas desta pessoa" }, 400);
+        const p = novoPerfil ? await db.prepare("SELECT admin FROM perfis WHERE id=?").bind(novoPerfil).first() : { admin: 0 };
         if (!p) return json({ erro: "perfil n\xE3o encontrado" }, 400);
-        if (!p.admin && await tiraUltimoAdmin()) return json({ erro: "este \xE9 o \xFAltimo Administrador Geral ativo \u2014 crie outro antes de mudar o perfil dele" }, 400);
+        // Sair do perfil admin (para outro perfil OU para permiss\u00e3o individual) \u00e9 a mesma
+        // perda de poder, e as duas travas que j\u00e1 existiam valem igual nos dois casos.
+        if (!p.admin && await tiraUltimoAdmin()) return json({ erro: "este \xE9 o \xFAltimo Administrador Geral ativo \u2014 crie outro antes de mudar o acesso dele" }, 400);
         if (!p.admin && souEu) return json({ erro: "voc\xEA n\xE3o pode tirar o seu pr\xF3prio acesso de administrador" }, 400);
+        o.perfil_id = novoPerfil || null;
+        o.permissoes = JSON.stringify(novoPerfil ? [] : novasPerms);
       }
       if ("ativo" in b) {
         o.ativo = B(b.ativo);

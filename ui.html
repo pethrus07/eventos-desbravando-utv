@@ -7076,6 +7076,12 @@ function nomePerfil(id){
   var p = (AC.perfis||[]).find(function(x){ return x.id === id; });
   return p ? p.nome : "—";
 }
+/* Conta ÁREAS, não permissões: uma área marcada já traz acessar e visualizar junto, então
+   "14 permissões" diria mais sobre a regra de dependência do que sobre o que a pessoa vê. */
+function areasDe(permissoes){
+  var n = AC.modulos.filter(function(m){ return (permissoes||[]).indexOf(m.id+".acessar") > -1; }).length;
+  return n + " área" + (n === 1 ? "" : "s");
+}
 
 function renderAcessos(sub){
   var html = '<div class="tabs" style="margin-bottom:14px">' +
@@ -7091,7 +7097,7 @@ function renderAcessos(sub){
       html += '<button class="row" data-usr="'+u.id+'"'+(u.ativo?'':' style="opacity:.55"')+'>' +
         '<div class="info"><div class="nm">'+esc(u.nome)+(AC.eu===u.id?' <span class="chip">você</span>':'')+'</div>' +
         '<div class="sub"><span>'+esc(u.email)+'</span>' +
-          '<span class="vl">'+esc(nomePerfil(u.perfil_id))+'</span>' +
+          '<span class="vl">'+(u.perfil_id ? esc(nomePerfil(u.perfil_id)) : areasDe(u.permissoes)+' · só dela')+'</span>' +
           (u.ultimo_acesso ? '<span>último acesso '+esc(fmtData(u.ultimo_acesso))+'</span>' : '<span>nunca entrou</span>') +
         '</div></div>' +
         '<span class="chip '+(u.ativo?'ok':'bad')+'">'+(u.ativo?'Ativo':'Inativo')+'</span>' +
@@ -7130,9 +7136,10 @@ function renderAcessos(sub){
 function sheetUsuario(u){
   var novo = !u, souEu = u && AC.eu === u.id;
   u = u || { nome:"", email:"", perfil_id:null, ativo:1 };
-  if (!AC.perfis.length) return toast("Crie um perfil de acesso antes", true);
   // Perfil comum = qualquer um que não seja o Administrador Geral, que é fixo e abre tudo.
   var semPerfilComum = !AC.perfis.some(function(p){ return !p.admin; });
+  // v4.9: quem já está cadastrado sem perfil está no modo de permissão individual.
+  var individual = !novo && !u.perfil_id;
   abrirSheet(
     '<h2 class="anton">'+(novo ? 'Novo usuário' : 'Editar usuário')+'</h2>' +
     '<label class="top" for="us_nome">Nome</label><input id="us_nome" maxlength="80" value="'+esc(u.nome)+'">' +
@@ -7140,9 +7147,10 @@ function sheetUsuario(u){
     '<label class="top" for="us_senha">'+(novo ? 'Senha (mín. 8 caracteres)' : 'Nova senha (deixe em branco pra manter)')+'</label>' +
     '<input id="us_senha" type="password" autocomplete="new-password">' +
     '<div class="grid2">' +
-      '<div><label class="top" for="us_perfil">Perfil de acesso</label><select id="us_perfil">' +
+      '<div><label class="top" for="us_perfil">Acesso</label><select id="us_perfil">' +
         (novo ? '<option value="">— escolha —</option>' : '') +
-        AC.perfis.map(function(p){ return '<option value="'+p.id+'"'+(p.id===u.perfil_id?' selected':'')+'>'+esc(p.nome)+'</option>'; }).join("") +
+        AC.perfis.map(function(p){ return '<option value="'+p.id+'"'+(!individual && p.id===u.perfil_id?' selected':'')+'>Perfil: '+esc(p.nome)+'</option>'; }).join("") +
+        '<option value="ind"'+(individual?' selected':'')+'>Escolher as áreas só desta pessoa</option>' +
       '</select>' +
       '<button class="link" id="us_novoperfil" style="margin-top:6px;font-size:12px">+ criar um perfil de acesso</button></div>' +
       '<div><label class="top" for="us_ativo">Status</label><select id="us_ativo"'+(souEu?' disabled':'')+'>' +
@@ -7154,10 +7162,13 @@ function sheetUsuario(u){
        áudios: "ele não me deixa selecionar os tópicos... quais os módulos que essa pessoa tem
        acesso". O que ele queria existe e está completo, uma tela ao lado, na aba Perfis de
        acesso. A tela nunca disse isso. Dizer onde fica é a correção. */
-    (semPerfilComum
-      ? '<div class="empty" style="text-align:left;padding:12px;margin-top:12px">Só existe o <b>Administrador Geral</b>, que abre tudo. Para esta pessoa ver só uma parte, crie um perfil antes: é lá que você marca, área por área, o que ela pode ver, criar, editar e excluir.</div>'
-      : '') +
-    '<p class="meta" style="margin-top:12px">O usuário terá somente as permissões do perfil escolhido. Quem escolhe as áreas é o perfil, na aba <b>Perfis de acesso</b>. Mudanças no perfil valem na hora pra todos que estão nele.</p>' +
+    '<div id="us_perms" class="hide" style="margin-top:14px">' +
+      '<p class="meta">Marque o que <b>esta pessoa</b> pode fazer em cada área. Vale só pra ela: não mexe em mais ninguém, e ninguém mexe nela.</p>' +
+      htmlMatriz(u.permissoes || [], false) +
+    '</div>' +
+    '<p class="meta" id="us_meta_perfil" style="margin-top:12px">O usuário terá somente as permissões do perfil escolhido. Quem escolhe as áreas é o perfil, na aba <b>Perfis de acesso</b>, e mudanças nele valem na hora pra todos que estão nele.' +
+      (semPerfilComum ? ' Hoje só existe o <b>Administrador Geral</b>, que abre tudo — para liberar só uma parte, use a opção de escolher as áreas desta pessoa, ou crie um perfil.' : '') +
+    '</p>' +
     '<div class="actions">' +
       (novo || souEu ? '<button class="btn2" data-close>Cancelar</button>' : '<button class="btn-danger" id="us_del">Excluir</button>') +
       '<button class="btn" id="us_ok">Salvar</button>' +
@@ -7165,13 +7176,28 @@ function sheetUsuario(u){
   );
   var np = $("us_novoperfil");
   if (np) np.onclick = function(){ fecharSheet(); location.hash = "#/acessos/perfil/novo"; };
+
+  var blocoPerms = $("us_perms"), sel = $("us_perfil");
+  var mostrarModo = function(){
+    var ind = sel.value === "ind";
+    blocoPerms.classList.toggle("hide", !ind);
+    $("us_meta_perfil").classList.toggle("hide", ind);
+  };
+  sel.onchange = mostrarModo;
+  ligarMatriz(blocoPerms);
+  mostrarModo();
+
   $("us_ok").onclick = function(){
+    var ind = sel.value === "ind";
     var b = { nome:$("us_nome").value.trim(), email:$("us_email").value.trim(),
-              perfil_id: $("us_perfil").value ? +$("us_perfil").value : null, ativo: +$("us_ativo").value };
+              perfil_id: ind || !sel.value ? null : +sel.value,
+              permissoes: ind ? lerMatriz(blocoPerms) : [],
+              ativo: +$("us_ativo").value };
     var senha = $("us_senha").value;
     if (!b.nome) return toast("Informe o nome", true);
     if (!b.email) return toast("Informe o e-mail", true);
-    if (!b.perfil_id) return toast("Escolha o perfil de acesso", true);
+    if (!ind && !b.perfil_id) return toast("Escolha o acesso desta pessoa", true);
+    if (ind && !b.permissoes.length) return toast("Marque pelo menos uma área para esta pessoa", true);
     if (novo && senha.length < 8) return toast("A senha precisa ter pelo menos 8 caracteres", true);
     if (senha) b.senha = senha;
     if (souEu) delete b.ativo;
@@ -7189,22 +7215,26 @@ function sheetUsuario(u){
 }
 
 /* ---------- editor de perfil: nome + matriz área × ação ---------- */
-function renderPerfilEditor(id){
-  var p = id ? AC.perfis.find(function(x){ return x.id === id; }) : { nome:"", admin:0, permissoes:[], usuarios:0 };
-  if (!p){ $("main").innerHTML = '<div class="empty">Perfil não encontrado.</div>'; return; }
-  var tem = {}; p.permissoes.forEach(function(x){ tem[x] = 1; });
-  var fixo = !!p.admin;
-  var ck = function(perm, extra){
-    return '<input type="checkbox" data-perm="'+perm+'"'+(tem[perm]||fixo?' checked':'')+(fixo?' disabled':'')+(extra||'')+'>';
+/* ============================================================
+   A matriz de permissões — área por ação.
+
+   Era um bloco solto dentro do editor de perfil. Virou função em 15/10/2026 porque o mesmo
+   quadro passou a aparecer em DOIS lugares: no perfil e no cadastro da pessoa, quando o
+   acesso é só dela. Duplicar não era opção: as regras de dependência aqui dentro (marcar
+   qualquer ação liga Acessar e Visualizar, módulo do evento liga Eventos junto, desligar
+   Acessar derruba a área inteira) são as mesmas do `normalizarPermissoes` do servidor. Duas
+   cópias divergem, e a tela passaria a mostrar permissão diferente da que vale de verdade.
+
+   `raiz` existe porque no perfil a matriz mora no #main e no cadastro mora no #sheet. Todo
+   seletor aqui é relativo a ela — com `document.querySelector` a matriz do sheet mexeria na
+   do fundo, que é um defeito que não aparece em teste e aparece no cliente.
+   ============================================================ */
+function htmlMatriz(permissoes, fixo){
+  var tem = {}; (permissoes||[]).forEach(function(x){ tem[x] = 1; });
+  var ck = function(perm){
+    return '<input type="checkbox" data-perm="'+perm+'"'+(tem[perm]||fixo?' checked':'')+(fixo?' disabled':'')+'>';
   };
-
-  var html = '<button class="backln" id="pf_voltar">← Perfis de acesso</button>' +
-    '<label class="top" for="pf_nome">Nome do perfil</label>' +
-    '<input id="pf_nome" maxlength="60" placeholder="ex.: Comercial" value="'+esc(p.nome)+'"'+(fixo?' disabled':'')+'>';
-  if (fixo) html += '<p class="meta" style="margin-top:10px">O <b>Administrador Geral</b> tem acesso completo a tudo, inclusive a esta tela de usuários e acessos. É o único perfil fixo — não pode ser alterado nem excluído.</p>';
-  else html += '<p class="meta" style="margin-top:10px">Marque o que este perfil pode fazer em cada área. Áreas sem <b>Acessar</b> ficam ocultas pra quem estiver nele. Marcar qualquer ação já libera Acessar e Visualizar da área.</p>';
-
-  html += '<div class="pm-wrap"><table class="pm"><thead><tr><th>Área</th>' +
+  var html = '<div class="pm-wrap"><table class="pm"><thead><tr><th>Área</th>' +
     AC.acoes.map(function(a){ return '<th>'+esc(a[1])+'</th>'; }).join("") +
     '<th>Tudo</th></tr></thead><tbody>';
   var grupo = null;
@@ -7221,7 +7251,69 @@ function renderPerfilEditor(id){
       '</div></td></tr>';
     }
   });
-  html += '</tbody></table></div>';
+  return html + '</tbody></table></div>';
+}
+
+function ligarMatriz(raiz){
+  var box = function(perm){ return raiz.querySelector('[data-perm="'+perm+'"]'); };
+  var marca = function(perm, v){ var b = box(perm); if (b) b.checked = v; };
+  var todosDo = function(mod){ return raiz.querySelectorAll('[data-perm^="'+mod+'."]'); };
+  var eventoMods = AC.modulos.filter(function(m){ return m.grupo === "Dentro do evento"; }).map(function(m){ return m.id; });
+  var syncTudo = function(){
+    AC.modulos.forEach(function(m){
+      var t = raiz.querySelector('[data-tudo="'+m.id+'"]');
+      if (!t) return;
+      t.checked = Array.prototype.every.call(todosDo(m.id), function(b){ return b.checked; });
+    });
+  };
+  // Mesmas regras do servidor (normalizarPermissoes), pra tela mostrar o que vai valer.
+  raiz.onchange = function(e){
+    var el = e.target;
+    if (el.hasAttribute && el.hasAttribute("data-tudo")){
+      var mod = el.getAttribute("data-tudo");
+      Array.prototype.forEach.call(todosDo(mod), function(b){ b.checked = el.checked; });
+      if (el.checked && eventoMods.indexOf(mod) > -1){ marca("eventos.acessar", true); marca("eventos.visualizar", true); }
+      if (el.checked && mod === "financeiro") marca("financeiro.ver_receber", true);
+      if (!el.checked && mod === "eventos") eventoMods.forEach(function(m){
+        Array.prototype.forEach.call(todosDo(m), function(b){ b.checked = false; });
+      });
+      return syncTudo();
+    }
+    if (!el.hasAttribute || !el.hasAttribute("data-perm")) return;
+    var perm = el.getAttribute("data-perm"), mo = perm.split(".")[0], acao = perm.split(".")[1];
+    if (el.checked){
+      marca(mo+".acessar", true); marca(mo+".visualizar", true);
+      if (eventoMods.indexOf(mo) > -1){ marca("eventos.acessar", true); marca("eventos.visualizar", true); }
+      if (perm === "financeiro.ver_resultado") marca("financeiro.ver_receber", true);
+    } else {
+      if (acao === "acessar" || acao === "visualizar")
+        Array.prototype.forEach.call(todosDo(mo), function(b){ b.checked = false; });
+      if (perm === "financeiro.ver_receber") marca("financeiro.ver_resultado", false);
+      if (mo === "eventos" && (acao === "acessar" || acao === "visualizar")) eventoMods.forEach(function(m){
+        Array.prototype.forEach.call(todosDo(m), function(b){ b.checked = false; });
+      });
+    }
+    syncTudo();
+  };
+  syncTudo();
+}
+
+function lerMatriz(raiz){
+  return Array.prototype.filter.call(raiz.querySelectorAll("[data-perm]"), function(b){ return b.checked; })
+    .map(function(b){ return b.getAttribute("data-perm"); });
+}
+
+function renderPerfilEditor(id){
+  var p = id ? AC.perfis.find(function(x){ return x.id === id; }) : { nome:"", admin:0, permissoes:[], usuarios:0 };
+  if (!p){ $("main").innerHTML = '<div class="empty">Perfil não encontrado.</div>'; return; }
+  var fixo = !!p.admin;
+  var html = '<button class="backln" id="pf_voltar">← Perfis de acesso</button>' +
+    '<label class="top" for="pf_nome">Nome do perfil</label>' +
+    '<input id="pf_nome" maxlength="60" placeholder="ex.: Comercial" value="'+esc(p.nome)+'"'+(fixo?' disabled':'')+'>';
+  if (fixo) html += '<p class="meta" style="margin-top:10px">O <b>Administrador Geral</b> tem acesso completo a tudo, inclusive a esta tela de usuários e acessos. É o único perfil fixo — não pode ser alterado nem excluído.</p>';
+  else html += '<p class="meta" style="margin-top:10px">Marque o que este perfil pode fazer em cada área. Áreas sem <b>Acessar</b> ficam ocultas pra quem estiver nele. Marcar qualquer ação já libera Acessar e Visualizar da área.</p>';
+
+  html += htmlMatriz(p.permissoes, fixo);
   if (!fixo) html += '<div class="actions">' +
       (id ? '<button class="btn-danger" id="pf_del">Excluir perfil</button>' : '<button class="btn2" id="pf_cancel">Cancelar</button>') +
       '<button class="btn" id="pf_ok">Salvar perfil</button>' +
@@ -7230,54 +7322,12 @@ function renderPerfilEditor(id){
   $("main").innerHTML = html;
   $("pf_voltar").onclick = function(){ location.hash = "#/acessos/perfis"; };
   if (fixo) return;
-
-  var box = function(perm){ return document.querySelector('[data-perm="'+perm+'"]'); };
-  var marca = function(perm, v){ var b = box(perm); if (b) b.checked = v; };
-  var eventoMods = AC.modulos.filter(function(m){ return m.grupo === "Dentro do evento"; }).map(function(m){ return m.id; });
-  var syncTudo = function(){
-    AC.modulos.forEach(function(m){
-      var todas = document.querySelectorAll('[data-perm^="'+m.id+'."]');
-      var t = document.querySelector('[data-tudo="'+m.id+'"]');
-      t.checked = Array.prototype.every.call(todas, function(b){ return b.checked; });
-    });
-  };
-  // Mesmas regras do servidor (normalizarPermissoes), pra tela mostrar o que vai valer.
-  $("main").onchange = function(e){
-    var el = e.target;
-    if (el.hasAttribute("data-tudo")){
-      var mod = el.getAttribute("data-tudo");
-      Array.prototype.forEach.call(document.querySelectorAll('[data-perm^="'+mod+'."]'), function(b){ b.checked = el.checked; });
-      if (el.checked && eventoMods.indexOf(mod) > -1){ marca("eventos.acessar", true); marca("eventos.visualizar", true); }
-      if (el.checked && mod === "financeiro") marca("financeiro.ver_receber", true);
-      if (!el.checked && mod === "eventos") eventoMods.forEach(function(m){
-        Array.prototype.forEach.call(document.querySelectorAll('[data-perm^="'+m+'."]'), function(b){ b.checked = false; });
-      });
-      return syncTudo();
-    }
-    if (!el.hasAttribute("data-perm")) return;
-    var perm = el.getAttribute("data-perm"), mod = perm.split(".")[0], acao = perm.split(".")[1];
-    if (el.checked){
-      marca(mod+".acessar", true); marca(mod+".visualizar", true);
-      if (eventoMods.indexOf(mod) > -1){ marca("eventos.acessar", true); marca("eventos.visualizar", true); }
-      if (perm === "financeiro.ver_resultado") marca("financeiro.ver_receber", true);
-    } else {
-      if (acao === "acessar" || acao === "visualizar")
-        Array.prototype.forEach.call(document.querySelectorAll('[data-perm^="'+mod+'."]'), function(b){ b.checked = false; });
-      if (perm === "financeiro.ver_receber") marca("financeiro.ver_resultado", false);
-      if (mod === "eventos" && (acao === "acessar" || acao === "visualizar")) eventoMods.forEach(function(m){
-        Array.prototype.forEach.call(document.querySelectorAll('[data-perm^="'+m+'."]'), function(b){ b.checked = false; });
-      });
-    }
-    syncTudo();
-  };
-  syncTudo();
+  ligarMatriz($("main"));
 
   $("pf_ok").onclick = function(){
     var nome = $("pf_nome").value.trim();
     if (!nome) return toast("Dê um nome ao perfil", true);
-    var perms = Array.prototype.filter.call(document.querySelectorAll("[data-perm]"), function(b){ return b.checked; })
-      .map(function(b){ return b.getAttribute("data-perm"); });
-    var b = { nome: nome, permissoes: perms };
+    var b = { nome: nome, permissoes: lerMatriz($("main")) };
     (id ? api("/api/perfis/"+id,"PATCH",b) : api("/api/perfis","POST",b))
       .then(function(){ toast(id ? "Perfil salvo" : "Perfil criado"); location.hash = "#/acessos/perfis"; })
       .catch(function(e){ toast(e.message, true); });
