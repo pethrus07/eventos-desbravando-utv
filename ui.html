@@ -7131,6 +7131,8 @@ function sheetUsuario(u){
   var novo = !u, souEu = u && AC.eu === u.id;
   u = u || { nome:"", email:"", perfil_id:null, ativo:1 };
   if (!AC.perfis.length) return toast("Crie um perfil de acesso antes", true);
+  // Perfil comum = qualquer um que não seja o Administrador Geral, que é fixo e abre tudo.
+  var semPerfilComum = !AC.perfis.some(function(p){ return !p.admin; });
   abrirSheet(
     '<h2 class="anton">'+(novo ? 'Novo usuário' : 'Editar usuário')+'</h2>' +
     '<label class="top" for="us_nome">Nome</label><input id="us_nome" maxlength="80" value="'+esc(u.nome)+'">' +
@@ -7141,17 +7143,28 @@ function sheetUsuario(u){
       '<div><label class="top" for="us_perfil">Perfil de acesso</label><select id="us_perfil">' +
         (novo ? '<option value="">— escolha —</option>' : '') +
         AC.perfis.map(function(p){ return '<option value="'+p.id+'"'+(p.id===u.perfil_id?' selected':'')+'>'+esc(p.nome)+'</option>'; }).join("") +
-      '</select></div>' +
+      '</select>' +
+      '<button class="link" id="us_novoperfil" style="margin-top:6px;font-size:12px">+ criar um perfil de acesso</button></div>' +
       '<div><label class="top" for="us_ativo">Status</label><select id="us_ativo"'+(souEu?' disabled':'')+'>' +
         '<option value="1"'+(u.ativo?' selected':'')+'>Ativo</option><option value="0"'+(u.ativo?'':' selected')+'>Inativo</option>' +
       '</select></div>' +
     '</div>' +
-    '<p class="meta" style="margin-top:12px">O usuário terá somente as permissões do perfil escolhido. Mudanças no perfil valem na hora pra todos que estão nele.</p>' +
+    /* 15/10/2026: o Gustavo travou exatamente aqui. A lista trazia só "Administrador Geral",
+       ele escolheu o traço, salvou, levou "Escolha o perfil de acesso" e mandou vídeo e três
+       áudios: "ele não me deixa selecionar os tópicos... quais os módulos que essa pessoa tem
+       acesso". O que ele queria existe e está completo, uma tela ao lado, na aba Perfis de
+       acesso. A tela nunca disse isso. Dizer onde fica é a correção. */
+    (semPerfilComum
+      ? '<div class="empty" style="text-align:left;padding:12px;margin-top:12px">Só existe o <b>Administrador Geral</b>, que abre tudo. Para esta pessoa ver só uma parte, crie um perfil antes: é lá que você marca, área por área, o que ela pode ver, criar, editar e excluir.</div>'
+      : '') +
+    '<p class="meta" style="margin-top:12px">O usuário terá somente as permissões do perfil escolhido. Quem escolhe as áreas é o perfil, na aba <b>Perfis de acesso</b>. Mudanças no perfil valem na hora pra todos que estão nele.</p>' +
     '<div class="actions">' +
       (novo || souEu ? '<button class="btn2" data-close>Cancelar</button>' : '<button class="btn-danger" id="us_del">Excluir</button>') +
       '<button class="btn" id="us_ok">Salvar</button>' +
     '</div>'
   );
+  var np = $("us_novoperfil");
+  if (np) np.onclick = function(){ fecharSheet(); location.hash = "#/acessos/perfil/novo"; };
   $("us_ok").onclick = function(){
     var b = { nome:$("us_nome").value.trim(), email:$("us_email").value.trim(),
               perfil_id: $("us_perfil").value ? +$("us_perfil").value : null, ativo: +$("us_ativo").value };

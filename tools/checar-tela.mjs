@@ -51,6 +51,7 @@ const sq = new DatabaseSync(":memory:");
 sq.exec(readFileSync(join(raiz, "schema.sql"), "utf8"));
 sq.exec(readFileSync(join(raiz, "migracao_v4_7.sql"), "utf8"));
 sq.exec(`
+  INSERT INTO perfis (id, nome, admin, permissoes) VALUES (1, 'Administrador Geral', 1, '[]');
   INSERT INTO eventos (id, nome, data_evento, data_evento_fim, hospedagem_diarias)
     VALUES (1, 'Expedição de Teste', '2026-12-01', '2026-12-03', 2);
   INSERT INTO itens (evento_id, ordem, dia, item, setor, status)
@@ -142,6 +143,44 @@ async function percorrer(rotulo, viewport) {
 
 const n = await percorrer("desktop", { width: 1440, height: 980 });
 await percorrer("celular", { width: 390, height: 844 });
+
+/* ---------------------------------------------- o formulário de usuário não é beco sem saída
+
+   15/10/2026: com só o "Administrador Geral" cadastrado, a lista de perfil do formulário de
+   usuário trazia uma opção que não serve e nada mais. O Gustavo escolheu o traço, salvou,
+   levou "Escolha o perfil de acesso" e parou ali — mandou vídeo e três áudios perguntando
+   como escolhe os módulos da pessoa. A resposta existia a uma aba de distância e a tela não
+   dizia. Caminho que não se enxerga é caminho que não existe. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 980 } });
+  const page = await ctx.newPage();
+  await page.goto("http://localhost:" + PORTA, { waitUntil: "networkidle" });
+  await page.click("#lmodo_chave");
+  await page.fill("#lkey", CHAVE);
+  await page.fill("#lnome", "Trava");
+  await page.click("#lbtn");
+  await page.waitForSelector("#app:not(.hide)", { timeout: 15000 });
+
+  await page.evaluate(() => { location.hash = "#/acessos"; });
+  await page.waitForSelector("#usr_novo", { timeout: 10000 });
+  await page.click("#usr_novo");
+  await page.waitForSelector("#us_perfil", { timeout: 10000 });
+
+  const saida = await page.locator("#us_novoperfil");
+  if (!(await saida.count())) {
+    problemas.push("acessos · o formulário de usuário não oferece criar um perfil de acesso");
+  } else {
+    await saida.click();
+    await page.waitForTimeout(700);
+    /* Clicar tem que CHEGAR no editor de perfil. Botão que navega para lugar nenhum passaria
+       na checagem acima e deixaria o beco sem saída de pé. */
+    const chegou = await page.locator("#pf_nome").count();
+    if (!chegou) problemas.push("acessos · 'criar um perfil' não abre o editor de perfil");
+    else console.log("  acessos · do formulário de usuário dá para criar um perfil  ok");
+  }
+  await ctx.close();
+}
+
 await browser.close();
 servidor.close();
 
