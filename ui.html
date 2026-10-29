@@ -205,6 +205,13 @@ body.sem-exportar [id$="_exp"],body.sem-exportar [id$="_exp_pdf"],body.sem-expor
 .somente-leitura{display:inline-block;font-size:11px;color:var(--warn);border:1px solid #6b5a22;border-radius:99px;padding:3px 10px;margin-top:10px}
 .pm-wrap{overflow-x:auto;margin:10px 0 6px;border:1px solid var(--line);border-radius:12px}
 .pm{margin:0;font-size:13px;min-width:600px}
+/* A matriz de permissão tem 8 colunas e 600px de largura mínima; os 620px do sheet deixavam
+   24px de fora, e o que sobrava escondido era justo a coluna "Tudo", o atalho mais útil da
+   tela. Medido em 29/10/2026 com a tela aberta, não pelo CSS: a caixa rola, então nada se
+   perdia, mas ninguém vê que rola. O sheet alarga quando tem matriz dentro. */
+.sheet:has(.pm-wrap){max-width:780px}
+.pm-dica{display:none;font-size:11px;color:var(--dim);margin:10px 0 0}
+@media(max-width:760px){.pm-dica{display:block}}
 .pm th,.pm td{padding:9px 6px;border-bottom:1px solid #1d1d1d;text-align:center;vertical-align:middle}
 .pm th:first-child,.pm td:first-child{text-align:left;padding-left:12px}
 .pm thead th{font-size:10px;letter-spacing:1px}
@@ -7234,7 +7241,8 @@ function htmlMatriz(permissoes, fixo){
   var ck = function(perm){
     return '<input type="checkbox" data-perm="'+perm+'"'+(tem[perm]||fixo?' checked':'')+(fixo?' disabled':'')+'>';
   };
-  var html = '<div class="pm-wrap"><table class="pm"><thead><tr><th>Área</th>' +
+  var html = '<p class="pm-dica">A tabela rola para o lado: a última coluna é <b>Tudo</b>, que marca a linha inteira.</p>' +
+    '<div class="pm-wrap"><table class="pm"><thead><tr><th>Área</th>' +
     AC.acoes.map(function(a){ return '<th>'+esc(a[1])+'</th>'; }).join("") +
     '<th>Tudo</th></tr></thead><tbody>';
   var grupo = null;
