@@ -11,7 +11,17 @@ cada uma numa notação padrão:
 
 Guarda-chuva das ferramentas que o Pedro mantém para a Desbravando UTV, operação de expedições de UTV: controle das expedições, formulário público, acervo de arquivos, estúdio de briefing e o site na Wix.
 
-![Desbravando UTV · as plataformas do cliente](./desbravando.svg)
+### Quem usa e para quê (UML)
+
+![Casos de uso · Desbravando UTV · as plataformas do cliente](./desbravando-1-casos-de-uso.svg)
+
+### Da expedição fechada à página no site (BPMN 2.0)
+
+![Processo · Desbravando UTV · as plataformas do cliente](./desbravando-2-processo.svg)
+
+### Arquitetura (C4, containers)
+
+![Arquitetura · Desbravando UTV · as plataformas do cliente](./desbravando-3-arquitetura.svg)
 
 Editável: [`desbravando.excalidraw`](./desbravando.excalidraw), abre em [excalidraw.com](https://excalidraw.com) ou no VS Code com a extensão Excalidraw.
 
@@ -19,7 +29,17 @@ Editável: [`desbravando.excalidraw`](./desbravando.excalidraw), abre em [excali
 
 Sistema em produção que a equipe da Desbravando UTV usa no celular, em campo: checklist, ciclo operacional, participantes, financeiro, hospedagem e formulários públicos. O Claude do dono opera o mesmo sistema pelo conector MCP.
 
-![Controle de Eventos · gestão das expedições](./eventos-desbravando.svg)
+### Quem usa e para quê (UML)
+
+![Casos de uso · Controle de Eventos · gestão das expedições](./eventos-desbravando-1-casos-de-uso.svg)
+
+### Da expedição criada à operação pronta (BPMN 2.0)
+
+![Processo · Controle de Eventos · gestão das expedições](./eventos-desbravando-2-processo.svg)
+
+### Arquitetura (C4, containers)
+
+![Arquitetura · Controle de Eventos · gestão das expedições](./eventos-desbravando-3-arquitetura.svg)
 
 Editável: [`eventos-desbravando.excalidraw`](./eventos-desbravando.excalidraw), abre em [excalidraw.com](https://excalidraw.com) ou no VS Code com a extensão Excalidraw.
 
