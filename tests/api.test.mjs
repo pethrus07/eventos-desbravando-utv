@@ -160,3 +160,30 @@ test("anexo: sobe para o R2, baixa o mesmo conteúdo e apaga", async () => {
   const depois = await api(`/api/anexos/${id}/arquivo`);
   assert.equal(depois.status, 404);
 });
+
+/* ---------- branch revisao-2026-11 ---------- */
+
+test("edição grava atualizado_por com aspa sem quebrar o SQL", async () => {
+  const cria = await api("/api/tarefas", { metodo: "POST", corpo: { titulo: "Fechar hospedagem" } });
+  assert.equal(cria.status, 200, await cria.clone().text());
+  const { id } = await cria.json();
+  const nome = "D'Ávila', status='x";
+  const edita = await api(`/api/tarefas/${id}`, { metodo: "PATCH", corpo: { titulo: "Fechar pousada", atualizado_por: nome } });
+  assert.equal(edita.status, 200, await edita.clone().text());
+  const { tarefas } = await (await api("/api/tarefas")).json();
+  const achado = tarefas.find((t) => t.id === id);
+  assert.equal(achado.titulo, "Fechar pousada");
+  assert.equal(achado.atualizado_por, nome, "o texto é gravado como veio, sem virar SQL");
+  assert.notEqual(achado.status, "x");
+});
+
+test("/oauth/register recusa redirect_uri que não é https e limita por hora", async () => {
+  const reg = (uris) => fetch(BASE + "/oauth/register", { method: "POST",
+    headers: { "content-type": "application/json" }, body: JSON.stringify({ client_name: "teste", redirect_uris: uris }) });
+  assert.equal((await reg(["javascript:alert(1)"])).status, 400);
+  assert.equal((await reg([])).status, 400);
+  const codigos = [];
+  for (let i = 0; i < 21; i++) codigos.push((await reg(["https://claude.ai/api/mcp/auth_callback"])).status);
+  assert.equal(codigos.filter((c) => c === 201).length, 20);
+  assert.equal(codigos.at(-1), 429);
+});
