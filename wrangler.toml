@@ -16,12 +16,21 @@ binding = "DB"
 database_name = "eventos"
 database_id = "c77cfaee-afe3-4a18-b1f1-a4164bdc9c75"
 
+# Anexos (fotos, PDFs) em R2. O código usa env.ANEXOS em worker.js (rotas /api/anexos e na
+# exclusão de evento/tarefa). Conferido em 01/11/2026: a versão no ar desde 21/10 tem este
+# binding apontando para o bucket "eventos-anexos". Sem esta declaração, um `wrangler deploy`
+# feito a partir deste arquivo publica o worker SEM o binding, e os anexos param (foi o que
+# aconteceu nas versões publicadas em 15/10, que saíram daqui sem ele).
+[[r2_buckets]]
+binding = "ANEXOS"
+bucket_name = "eventos-anexos"
+
 # ------------------------------------------------------------
 # STAGING — ambiente de testes, separado da produção.
 # Worker "eventos-staging" + banco próprio (sem dados reais).
 # O Claude do dono trabalha aqui (branch dev); nada aqui toca a produção.
 #   Deploy:  npx wrangler deploy --env staging
-#   Banco:   npx wrangler d1 execute eventos-staging --remote --file=schema.sql
+#   Banco:   npx wrangler d1 execute eventos-staging --remote --file=schema.sql   (depois as de migrations/, em ordem)
 # ------------------------------------------------------------
 [env.staging]
 name = "eventos-staging"
@@ -30,3 +39,7 @@ name = "eventos-staging"
 binding = "DB"
 database_name = "eventos-staging"
 database_id = "c9653583-1a3f-48c5-aab3-ac8960009d68"
+
+[[env.staging.r2_buckets]]
+binding = "ANEXOS"
+bucket_name = "eventos-anexos-staging"
