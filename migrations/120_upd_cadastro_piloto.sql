@@ -15,7 +15,7 @@
 -- CSV mostra coluna vazia para quem respondeu antes das perguntas existirem.
 --
 -- Aplicar:
---   npx wrangler d1 execute eventos --remote --file=upd_cadastro_piloto.sql
+--   npx wrangler d1 execute eventos --remote --file=migrations/120_upd_cadastro_piloto.sql
 -- ============================================================
 
 UPDATE cardapio_forms

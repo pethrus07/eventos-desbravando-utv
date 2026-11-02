@@ -7,7 +7,7 @@
 -- Os tokens em si são assinados (stateless), não ficam em tabela.
 --
 -- Aditivo. Aplicar com:
---   npx wrangler d1 execute eventos --remote --file=migracao_v4_2.sql
+--   npx wrangler d1 execute eventos --remote --file=migrations/080_v4_2.sql
 -- ============================================================
 
 -- Clientes registrados via Dynamic Client Registration (RFC 7591).

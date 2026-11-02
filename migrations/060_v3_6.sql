@@ -1,7 +1,7 @@
 -- ============================================================
 -- v3.6 · Tarefas gerais: reordenar (ordem) + horário + subtarefas
 -- Aplicar com:
---   npx wrangler d1 execute eventos --remote --file=migracao_v3_6.sql
+--   npx wrangler d1 execute eventos --remote --file=migrations/060_v3_6.sql
 -- ============================================================
 
 -- Ordem manual (arrastar) e horário livre nas tarefas gerais

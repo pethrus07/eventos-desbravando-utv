@@ -2,7 +2,7 @@
 -- Backfill único: leva os valores já lançados no CHECKLIST (itens.valor)
 -- para a nova tabela CUSTOS, para os eventos não começarem zerados na v3.2.
 -- Só copia itens que TÊM valor. Rodar UMA VEZ (a tabela custos deve estar vazia).
---   npx wrangler d1 execute eventos --remote --file=backfill_custos_do_checklist.sql
+--   npx wrangler d1 execute eventos --remote --file=migrations/025_backfill_custos_v3_2.sql
 -- Mapeamento de status: concluido->pago, andamento->andamento, resto->pendente.
 -- Fornecedor do checklist é texto livre -> vai para observações (custos usa fornecedor_id).
 -- ============================================================

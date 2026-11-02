@@ -7,8 +7,8 @@
 -- ninguém termina.
 --
 -- Depende da migração v4.5 (coluna nota_rodape). Aplicar nesta ordem:
---   npx wrangler d1 execute eventos --remote --file=migracao_v4_5.sql
---   npx wrangler d1 execute eventos --remote --file=seed_avaliacao.sql
+--   npx wrangler d1 execute eventos --remote --file=migrations/110_v4_5.sql
+--   npx wrangler d1 execute eventos --remote --file=seeds/seed_avaliacao.sql
 --   npx wrangler deploy -c wrangler.cardapio.toml
 --   npx wrangler deploy                      (painel + API)
 --

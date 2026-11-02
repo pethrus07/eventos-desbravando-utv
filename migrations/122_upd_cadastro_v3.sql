@@ -17,7 +17,7 @@
 -- mudanças se encaixam.
 --
 -- Aplicar:
---   npx wrangler d1 execute eventos --remote --file=upd_cadastro_v3.sql
+--   npx wrangler d1 execute eventos --remote --file=migrations/122_upd_cadastro_v3.sql
 -- ============================================================
 
 UPDATE cardapio_forms

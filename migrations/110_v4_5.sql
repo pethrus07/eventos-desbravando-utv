@@ -14,7 +14,7 @@
 -- quem respondeu o cardápio leu aquele texto, e ele continua valendo.
 --
 -- Aplicar:
---   npx wrangler d1 execute eventos --remote --file=migracao_v4_5.sql
+--   npx wrangler d1 execute eventos --remote --file=migrations/110_v4_5.sql
 -- ============================================================
 
 ALTER TABLE cardapio_forms ADD COLUMN nota_rodape TEXT NOT NULL DEFAULT '';

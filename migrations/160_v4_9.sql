@@ -1,7 +1,7 @@
 -- v4.9 · PERMISSÃO POR PESSOA, sem perfil obrigatório (15/10/2026)
 --
 -- POR QUE
--- O Administrador tentou cadastrar a Usuária e parou na pergunta certa: "quais os módulos que essa
+-- O administrador tentou cadastrar uma pessoa da equipe e parou na pergunta certa: "quais os módulos que essa
 -- pessoa tem acesso". Hoje a resposta é indireta — cria-se um PERFIL com aquelas áreas e
 -- põe-se a pessoa nele. Funciona quando as pessoas se agrupam em papéis de verdade
 -- (comercial, operação), e vira um perfil por pessoa quando não se agrupam. O briefing do
@@ -24,7 +24,7 @@
 -- Ainda assim o INSERT copia linha por linha, porque este arquivo pode rodar depois, em
 -- banco que já tenha gente, e aí jogar fora não seria aceitável.
 --
--- Aplicar:  npx wrangler d1 execute eventos --remote --file=migracao_v4_9.sql
+-- Aplicar:  npx wrangler d1 execute eventos --remote --file=migrations/160_v4_9.sql
 -- Antes:    npx wrangler d1 export eventos --remote --output backup.sql
 
 CREATE TABLE usuarios_v49 (

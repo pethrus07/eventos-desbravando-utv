@@ -1,7 +1,7 @@
 -- ============================================================
 -- v3.5 · Checklist: horário nos itens + subtarefas simples
 -- Aplicar com:
---   npx wrangler d1 execute eventos --remote --file=migracao_v3_5.sql
+--   npx wrangler d1 execute eventos --remote --file=migrations/050_v3_5.sql
 -- ============================================================
 
 -- Horário do item (livre: "14h", "08:30", "após o almoço"…)

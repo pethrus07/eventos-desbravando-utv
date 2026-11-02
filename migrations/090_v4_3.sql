@@ -6,7 +6,7 @@
 -- as respostas caem aqui e saem em planilha (CSV).
 --
 -- Aplicar:
---   npx wrangler d1 execute eventos --remote --file=migracao_v4_3.sql
+--   npx wrangler d1 execute eventos --remote --file=migrations/090_v4_3.sql
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS cardapio_forms (

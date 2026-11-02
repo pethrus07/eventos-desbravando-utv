@@ -9,7 +9,7 @@
 -- custos, CRM…). Só cria tabelas novas.
 --
 -- Aplicar com:
---   npx wrangler d1 execute eventos --remote --file=migracao_v4_1.sql
+--   npx wrangler d1 execute eventos --remote --file=migrations/070_v4_1.sql
 -- ============================================================
 
 -- ---------- Ciclo Operacional de Aquisição ----------

@@ -245,7 +245,7 @@ const BASE = {
 /* ---------------------------------------------- o esquema do briefing não descolou da migração
 
    `briefing.js` garante as próprias tabelas porque deploy e migração são dois atos e nada
-   obriga os dois a acontecerem. O SQL de lá foi EXTRAÍDO de `migracao_v4_7.sql`; se os dois
+   obriga os dois a acontecerem. O SQL de lá foi EXTRAÍDO de `migrations/140_v4_7.sql`; se os dois
    descolarem, o banco que se auto-cura passa a ser diferente do banco migrado à mão — que é a
    divergência mais cara de achar depois. */
 {
@@ -253,14 +253,14 @@ const BASE = {
   const ler = (n) => readFileSync(new URL("../" + n, import.meta.url), "utf8");
   const limpar = (s) => s.replace(/--[^\n]*/g, " ").replace(/\s+/g, " ").trim();
   const noJs = limpar(ler("briefing.js"));
-  const faltando = limpar(ler("migracao_v4_7.sql"))
+  const faltando = limpar(ler("migrations/140_v4_7.sql"))
     .split(";")
     .map(limpar)
     .filter((i) => i && /^(CREATE|INSERT)/i.test(i))
     .filter((i) => !noJs.includes(i));
   if (faltando.length)
     falhou("briefing · esquema igual ao da migração", faltando.map((i) => i.slice(0, 60)).join(" | "));
-  else ok("briefing · o esquema embutido é o mesmo da migracao_v4_7.sql");
+  else ok("briefing · o esquema embutido é o mesmo da migrations/140_v4_7.sql");
 }
 
 console.log(falhas.length ? `\n${falhas.length} falha(s). NÃO PUBLIQUE.` : "\nTudo que vale para esta base passa.");

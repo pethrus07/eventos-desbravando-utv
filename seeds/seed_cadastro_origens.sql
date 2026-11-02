@@ -13,7 +13,7 @@
 -- README antes de colar a fórmula em planilha compartilhada.
 --
 -- Aplicar:
---   npx wrangler d1 execute eventos --remote --file=seed_cadastro_origens.sql
+--   npx wrangler d1 execute eventos --remote --file=seeds/seed_cadastro_origens.sql
 -- ============================================================
 
 INSERT INTO cardapio_forms

@@ -16,7 +16,7 @@
 -- no tom mais apagado da página — e "se beber, não pilote" não é letra miúda.
 --
 -- Aplicar:
---   npx wrangler d1 execute eventos --remote --file=seed_bebidas_origens.sql
+--   npx wrangler d1 execute eventos --remote --file=seeds/seed_bebidas_origens.sql
 -- ============================================================
 
 INSERT INTO cardapio_forms

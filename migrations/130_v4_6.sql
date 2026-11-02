@@ -13,7 +13,7 @@
 -- pagamento, e copiar isso para o log duplicaria dado pessoal num lugar com outra régua de
 -- acesso. Guarda-se O QUE foi feito e em qual alvo, nunca o conteúdo.
 --
--- Aplicar:  npx wrangler d1 execute eventos --remote --file=migracao_v4_6.sql
+-- Aplicar:  npx wrangler d1 execute eventos --remote --file=migrations/130_v4_6.sql
 -- Antes:    npx wrangler d1 export eventos --remote --output backup.sql
 
 CREATE TABLE IF NOT EXISTS auditoria (

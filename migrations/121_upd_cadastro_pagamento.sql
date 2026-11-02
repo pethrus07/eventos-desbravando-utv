@@ -16,7 +16,7 @@
 -- quem preencher — trocar aqui quando virar, ou passar para "1ª na contratação, 2ª em 15/10".
 --
 -- Aplicar:
---   npx wrangler d1 execute eventos --remote --file=upd_cadastro_pagamento.sql
+--   npx wrangler d1 execute eventos --remote --file=migrations/121_upd_cadastro_pagamento.sql
 -- ============================================================
 
 UPDATE cardapio_forms

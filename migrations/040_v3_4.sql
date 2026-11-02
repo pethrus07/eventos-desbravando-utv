@@ -1,7 +1,7 @@
 -- ============================================================
 -- v3.4: Staff nos participantes + acompanhamento financeiro nos custos
 -- Aplicar com:
---   npx wrangler d1 execute eventos --remote --file=migracao_v3_4.sql
+--   npx wrangler d1 execute eventos --remote --file=migrations/040_v3_4.sql
 -- (local: trocar --remote por --local)
 -- ============================================================
 

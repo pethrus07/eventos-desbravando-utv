@@ -6,7 +6,7 @@
 -- Dá contexto a quem abre o link sem saber de onde veio.
 --
 -- Aplicar:
---   npx wrangler d1 execute eventos --remote --file=migracao_v4_4.sql
+--   npx wrangler d1 execute eventos --remote --file=migrations/100_v4_4.sql
 -- ============================================================
 
 ALTER TABLE cardapio_forms ADD COLUMN sobretitulo TEXT NOT NULL DEFAULT '';

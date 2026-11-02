@@ -2,8 +2,8 @@
 -- SEED · Playbook Desbravando (Modelo)
 -- Gerado por tools/gerar_seed_playbook.py a partir da planilha.
 -- Re-executável: apaga o playbook anterior e recria (id-agnóstico).
--- Aplicar DEPOIS da migracao_v4_1.sql:
---   npx wrangler d1 execute eventos --remote --file=seed_playbook.sql
+-- Aplicar DEPOIS da migrations/070_v4_1.sql:
+--   npx wrangler d1 execute eventos --remote --file=seeds/seed_playbook.sql
 -- ============================================================
 
 DELETE FROM op_microtarefas WHERE fase_id IN (SELECT f.id FROM op_fases f JOIN op_itens i ON i.id=f.item_id WHERE i.evento_id IN (SELECT id FROM eventos WHERE nome='Playbook Desbravando (Modelo)'));

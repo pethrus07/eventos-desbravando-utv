@@ -3,7 +3,7 @@
 -- APENAS para quem já tem o banco no ar. (instalação nova usa o schema.sql)
 -- É ADITIVA: cria tabelas novas, não altera nem apaga nada existente.
 -- Rodar UMA VEZ:
---   npx wrangler d1 execute eventos --remote --file=migracao_v3_2.sql
+--   npx wrangler d1 execute eventos --remote --file=migrations/020_v3_2.sql
 -- ============================================================
 
 -- Fornecedores (globais — compartilhados entre todas as expedições)

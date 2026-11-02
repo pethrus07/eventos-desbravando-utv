@@ -49,7 +49,7 @@ try {
    dentro. O seed é o mínimo para cada aba ter o que desenhar. */
 const sq = new DatabaseSync(":memory:");
 sq.exec(readFileSync(join(raiz, "schema.sql"), "utf8"));
-sq.exec(readFileSync(join(raiz, "migracao_v4_7.sql"), "utf8"));
+sq.exec(readFileSync(join(raiz, "migrations/140_v4_7.sql"), "utf8"));
 sq.exec(`
   INSERT INTO perfis (id, nome, admin, permissoes) VALUES (1, 'Administrador Geral', 1, '[]');
   INSERT INTO eventos (id, nome, data_evento, data_evento_fim, hospedagem_diarias)

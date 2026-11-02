@@ -4,7 +4,7 @@ Gera o seed do "Playbook Desbravando (Modelo)" a partir da planilha
 Levantamento_Tarefas_Expedicoes.xlsx.
 
 Uso:
-    python tools/gerar_seed_playbook.py [caminho_da_planilha.xlsx] > seed_playbook.sql
+    python tools/gerar_seed_playbook.py [caminho_da_planilha.xlsx] > seeds/seed_playbook.sql
 
 Modelo de destino (uniforme, conforme o spec):
     Expedição → 7 Etapas → Itens (Nome+Categoria) → 6 Fases → Microtarefas
@@ -223,8 +223,8 @@ def main():
     p("-- SEED · " + PLAYBOOK)
     p("-- Gerado por tools/gerar_seed_playbook.py a partir da planilha.")
     p("-- Re-executável: apaga o playbook anterior e recria (id-agnóstico).")
-    p("-- Aplicar DEPOIS da migracao_v4_1.sql:")
-    p("--   npx wrangler d1 execute eventos --remote --file=seed_playbook.sql")
+    p("-- Aplicar DEPOIS da migrations/070_v4_1.sql:")
+    p("--   npx wrangler d1 execute eventos --remote --file=seeds/seed_playbook.sql")
     p("-- ============================================================")
     p("")
     # limpeza (filhos primeiro)

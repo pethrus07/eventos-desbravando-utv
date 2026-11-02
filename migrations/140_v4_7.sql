@@ -19,7 +19,7 @@
 --    código: fora do catálogo não existe verbo para "faça isto para mim", só para "quero um
 --    orçamento disto". A trava é a AUSÊNCIA do verbo, não uma regra escrita em algum lugar.
 --
--- Aplicar:  npx wrangler d1 execute eventos --remote --file=migracao_v4_7.sql
+-- Aplicar:  npx wrangler d1 execute eventos --remote --file=migrations/140_v4_7.sql
 -- Antes:    npx wrangler d1 export eventos --remote --output backup.sql
 -- Confira:  npx wrangler whoami   (o Desbravando é na conta ryzecode08)
 
