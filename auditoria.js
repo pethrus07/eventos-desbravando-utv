@@ -21,7 +21,7 @@
    à mão, sem dado de pessoa.
    ============================================================ */
 
-/** DDL — espelha migracao_v4_6.sql e schema.sql. Mudou aqui, mudou nos três. */
+/** DDL — espelha migrations/130_v4_6.sql e schema.sql. Mudou aqui, mudou nos três. */
 export const DDL_AUDITORIA = `
 CREATE TABLE IF NOT EXISTS auditoria (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
