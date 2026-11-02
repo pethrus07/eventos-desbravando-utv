@@ -862,11 +862,22 @@ function minHhmm2(t) {
   return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0");
 }
 __name(minHhmm2, "minHhmm");
+/* UPDATE parcial. Os VALORES sempre vão por bind. No texto do SQL entram só nomes de tabela
+   e de coluna, que vêm de constantes e dos limpar*() (lista fechada), nunca do pedido.
+   `extra` é uma string fixa (sem valor de fora) ou { sql, args }: pedaço de SET com "?" e os
+   valores dele, na ordem. Revisão de 01/11/2026: antes o `atualizado_por` entrava no SQL com
+   a aspa escapada à mão. */
+function carimbo(b) {
+  return { sql: ", atualizado_em=datetime('now'), atualizado_por=?", args: [S(b.atualizado_por, 60)] };
+}
+__name(carimbo, "carimbo");
 async function upd(db, tabela, id, campos, extra = "") {
+  const ex = typeof extra === "string" ? { sql: extra, args: [] } : extra;
   const chaves = Object.keys(campos);
   if (!chaves.length) return false;
   const sets = chaves.map((k) => `${k}=?`).join(", ");
-  await db.prepare(`UPDATE ${tabela} SET ${sets}${extra} WHERE id=?`).bind(...chaves.map((k) => campos[k]), id).run();
+  await db.prepare(`UPDATE ${tabela} SET ${sets}${ex.sql} WHERE id=?`)
+    .bind(...chaves.map((k) => campos[k]), ...ex.args, id).run();
   return true;
 }
 __name(upd, "upd");
@@ -1621,7 +1632,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
     if (method === "PATCH") {
       const b = await request.json().catch(() => ({}));
       const c = limparItem(b);
-      if (!await upd(db, "itens", id, c, `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "itens", id, c, carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       const item = await db.prepare("SELECT * FROM itens WHERE id=?").bind(id).first();
       return item ? json({ ok: true, item }) : json({ erro: "n\xE3o encontrado" }, 404);
@@ -1841,9 +1852,9 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
           recDepois = !staffDepois && !desistDepois;
         }
       }
-      let extraCli = `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`;
-      if ("utv_recebido" in c) extraCli += `, utv_recebido_em=${c.utv_recebido ? "datetime('now')" : "''"}`;
-      if ("utv_devolvido" in c) extraCli += `, utv_devolvido_em=${c.utv_devolvido ? "datetime('now')" : "''"}`;
+      const extraCli = carimbo(b);
+      if ("utv_recebido" in c) extraCli.sql += `, utv_recebido_em=${c.utv_recebido ? "datetime('now')" : "''"}`;
+      if ("utv_devolvido" in c) extraCli.sql += `, utv_devolvido_em=${c.utv_devolvido ? "datetime('now')" : "''"}`;
       if (!await upd(db, "clientes", id, c, extraCli))
         return json({ erro: "nada para atualizar" }, 400);
       if ("nome" in c) {
@@ -2112,7 +2123,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
     const id = +m[1];
     if (method === "PATCH") {
       const b = await request.json().catch(() => ({}));
-      if (!await upd(db, "focos_do_dia", id, limparFoco(b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "focos_do_dia", id, limparFoco(b), carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       return json({ ok: true });
     }
@@ -2184,7 +2195,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
     if (method === "PATCH") {
       const b = await request.json().catch(() => ({}));
       const t = limparTarefa(b);
-      if (!await upd(db, "tarefas", id, t, `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "tarefas", id, t, carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       const tarefa = await db.prepare("SELECT * FROM tarefas WHERE id=?").bind(id).first();
       return tarefa ? json({ ok: true, tarefa }) : json({ erro: "n\xE3o encontrado" }, 404);
@@ -2288,7 +2299,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
     if (method === "PATCH") {
       const b = await request.json().catch(() => ({}));
       const c = limparContato(b);
-      if (!await upd(db, "crm_contatos", id, c, `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "crm_contatos", id, c, carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       return json({ ok: true });
     }
@@ -2346,7 +2357,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
     const id = +m[1];
     if (method === "PATCH") {
       const b = await request.json().catch(() => ({}));
-      if (!await upd(db, "fornecedores", id, limparFornecedor(b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "fornecedores", id, limparFornecedor(b), carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       return json({ ok: true });
     }
@@ -2446,7 +2457,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
     const id = +m[1];
     if (method === "PATCH") {
       const b = await request.json().catch(() => ({}));
-      if (!await upd(db, "custos", id, limparCusto(b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "custos", id, limparCusto(b), carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       return json({ ok: true });
     }
@@ -2526,7 +2537,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
     }
     if (method === "PATCH") {
       const b = await request.json().catch(() => ({}));
-      if (!await upd(db, "financeiro_receber", id, limparRecebivel(b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "financeiro_receber", id, limparRecebivel(b), carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       return json({ ok: true });
     }
@@ -2565,7 +2576,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
     const id = +m[1];
     if (method === "PATCH") {
       const b = await request.json().catch(() => ({}));
-      if (!await upd(db, "financeiro_parcelas", id, limparParcela(b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "financeiro_parcelas", id, limparParcela(b), carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       return json({ ok: true });
     }
@@ -2631,7 +2642,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
         }
       }
       if (!Object.keys(t0).length) return json({ erro: "nada para atualizar" }, 400);
-      if (!await upd(db, "pagamentos_terceiros", id, t0, `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "pagamentos_terceiros", id, t0, carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       return json({ ok: true });
     }
@@ -2672,7 +2683,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
     const id = +m[1];
     if (method === "PATCH") {
       const b = await request.json().catch(() => ({}));
-      if (!await upd(db, "etapas", id, limparEtapa(b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "etapas", id, limparEtapa(b), carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       return json({ ok: true });
     }
@@ -2714,7 +2725,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
     const id = +m[1];
     if (method === "PATCH") {
       const b = await request.json().catch(() => ({}));
-      if (!await upd(db, "categorias", id, limparCategoria(b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "categorias", id, limparCategoria(b), carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       return json({ ok: true });
     }
@@ -2756,7 +2767,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
     const id = +m[1];
     if (method === "PATCH") {
       const b = await request.json().catch(() => ({}));
-      if (!await upd(db, "centros_custo", id, limparCentroCusto(b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "centros_custo", id, limparCentroCusto(b), carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       return json({ ok: true });
     }
@@ -2897,7 +2908,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
     const id = +m[1];
     if (method === "PATCH") {
       const b = await request.json().catch(() => ({}));
-      if (!await upd(db, "op_itens", id, await limparOpItem(db, b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "op_itens", id, await limparOpItem(db, b), carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       return json({ ok: true });
     }
@@ -3074,7 +3085,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
     const id = +m[1];
     if (method === "PATCH") {
       const b = await request.json().catch(() => ({}));
-      if (!await upd(db, "campo_tarefas", id, limparCampoTarefa(b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "campo_tarefas", id, limparCampoTarefa(b), carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       const tarefa = await db.prepare("SELECT * FROM campo_tarefas WHERE id=?").bind(id).first();
       return tarefa ? json({ ok: true, tarefa }) : json({ erro: "n\xE3o encontrado" }, 404);
@@ -3208,7 +3219,7 @@ async function rotasApi(request, env, url, path, method, db, auth, pode) {
     const id = +m[1];
     if (method === "PATCH") {
       const b = await request.json().catch(() => ({}));
-      if (!await upd(db, "prog_acontecimentos", id, limparProgAcontecimento(b), `, atualizado_em=datetime('now'), atualizado_por='${S(b.atualizado_por, 60).replace(/'/g, "''")}'`))
+      if (!await upd(db, "prog_acontecimentos", id, limparProgAcontecimento(b), carimbo(b)))
         return json({ erro: "nada para atualizar" }, 400);
       return json({ ok: true });
     }
