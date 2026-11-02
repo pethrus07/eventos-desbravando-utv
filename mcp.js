@@ -760,8 +760,20 @@ async function handleMcp(request, env) {
     }), { headers: jsonHdr });
   }
   if (path === "/oauth/register" && request.method === "POST") {
+    /* Revisão de 01/11/2026: a rota grava sem chave (o registro dinâmico exige) e não tinha
+       limite. Agora: no máximo REG_POR_HORA registros por hora no total, no máximo REG_TOTAL
+       clientes guardados, e redirect_uri só https (ou localhost, para teste). Sem redirect_uri
+       registrada, o /oauth/authorize aceitava qualquer destino. */
+    const REG_POR_HORA = 20, REG_TOTAL = 500;
+    const recentes = await db.prepare("SELECT COUNT(*) AS n FROM mcp_clients WHERE criado_em > datetime('now', '-1 hour')").first();
+    const total = await db.prepare("SELECT COUNT(*) AS n FROM mcp_clients").first();
+    if ((recentes && recentes.n >= REG_POR_HORA) || (total && total.n >= REG_TOTAL))
+      return new Response(JSON.stringify({ error: "temporarily_unavailable", error_description: "limite de registros atingido" }), { status: 429, headers: { ...jsonHdr, "retry-after": "3600" } });
     const b = await request.json().catch(() => ({}));
-    const uris = Array.isArray(b.redirect_uris) ? b.redirect_uris.filter((u) => typeof u === "string").slice(0, 10) : [];
+    const uriValida = (u) => { try { const x = new URL(u); return x.protocol === "https:" || (x.protocol === "http:" && (x.hostname === "localhost" || x.hostname === "127.0.0.1")); } catch { return false; } };
+    const uris = Array.isArray(b.redirect_uris) ? b.redirect_uris.filter((u) => typeof u === "string" && u.length <= 500 && uriValida(u)).slice(0, 10) : [];
+    if (!uris.length)
+      return new Response(JSON.stringify({ error: "invalid_redirect_uri", error_description: "informe ao menos uma redirect_uri https" }), { status: 400, headers: jsonHdr });
     const client_id = "cli_" + randToken(18);
     await db.prepare("INSERT INTO mcp_clients (client_id, redirect_uris, nome) VALUES (?,?,?)").bind(client_id, JSON.stringify(uris), String(b.client_name || "").slice(0, 120)).run();
     return new Response(JSON.stringify({
