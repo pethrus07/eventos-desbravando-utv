@@ -12,6 +12,12 @@
 > **Atenção antes de qualquer deploy:** existem **duas linhas de código** deste sistema. O que
 > está no ar hoje não foi publicado deste repositório. Leia a seção 11 antes de rodar
 > `npx wrangler deploy`.
+>
+> **Revisão de 01/11/2026:** as seções 2, 11 e 13 foram atualizadas. As seções 1, 7 e 16 ainda
+> descrevem o acesso por duas chaves (admin e equipe) de 09/09. Desde a recuperação de 14/10 o
+> `main` tem também login por e-mail e senha, perfis, sessões e permissão por pessoa (v4.9);
+> as chaves continuam valendo como acesso legado. O código é a fonte: `autenticar()` e
+> `regraRota()` no `worker.js`.
 
 ---
 
@@ -69,43 +75,42 @@ flowchart LR
 
 ```
 eventos-desbravando-utv/
-├── worker.js                    O WORKER PRINCIPAL: roteia /api/*, serve o ui.html, checa o papel
-├── ui.html                      A INTERFACE INTEIRA: HTML + CSS + JS num arquivo (3.257 linhas)
+├── worker.js                    O WORKER PRINCIPAL: roteia /api/*, serve o ui.html, login e permissões
+├── ui.html                      A INTERFACE INTEIRA: HTML + CSS + JS num arquivo
+├── auditoria.js                 Registro de toda escrita (S1)
+├── briefing.js                  Briefing de comunicação por expedição (S2)
 ├── cardapio.js                  O formulário público: modelo da pergunta, página, gravação, CSV
 ├── worker-cardapio.js           Worker separado que só serve o formulário (ver seção 11)
 ├── mcp.js                       Conector MCP + OAuth 2.1 (o Claude operando o sistema)
-├── marca.js                     A marca da Desbravando em vetor (logotipo e montanha), como <symbol>
+├── marca.js                     A marca em vetor (logotipo e montanha), como <symbol>
 │
-├── schema.sql                   Estrutura do banco — 24 tabelas. NÃO cria as do cardápio (ver 6.3)
-├── migracao_v3_1..v3_6.sql      Migrações incrementais da v3 (custos, subtarefas, staff, horário)
-├── migracao_v4_1..v4_5.sql      v4.1 Sistema Operacional · v4.2 MCP · v4.3–4.5 cardápio
-├── backfill_custos_do_checklist.sql   Rodada única: leva itens.valor do checklist para custos
-├── seed_playbook.sql            O "Playbook Desbravando (Modelo)" (394 INSERTs) gerado da planilha
-├── seed_avaliacao.sql           Cria o formulário de avaliação da expedição
-├── seed_cadastro_origens.sql    Cria o formulário de cadastro (CPF/RG/endereço) da Origens
-├── upd_cadastro_piloto.sql      Acrescenta piloto/acompanhante ao formulário acima, sem recriá-lo
+├── schema.sql                   Estrutura do banco para instalação nova
+├── migrations/                  Mudanças incrementais, numeradas na ordem de aplicação (ver o README de lá)
+├── seeds/                       Playbook operacional e os formulários criados por SQL
 │
-├── tools/
-│   ├── gerar_seed_playbook.py   Lê a planilha de levantamento (.xlsx) e escreve o seed_playbook
-│   └── links-cardapio.mjs       Imprime link e fórmula =IMPORTDATA de cada formulário, com o token
+├── tools/                       Travas de deploy (checar-*), recuperação da produção, geradores
+├── tests/api.test.mjs           Suíte contra o wrangler dev local (npm test)
 │
-├── previa/                      SAÍDA: prévia estática do formulário de avaliação (HTML + PNG)
-├── recuperado-prod-2026-08-23/  SAÍDA: o que estava no ar em 23/08, baixado da Cloudflare (ver 11)
-│
-├── wrangler.toml                Worker "eventos" + D1 + ambiente staging
+├── wrangler.toml                Worker "eventos" + D1 + R2 (ANEXOS) + ambiente staging
 ├── wrangler.cardapio.toml       Worker "cardapio", mesmo D1
-├── README.md                    A vitrine: a dor, as decisões, a tabela de rotas, LGPD
-├── CLAUDE.md                    O guia de quem edita e publica direto na produção
-└── docs/ARQUITETURA.md          este arquivo
+├── package.json                 Só o wrangler como dependência de desenvolvimento e os scripts
+├── README.md / README.pt-BR.md  Visão geral, em inglês e em português
+├── CLAUDE.md                    Regras para quem edita este repositório
+└── docs/
+    ├── ARQUITETURA.md           este arquivo
+    ├── ROADMAP.md               Agora / Depois / Talvez
+    ├── HISTORICO.md             o roadmap antigo, como registro
+    ├── FORMULARIOS-PUBLICOS.md  os formulários e o cuidado com dado sensível
+    ├── historico/               migração descartada (v4_8), só como registro
+    ├── previa/                  prévia estática do formulário de avaliação
+    └── arquitetura/             diagramas gerados
 ```
 
-**Não versionados** (e é de propósito — ver `.gitignore`): `.dev.vars` (as chaves para o
+**Não versionados** (e é de propósito, ver `.gitignore`): `.dev.vars` (as chaves para o
 `wrangler dev`), `backup*.sql` e `backup*.json` (despejos da produção, com dado real),
-`seed_dados_reais.sql`, `.wrangler/` (estado local do miniflare). O repositório é **público**:
-nada com CPF, telefone ou e-mail de participante pode entrar nele.
-
-Não há `package.json`, não há `node_modules`, não há build e não há teste automatizado. Tudo
-roda por `npx wrangler`.
+`seed_dados_reais.sql`, `.wrangler/`, `node_modules/` e `recuperado/` (fonte baixado da
+produção). O repositório é **público**: nada com CPF, telefone ou e-mail de participante pode
+entrar nele.
 
 ---
 
@@ -155,7 +160,7 @@ colado cru na SQL; ver a armadilha na seção 17.
 | `worker-cardapio.js` (68) | Um Worker que só chama `handleCardapio`, com link curto `/<slug>` | Não tem API, não tem R2, não lê secret: só o formulário |
 | `mcp.js` (682) | Servidor MCP (JSON-RPC sobre HTTP) + servidor OAuth 2.1 completo + as 34 ferramentas | Não expõe CPF/financeiro/CRM à chave de equipe; não usa o roteador do `worker.js` |
 | `marca.js` (42) | Logotipo e montanha em `<path>`, como `<symbol>` reusável e como SVG autossuficiente | Não tem CSS: a cor vem do `currentColor` de quem usa |
-| `tools/gerar_seed_playbook.py` (305) | Lê o `.xlsx` de levantamento e cospe o `seed_playbook.sql` | Não fala com o banco: escreve SQL no stdout |
+| `tools/gerar_seed_playbook.py` (305) | Lê o `.xlsx` de levantamento e cospe o `seeds/seed_playbook.sql` | Não fala com o banco: escreve SQL no stdout |
 | `tools/links-cardapio.mjs` (60) | Lê os formulários pelo `wrangler` e imprime link + fórmula da planilha com o token inteiro | Não grava nada |
 
 ---
@@ -260,13 +265,13 @@ rodados à mão).
 ### 6.3 Instalação e migrações — o detalhe que morde
 
 `schema.sql` cria **24 tabelas** e é o que o README manda rodar na instalação. Ele **não cria**
-`cardapio_forms` nem `cardapio_respostas`: elas nasceram na `migracao_v4_3.sql` e nunca foram
+`cardapio_forms` nem `cardapio_respostas`: elas nasceram na `migrations/090_v4_3.sql` e nunca foram
 copiadas para o schema. Numa instalação limpa, portanto, é preciso rodar também:
 
 ```bash
-npx wrangler d1 execute eventos --remote --file=migracao_v4_3.sql   # tabelas do cardápio
-npx wrangler d1 execute eventos --remote --file=migracao_v4_4.sql   # coluna sobretitulo
-npx wrangler d1 execute eventos --remote --file=migracao_v4_5.sql   # coluna nota_rodape
+npx wrangler d1 execute eventos --remote --file=migrations/090_v4_3.sql   # tabelas do cardápio
+npx wrangler d1 execute eventos --remote --file=migrations/100_v4_4.sql   # coluna sobretitulo
+npx wrangler d1 execute eventos --remote --file=migrations/110_v4_5.sql   # coluna nota_rodape
 ```
 
 Em banco que **já tem dado**, migração é o único caminho: as `migracao_*.sql` são aditivas
@@ -435,43 +440,57 @@ cenários com suas linhas, e a árvore inteira do Ciclo e do Campo. Como os ids 
 remapeamento é feito pela **`ordem`** do item (única dentro do evento) casada com o **tipo** da
 fase; o realizado é zerado e os status voltam para `afazer`. `limpar_valores` apaga fornecedor
 e valor do checklist copiado. É assim que o **"Playbook Desbravando (Modelo)"** — semeado da
-planilha de levantamento pelo `seed_playbook.sql` — vira o ponto de partida de cada expedição
+planilha de levantamento pelo `seeds/seed_playbook.sql` — vira o ponto de partida de cada expedição
 nova.
 
 ---
 
-## 11 · Por que existem dois Workers
+## 11 · Duas cópias do código e dois Workers
 
-Em **23/08/2026** o Worker `eventos` foi publicado por `wrangler deploy` a partir de uma cópia
-do projeto **que não está neste git**, e que não tem o módulo do cardápio: a rota
-`/cardapio/<slug>` saiu do ar. Aquela cópia tem o que este repositório não tem (anexos em R2,
-uma `ui.html` de 383 kB, o secret `CLIENTE_KEY`); este repositório tem o que ela não tem (o
-cardápio e a agenda). **Nenhuma das duas contém a outra** — o `recuperado-prod-2026-08-23/`
-guarda o que foi baixado da Cloudflare naquele dia, com o relato inteiro no `LEIA-ME.md` de lá.
+**Estado conferido em 01/11/2026 (só leitura na Cloudflare).** Esta seção substitui a versão de
+09/09 e alinha com o ROADMAP: a divergência entre cópias **continua aberta**.
 
-A saída foi republicar o formulário num Worker próprio, `cardapio`, apontado para o **mesmo
-banco D1**. Consequências, todas de propósito:
+### A linha do tempo
 
-- nenhum byte do Worker `eventos` é tocado;
-- as respostas caem na mesma tabela, então quando as duas linhas se juntarem o painel encontra
-  tudo onde sempre esteve;
-- o próximo deploy da outra cópia não derruba o formulário;
-- o código do formulário é **o mesmo `cardapio.js`** — não há fonte duplicado.
+| quando | o que foi publicado no Worker `eventos` | de onde |
+|---|---|---|
+| 23/08/2026 | versão sem o cardápio, com anexos em R2 e `ui.html` de 383 kB | outra cópia, fora deste git |
+| 08/10/2026 | versão com login, perfis, financeiro, programação | outra cópia |
+| 14/10/2026 | o fonte de 08/10 é baixado e vira o `main` (`f071b70`); S0 a S3 publicados por cima (`ffcea15b`) | este repositório |
+| 15/10/2026 | v4.9, permissão por pessoa (versões `2aa230af` e `3e1ec7dd`) | este repositório, **sem o binding `ANEXOS`** |
+| 21/10/2026 | versão `9ff53cdf`, que é a que está no ar | **outra cópia de novo** |
 
-O Worker do cardápio ainda aceita o link curto: `/<slug>` é reescrito para `/cardapio/<slug>`
-(preservando o `/planilha.csv` do fim), porque no host `cardapio.…` o prefixo é redundante.
+Como se sabe que a de 21/10 não saiu daqui: o `ui.html` publicado é idêntico byte a byte ao
+recuperado em 14/10 (não tem as telas da v4.9), o pacote não contém `auditoria.js` nem
+`briefing.js`, e o cabeçalho do fonte diz "v4.48", numeração que este repositório nunca usou.
 
-**Medido hoje, 09/09/2026:**
+Consequências práticas:
 
-| URL | Resposta |
-|---|---|
-| `https://eventos.desbravando-utv.workers.dev/` | 200 (o painel está no ar) |
-| `https://eventos.desbravando-utv.workers.dev/cardapio/avaliacao-expedicao` | **404** — a versão no ar ainda não tem o módulo |
-| `https://cardapio.desbravando-utv.workers.dev/avaliacao-expedicao` | 200 |
-| `https://eventos.desbravando-utv.workers.dev/.well-known/oauth-protected-resource` | 200 (o MCP está lá) |
+- **O `main` não é o que está no ar.** A auditoria (S1), o briefing (S2) e a v4.9 estão no
+  `main` e não estão em produção desde 21/10. As tabelas deles continuam no banco.
+- **Entre 15/10 e 21/10 os anexos ficaram sem armazenamento**: as duas versões de 15/10 não
+  tinham o binding R2. Desde 01/11 o `wrangler.toml` declara `ANEXOS → eventos-anexos`.
+- A versão de 21/10 publicou também o **source map**, e ele traz o fonte original **com os
+  comentários** (`worker.js` de 3.249 linhas e `mcp.js`). Foi guardado fora do git, em
+  `C:\Users\olive\Arquivo-projetos\eventos-desbravando-utv\producao-2026-10-21-versao-9ff53cdf\`.
+  É o melhor ponto de partida para juntar as duas linhas e para separar o `worker.js`.
 
-Ou seja: **a divergência de 23/08 continua aberta**. Publicar este repositório sobre o Worker
-`eventos` hoje apagaria os anexos em R2 e a `ui.html` grande da outra cópia.
+**Antes de qualquer `wrangler deploy` deste repositório:** rodar
+`npx wrangler deployments list` e `node tools/recuperar-da-producao.mjs --saida=<pasta fora do repo>`,
+comparar com o checkout, e só publicar quando as duas linhas estiverem juntas. Publicar o
+`main` hoje apaga o que a outra cópia publicou em 21/10.
+
+### O Worker do cardápio
+
+Em 23/08 o deploy da outra cópia tirou do ar a rota `/cardapio/<slug>`. A saída foi publicar o
+formulário num Worker próprio, `cardapio` (`worker-cardapio.js` + `wrangler.cardapio.toml`),
+apontado para o **mesmo banco D1**. Nenhum byte do Worker `eventos` é tocado, as respostas
+caem na mesma tabela, e o código é o mesmo `cardapio.js`. O Worker do cardápio aceita o link
+curto: `/<slug>` é reescrito para `/cardapio/<slug>`.
+
+O material de recuperação de 23/08 e a versão anterior a 14/10 saíram da árvore do git em
+01/11/2026. Continuam no histórico (`9908a3d`, `f071b70`) e numa cópia em
+`C:\Users\olive\Arquivo-projetos\eventos-desbravando-utv\`.
 
 ---
 
@@ -493,7 +512,7 @@ O Worker do formulário é um deploy à parte: `npx wrangler deploy -c wrangler.
 | `APP_KEY` | secret do Wrangler | papel admin; também assina o token do MCP se `MCP_SIGNING_KEY` não existir |
 | `TEAM_KEY` | secret do Wrangler (opcional) | papel equipe |
 | `MCP_SIGNING_KEY` | secret do Wrangler (opcional) | assina os tokens OAuth do conector |
-| `CLIENTE_KEY` | existe **só** no Worker que está no ar (ver seção 11) | não há código para ela neste repositório |
+| `CLIENTE_KEY` | existe no Worker que está no ar (ver seção 11) | não há código para ela neste repositório |
 | `token_planilha` | coluna do banco, por formulário | o `=IMPORTDATA` da planilha |
 
 Definir: `npx wrangler secret put APP_KEY`. Acompanhar erro em produção: `npx wrangler tail`.
@@ -505,8 +524,10 @@ O `wrangler.toml` declara `[[rules]] type = "Text"` para `**/*.html` — é o qu
 
 ## 13 · Como conferir
 
-**Não há teste automatizado, não há `package.json` e não há lint.** A conferência é manual, e
-o CLAUDE.md fixa o mínimo depois de publicar:
+Desde 01/11/2026 há uma suíte automática: `npm test` sobe o `wrangler dev` sobre um D1 local
+criado do `schema.sql` e testa login, permissão por pessoa, o ciclo de uma expedição e o anexo
+no R2. As travas (`npm run travas`, `npm run travas:tela`) seguem valendo antes de publicar.
+Depois de publicar, o mínimo:
 
 ```bash
 curl https://eventos.desbravando-utv.workers.dev/          # tem de responder 200
@@ -540,17 +561,17 @@ baixar o CSV pelo painel.
 **Aplicar uma migração**
 ```bash
 npx wrangler d1 export eventos --remote --output backup.sql
-npx wrangler d1 execute eventos --remote --file=migracao_v4_5.sql
+npx wrangler d1 execute eventos --remote --file=migrations/110_v4_5.sql
 ```
 Local, trocar `--remote` por `--local`.
 
 **Criar um formulário público novo** — pelo painel (aba Cardápio da expedição, só admin): ele
 gera slug, perguntas padrão e token. Para um formulário com contrato específico, o caminho é um
-`.sql` como o `seed_avaliacao.sql` ou o `seed_cadastro_origens.sql`, aplicado com
+`.sql` como o `seeds/seed_avaliacao.sql` ou o `seeds/seed_cadastro_origens.sql`, aplicado com
 `npx wrangler d1 execute eventos --remote --file=...`.
 
 **Mudar as perguntas de um formulário que já está no ar** — `UPDATE`, nunca `INSERT` novo: é o
-que o `upd_cadastro_piloto.sql` faz. Recriar mudaria o slug e o token, e quem já respondeu
+que o `migrations/120_upd_cadastro_piloto.sql` faz. Recriar mudaria o slug e o token, e quem já respondeu
 ficaria num formulário órfão. Preserve os `id` das perguntas antigas — é o `id` que liga a
 resposta gravada à pergunta.
 
@@ -567,8 +588,8 @@ de log truncado: já custou meia hora achando "bloqueio de rede" onde havia cred
 
 **Regenerar o Playbook a partir da planilha**
 ```bash
-python tools/gerar_seed_playbook.py Levantamento_Tarefas_Expedicoes.xlsx > seed_playbook.sql
-npx wrangler d1 execute eventos --remote --file=seed_playbook.sql
+python tools/gerar_seed_playbook.py Levantamento_Tarefas_Expedicoes.xlsx > seeds/seed_playbook.sql
+npx wrangler d1 execute eventos --remote --file=seeds/seed_playbook.sql
 ```
 
 **Instalar do zero** — os quatro passos do README **mais** as migrações do cardápio (seção 6.3).

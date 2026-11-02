@@ -1,248 +1,99 @@
-# Controle de Eventos · Desbravando UTV
+# Event Control · Desbravando UTV
 
-![status](https://img.shields.io/badge/status-em%20produção-6FCF97)
-![runtime](https://img.shields.io/badge/runtime-Cloudflare%20Workers-F38020)
-![banco](https://img.shields.io/badge/banco-D1%20(SQLite)-003B57)
-![front](https://img.shields.io/badge/front-SPA%20sem%20framework-F7DF1E)
-![deps](https://img.shields.io/badge/dependências-0-brightgreen)
+[Português](README.pt-BR.md) · English
 
-**Projeto real, em produção — não é demo nem exercício de portfólio.** É usado no dia a dia da **Desbravando UTV**, uma operação de expedições de UTV com atuação nacional que movimenta milhões de reais.
+Management system for off-road UTV expeditions run by Desbravando UTV. One web app replaces
+a set of spreadsheets: logistics checklist, participants, receivables, costs and suppliers,
+lodging, field schedule and team tasks. The team uses it on the phone, in the field.
 
-**Desbravando UTV:** [site oficial](https://desbravandoutv.com) · Instagram [@desbravando_utv](https://www.instagram.com/desbravando_utv/)
+## Status
 
-> Sistema de gestão para uma operação **real** de expedições de UTV: substituiu um emaranhado de planilhas por um app único que a equipe abre **no celular, em campo**. Roda inteiro em um **Cloudflare Worker + D1** (SQLite serverless), no plano gratuito — nada de servidor pra manter.
+In production since July 2026 at `eventos.desbravando-utv.workers.dev`.
 
-> **Para entender o código sozinho, comece por [docs/ARQUITETURA.md](docs/ARQUITETURA.md).**
+Known gap (checked 2026-11-01): the version live since 2026-10-21 was published from another
+copy of the code that is not in this repository. `main` and production differ again. See
+[docs/ARQUITETURA.md §11](docs/ARQUITETURA.md) before any deploy.
 
----
+## The problem it solves
 
-## 1. Visão Geral e a Dor
+The operation sold expeditions, tracked logistics, collected payments in installments and
+estimated costs in separate spreadsheets that several people edited at the same time.
+Formulas broke and edits overwrote each other. This app puts the whole expedition cycle in
+one place, with per-field saves so several people can edit at once.
 
-A operação vende expedições, monta o checklist de logística, cobra pacotes em parcelas, aloca gente em quartos e simula o custo de cada trilha. Isso vivia espalhado em abas de planilha — "controle geral", "cadastro de clientes", "simulador de custos" — que **ninguém conseguia editar ao mesmo tempo** sem quebrar fórmula ou sobrescrever o colega.
+## Stack
 
-**O que está sendo resolvido?**
-Juntar todo o ciclo de uma expedição (venda → logística → financeiro → hospedagem → pós) em um só lugar, que funcione bem no celular e aguente 2–5 pessoas mexendo juntas.
+- Cloudflare Worker (`worker.js`), plain JavaScript, no framework and no build step
+- Cloudflare D1 (SQLite) for data
+- Cloudflare R2 for attachments (binding `ANEXOS`)
+- Single-file front end (`ui.html`) served by the Worker
+- MCP server with OAuth 2.1 (`mcp.js`) so Claude can operate the system
+- Public forms (`cardapio.js`) served by a separate Worker (`worker-cardapio.js`)
 
-**Quem sofre com o problema?**
-Uma equipe pequena tocando várias expedições em paralelo, no campo, sem TI dedicada e sem orçamento pra ferramenta paga por assento.
+## Run locally
 
-**Por que importa pro negócio?**
-Informação perdida ou desencontrada é dinheiro perdido: pacote não cobrado, custo esquecido, participante sem contrato. Centralizar isso é o que deixa a operação escalar sem virar caos.
-
----
-
-## 2. Arquitetura e Decisões Técnicas
-
-| Camada | Escolha | Por que escolhi isso? | Alternativa considerada | Nota de impacto |
-|---|---|---|---|---|
-| **Runtime** | Cloudflare Workers | Escala a zero, deploy num comando, plano gratuito e edge global; zero servidor pra manter | VPS + Node, Vercel Functions | Custo zero, zero-ops |
-| **Banco** | D1 (SQLite serverless) | SQL relacional no mesmo edge do Worker, transacional, sobra no volume da operação | Postgres gerenciado, KV/DO | Consistência sem infra |
-| **Front** | SPA de arquivo único, **sem build e sem framework** | HTML+CSS+JS puro servido como texto pelo próprio Worker; carrega rápido no 4G do campo, sem toolchain | React/Vue + Vite | Simplicidade, 0 dependências |
-| **Auth** | Chave em 2 níveis no header `x-app-key` | Operação de 2–5 pessoas não precisa de cadastro; a chave é *secret* do Wrangler e nunca vai no HTML | OAuth, conta por usuário | Menos atrito e menos superfície de ataque |
-| **Concorrência** | Gravação **por campo** (PATCH pequeno) + poll leve | Várias pessoas editam ao mesmo tempo sem "salvar a tela inteira" e sobrescrever o outro | Salvar formulário inteiro; WebSocket/CRDT | Edição simultânea segura, sem backend de tempo real |
-
-**Fluxo:**
-
-```
-Navegador (SPA)  ──►  Worker  /api/*  ──►  D1 (SQLite)
-  x-app-key            roteia + valida       eventos · itens · clientes
-  rotas por hash       papel admin/equipe    custos · quartos · CRM · tarefas
-```
-
-**Módulos:** Checklist de logística · **Sistema Operacional (Ciclo de 6 fases + Operação em Campo + Agenda)** · Participantes + Financeiro · Simulador de custos · Hospedagem · Custos + Fornecedores · Tarefas gerais · Mini-CRM. Dois papéis: `APP_KEY` (admin — tudo) e `TEAM_KEY` (equipe — checklist, operacional, hospedagem e tarefas, sem CPF/financeiro/CRM).
-
-### Sistema Operacional (v4.1)
-
-Padroniza toda expedição em **7 etapas → itens → ciclo de 6 fases → microtarefas**. Ao criar um item (só **nome + categoria**), o sistema gera automaticamente as fases **Pesquisa · Negociação · Contratação · Confirmação · Execução/Entrega · Avaliação**. A etapa **Operação em Campo** é diferente: cronológica por **dias → tarefas → subtarefas**, com tarefas **Ajustável** (ao registrar o horário real, reajusta em cascata as próximas ajustáveis) ou **Fixa** (não move as demais). A **Agenda** funde as entregas com horário (fase Execução) e as tarefas de campo num painel cronológico por dia. Um **"Playbook Desbravando (Modelo)"** (semeado da planilha de levantamento — ~60 itens, 270 microtarefas, 5 dias de campo) é clonado a cada nova expedição.
-
----
-
-## 3. Destaque de Engenharia / "The Hard Part"
-
-**Edição simultânea sem backend de tempo real.** O jeito óbvio — cada tela salva o formulário inteiro — faz duas pessoas na mesma expedição sobrescreverem o trabalho uma da outra. Em vez disso, cada alteração é um `PATCH` cirúrgico de um campo só, e o `UPDATE` é montado dinamicamente a partir do objeto já saneado:
-
-```js
-// monta "SET col=?" só com os campos que vieram, e faz bind na ordem
-async function upd(db, tabela, id, campos, extra = "") {
-  const chaves = Object.keys(campos);
-  if (!chaves.length) return false;
-  const sets = chaves.map(k => `${k}=?`).join(", ");
-  await db.prepare(`UPDATE ${tabela} SET ${sets}${extra} WHERE id=?`)
-    .bind(...chaves.map(k => campos[k]), id).run();
-  return true;
-}
-```
-
-Somado a um *poll* leve nas telas (que pausa quando o campo está em foco, pra não atropelar quem digita), isso dá a sensação de colaborativo **sem WebSocket, sem CRDT e sem sair do plano gratuito**. O mesmo princípio aparece no financeiro: o status de um custo (`pago`/`parcial`/`pendente`) é **derivado** do quanto já foi pago, em vez de ser um campo que alguém precisa lembrar de mudar.
-
----
-
-## 4. API
-
-Autenticação: header `x-app-key`. Papel "ambos" = admin e equipe; "admin" = só a chave admin.
-
-| Rota | Método | Papel | Faz |
-| --- | --- | --- | --- |
-| `/api/me` | GET | ambos | Retorna o papel da chave |
-| `/api/eventos` | GET | ambos | Lista eventos com progresso e custo total |
-| `/api/eventos` | POST | admin | Cria evento; `{copiar_de, limpar_valores}` duplica outro como modelo |
-| `/api/eventos/:id` | PATCH / DELETE | admin | Renomeia/arquiva · exclui tudo do evento |
-| `/api/eventos/:id/itens` | GET / POST | ambos | Checklist: lista · adiciona |
-| `/api/itens/:id` | PATCH / DELETE | ambos | Atualiza · exclui item |
-| `/api/eventos/:id/clientes` | GET / POST | admin | Participantes (com soma de pagos) · adiciona |
-| `/api/clientes/:id` | GET / PATCH / DELETE | admin | Ficha + pagamentos · atualiza · exclui |
-| `/api/clientes/:id/pagamentos` | POST | admin | Registra pagamento `{valor, data, forma}` |
-| `/api/pagamentos/:id` | DELETE | admin | Remove pagamento |
-| `/api/clientes/:id/notas` | POST | admin | Anotação livre na ficha do participante |
-| `/api/cliente-notas/:id` | DELETE | admin | Remove anotação |
-| `/api/eventos/:id/cenarios` | GET / POST | admin | Cenários do simulador + linhas · cria (padrão ou `copiar_de`) |
-| `/api/cenarios/modelos` | GET | admin | Cenários marcados como modelo, reusáveis entre expedições |
-| `/api/cenarios/:id` | PATCH / DELETE | admin | Parâmetros · exclui |
-| `/api/cenarios/:id/linhas` | POST | admin | Nova linha de custo |
-| `/api/linhas/:id` | PATCH / DELETE | admin | Edita · remove linha |
-| `/api/eventos/:id/cardapio` | GET / POST | admin | Formulário de cardápio do evento · cria (perguntas padrão se não vierem) |
-| `/api/cardapio/:id` | PATCH / DELETE | admin | Título, perguntas, abre/encerra, `novo_token` · exclui com as respostas |
-| `/api/cardapio/:id/respostas` | GET | admin | Respostas recebidas |
-| `/api/cardapio/:id/respostas/:rid` | DELETE | admin | Remove uma resposta |
-| `/api/cardapio/:id/planilha.csv` | GET | admin | Planilha das respostas (download no painel) |
-| `/cardapio/:slug` | GET / POST | **público** | Página do formulário · grava a resposta |
-| `/cardapio/:slug/planilha.csv?t=` | GET | **token** | CSV para a planilha do Google puxar (`=IMPORTDATA`) |
-| `/api/eventos/:id/custos` | GET / POST | admin | Custos reais da expedição (+ lista de staff) · adiciona |
-| `/api/eventos/:id/custos/importar` | POST | admin | Gera itens de custo a partir de um cenário do simulador |
-| `/api/eventos/:id/custos/reordenar` | POST | admin | Salva a nova ordem (drag & drop) |
-| `/api/custos/:id` | PATCH / DELETE | admin | Edita (valor, pago, parcelas, forma, status) · exclui |
-| `/api/fornecedores` | GET / POST | admin | Fornecedores globais (com nº de itens e total) · adiciona |
-| `/api/fornecedores/:id` | PATCH / DELETE | admin | Edita · exclui (desamarra os custos) |
-| `/api/eventos/:id/quartos` | GET / POST | GET ambos / POST admin | Quartos + alocações · cria quarto |
-| `/api/quartos/:id` | PATCH / DELETE | admin | Edita · exclui quarto |
-| `/api/quartos/:id/alocacoes` | POST | ambos | Aloca `{cliente_id}` (admin) ou `{nome_livre}` |
-| `/api/alocacoes/:id` | PATCH / DELETE | ambos | Situação do hóspede · remove do quarto |
-| `/api/tarefas` | GET / POST | ambos | Tarefas gerais: lista · adiciona |
-| `/api/tarefas/:id` | PATCH / DELETE | ambos | Atualiza · exclui tarefa |
-| `/api/crm` | GET / POST | admin | Contatos do CRM · adiciona |
-| `/api/crm/:id` | GET / PATCH / DELETE | admin | Ficha + interações + expedições vinculadas · atualiza · exclui |
-| `/api/crm/:id/interacoes` | POST | admin | Registra interação `{data, canal, resumo}` |
-| `/api/crm-interacoes/:id` | DELETE | admin | Remove interação |
-
-**Sistema Operacional (v4.1) — ambos os papéis:**
-
-| Rota | Método | Faz |
-| --- | --- | --- |
-| `/api/eventos/:id/op` | GET | Árvore do ciclo: itens → fases → microtarefas |
-| `/api/eventos/:id/op/itens` | POST | Cria item (nome+categoria) e já gera as 6 fases |
-| `/api/op-itens/:id` | PATCH / DELETE | Edita · exclui item (com fases e microtarefas) |
-| `/api/op-fases/:id` | PATCH | Status da fase (afazer/andamento/concluído/não-utilizada) |
-| `/api/op-fases/:id/micros` | POST | Nova microtarefa (na Execução: data/horário/responsável/tipo) |
-| `/api/op-micros/:id` | PATCH / DELETE | Edita (concluído, horário…) · exclui |
-| `/api/eventos/:id/campo` | GET | Operação em Campo: dias → tarefas → subtarefas |
-| `/api/eventos/:id/campo/dias` | POST | Novo dia |
-| `/api/campo-dias/:id` | PATCH / DELETE | Edita · exclui dia |
-| `/api/campo-dias/:id/tarefas` | POST | Nova tarefa cronológica |
-| `/api/campo-tarefas/:id` | PATCH / DELETE | Edita · exclui tarefa |
-| `/api/campo-tarefas/:id/reajustar` | POST | Registra `h_realizado`; com `aplicar` cascateia o delta nas próximas Ajustáveis |
-| `/api/campo-tarefas/:id/subtarefas` | POST | Nova subtarefa de check |
-| `/api/campo-subtarefas/:id` | PATCH / DELETE | Marca · exclui |
-| `/api/eventos/:id/agenda` | GET | Agenda cronológica (campo + execução com horário) |
-
-Fora desta tabela ainda existem as rotas de reordenação (`/api/eventos/:id/itens/reordenar`, `/api/tarefas/reordenar`, `/api/eventos/:id/op/reordenar`), as de subtarefa (`/api/itens/:id/subitens`, `/api/subitens/:id`, `/api/tarefas/:id/subtarefas`, `/api/subtarefas/:id`) e o **conector MCP** (`/mcp`, `/api/mcp`, `/oauth/*`, `/.well-known/*`), que tem autenticação própria. Todas estão descritas em [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
-
-**Cálculo do simulador** (mesma lógica da planilha original): linha `pessoa` = média × preço × multiplicador (nenhum / diárias / dias de trilha / refeições / eventos), somado por pessoa; linha `fixo` = valor × multiplicador, rateado entre as pessoas.
-
----
-
-## 5. Rodando / publicando
+Requires Node 20 or newer.
 
 ```bash
-npx wrangler login                                    # se ainda não estiver logado
-npx wrangler d1 create eventos                        # 1) cria o banco
-#   → cole o database_id impresso no wrangler.toml
-npx wrangler d1 execute eventos --remote --file=schema.sql   # 2) estrutura
-npx wrangler secret put APP_KEY                       # 3) chave admin
-npx wrangler secret put TEAM_KEY                      #    chave equipe (opcional)
-npx wrangler deploy                                   # 4) publica
+npm install
+npx wrangler d1 execute eventos --local --file=schema.sql
+npx wrangler dev
 ```
 
-A URL final (`https://eventos.SEU-USUARIO.workers.dev`) é o app completo. Desenvolvimento local: `npx wrangler dev` (chaves num `.dev.vars`, fora do git).
+Local keys go in `.dev.vars` (ignored by git):
 
-> **Instalação limpa:** o `schema.sql` cria 24 tabelas, mas **não** as do cardápio — elas nasceram na v4.3. Depois do passo 2, rode também `migracao_v4_3.sql`, `migracao_v4_4.sql` e `migracao_v4_5.sql`, senão os formulários públicos não sobem.
+```
+APP_KEY=any-local-admin-key
+TEAM_KEY=any-local-team-key
+```
 
-| Arquivo | O que é |
-| --- | --- |
-| `worker.js` | API (`/api/*`) + entrega da interface |
-| `ui.html` | Interface completa (SPA de arquivo único) |
-| `cardapio.js` | O formulário público (página, gravação e CSV) |
-| `worker-cardapio.js` + `wrangler.cardapio.toml` | Worker separado que só serve o formulário — ver o cabeçalho do arquivo |
-| `mcp.js` | Conector MCP + OAuth (o Claude operando o sistema) |
-| `marca.js` | A marca da Desbravando em vetor, usada pelo formulário |
-| `schema.sql` | Estrutura do banco |
-| `migracao_v3_*.sql` / `migracao_v4_*.sql` | Migrações incrementais (v3.1 a v4.5) |
-| `seed_playbook.sql` | Semeia o "Playbook Desbravando (Modelo)" |
-| `seed_avaliacao.sql` · `seed_cadastro_origens.sql` · `upd_cadastro_piloto.sql` | Os formulários públicos criados por SQL |
-| `tools/gerar_seed_playbook.py` | Gera o seed a partir da planilha de levantamento |
-| `tools/links-cardapio.mjs` | Imprime o link e a fórmula da planilha de cada formulário |
-| `wrangler.toml` | Configuração do Worker/D1 |
-| `docs/ARQUITETURA.md` | O manual do funcionamento inteiro |
+## Tests
 
----
+```bash
+npm test          # API suite against a local `wrangler dev` (login, per-person permission, event CRUD, R2 attachment)
+npm run travas    # pre-deploy checks: UI compiles, worker rules, zip export, public form
+npm run travas:tela   # opens every tab in Chromium (needs Playwright from the qa-parresia checkout)
+```
 
-## 6. Privacidade (LGPD)
+`npm test` creates a temporary local D1 from `schema.sql`, uses test keys and never touches
+production.
 
-- Os dados pessoais reais (CPF, telefone, financeiro, CRM) **nunca entram no git**: ficam num seed ignorado (`seed_dados_reais.sql`) e num banco privado — este repositório é só o código.
-- As chaves de acesso são *secrets* do Wrangler, não vão no código nem no HTML; trocar é um comando e desloga quem usava a antiga.
-- CPF/telefone e todo o financeiro só aparecem com a chave admin; a equipe opera checklist, hospedagem e tarefas sem ver dado pessoal.
-- O formulário de cardápio é a única rota pública que grava **dado de gente** no banco. (O `POST /oauth/register` do conector MCP também grava sem chave, mas só a linha técnica de um cliente OAuth — é o que o registro dinâmico exige, e registrar não dá acesso a nada.) Ele aceita só as perguntas que o formulário declara — campo desconhecido e opção fora da lista são descartados no servidor —, guarda nome e WhatsApp de quem responde e nada mais, e pode ser encerrado com um clique. O CSV para planilha tem token próprio, separado das chaves do sistema: vazou, você gera outro e o antigo morre.
+## Folder structure
 
-## Formulários públicos · dado sensível
+| Path | What it is |
+|---|---|
+| `worker.js` | API (`/api/*`), login, permissions and serving the UI |
+| `ui.html` | The whole interface, one file |
+| `mcp.js` | MCP connector and OAuth endpoints |
+| `auditoria.js` | Audit log of every write |
+| `briefing.js` | Design brief per expedition |
+| `cardapio.js`, `worker-cardapio.js`, `wrangler.cardapio.toml` | Public forms Worker |
+| `marca.js` | Brand vector used by the public forms |
+| `schema.sql` | Database structure for a fresh install |
+| `migrations/` | Incremental SQL changes, in order (see `migrations/README.md`) |
+| `seeds/` | SQL that creates forms and the operations playbook |
+| `tools/` | Pre-deploy checks and helper scripts |
+| `tests/` | Automated API tests |
+| `docs/` | Architecture, roadmap, history, diagrams |
 
-Quatro formulários rodam no worker `cardapio` (mesmo banco do sistema):
+## Architecture
 
-| slug | evento | o que coleta |
-|---|---|---|
-| `jantar-urubici` | Urubici · ago | escolha de jantar das 4 noites |
-| `almoco-vinicola` | Urubici · ago | escolha do almoço na vinícola |
-| `avaliacao-expedicao` | Urubici · ago | nome, nota de 1 a 5, comentário |
-| `cadastro-origens` | Origens · 23–25/10 | **nome, piloto/acompanhante, telefone, CPF, RG, endereço, CEP, nacionalidade, estado civil, camiseta, contato de emergência, forma de pagamento, e-mail** |
-| `bebidas-origens` | **Urubici · 16–20/09** | nome, bebidas do cooler e a quantidade de cada uma |
+Request flow, modules, database and roles are in [docs/ARQUITETURA.md](docs/ARQUITETURA.md)
+(Portuguese). Diagrams are in [docs/arquitetura/](docs/arquitetura/).
 
-⚠️ **O slug `bebidas-origens` está errado no nome, e fica assim.** O formulário foi criado amarrado à Origens por inferência minha (a descrição da Origens menciona "bebidas e gelo para trilha") e em 16/09 ele corrigiu: os coolers são da **Urubici de Setembro**. O evento e o sobretítulo foram corrigidos, o slug não — o link já estava circulando e tinha resposta de cliente. **Slug é endereço: trocar quebra o link na mão de quem já recebeu**, e isso é pior do que um nome interno feio. Ao criar formulário novo, confirmar o evento ANTES: o nome do slug é a única coisa que não se conserta depois.
+## Decisions and known limits
 
-⚠️ **O `cadastro-origens` é o primeiro que coleta documento.** Duas consequências práticas:
+- `worker.js` and `mcp.js` were recovered from the production bundle on 2026-10-14. They
+  run and read fine, but the bundler removed comments and added `__name()` wrappers.
+- Personal data (ID numbers, phone, payments) never goes into git. Real data seeds and
+  database backups are ignored by `.gitignore`.
+- Access keys and signing keys are Wrangler secrets, never in code.
+- Migrations are applied by hand with `wrangler d1 execute`. They are not managed by
+  `wrangler d1 migrations` yet.
+- The public form route is the only route that writes without a session. `POST
+  /oauth/register` also accepts requests without a session, as dynamic client registration
+  requires.
 
-1. **O token do CSV virou credencial de verdade.** Ele existe porque o `=IMPORTDATA` do
-   Google puxa o endereço em texto puro, então não pode ser a `APP_KEY`. Nos formulários de
-   cardápio, um token vazado expõe preferência de jantar. Neste, expõe o CPF e o RG de todos
-   os clientes. Não colar a fórmula em planilha compartilhada com o grupo, e **trocar o
-   token no painel quando o cadastro terminar** — trocar invalida o link antigo, que é o
-   objetivo.
-2. **As respostas também aparecem no painel**, que é protegido por chave. Para poucos
-   clientes, ler ali evita criar a planilha e evita o token circulando.
+## License
 
-O CPF é validado pelos dígitos verificadores no servidor (`limparCpf`), e é gravado sempre
-no formato `000.000.000-00`, independente de como foi digitado. CPF que não fecha a conta é
-tratado como campo não respondido: o formulário recusa e diz que falta o CPF, em vez de
-guardar documento quebrado que só apareceria quando o contrato voltasse.
-
-### Pergunta condicional
-
-Uma pergunta pode depender de outra: `depende: { campo, valor }` faz o campo aparecer — e
-passar a ser obrigatório — só quando a pergunta de referência tem aquele valor. É o caso do
-**nome do piloto** no `cadastro-origens`, que só existe para quem marca "Acompanhante".
-
-Três detalhes que não são óbvios:
-
-- O campo nasce **escondido e sem `required`**. Se nascesse obrigatório e oculto, o navegador
-  barraria o envio apontando para um campo que ninguém vê.
-- A **barra de progresso reconta o total** a cada passada, sobre os campos visíveis. Com o
-  denominador fixo, marcar "Acompanhante" fazia a barra andar para trás.
-- No servidor, dependência não satisfeita **apaga o valor** e dispensa o obrigatório. O
-  cliente não vê o campo, então não pode ser cobrado por ele — e piloto que mandasse nome de
-  piloto, por engano ou não, não sujaria a planilha do cadastro.
-
-O `campo` da dependência é validado contra os ids já aceitos: apontar para uma pergunta que
-vem depois, ou que não existe, criaria campo invisível para sempre.
-
-**Vale para múltipla escolha também** (16/09): as seis quantidades do `bebidas-origens` dependem cada uma da sua bebida estar marcada, então quem marca duas vê dois campos e só esses dois são obrigatórios. Duas correções foram necessárias para isso — no cliente, `querySelectorAll` em vez de `querySelector` (com caixa de seleção o primeiro marcado não é o único) e no servidor, `includes` em vez de comparar com `String()` (resposta de múltipla é array, e `String(["a","b"])` nunca ia bater com `"a"`).
-
-**Isso dita a ordem do formulário.** Quando o e-mail passou a depender da forma de pagamento (09/09 — só quem paga por boleto precisa dele), o bloco de pagamento teve de **subir** e o e-mail virou o último campo. Lê melhor assim, por sorte: escolheu boleto, então me dê o e-mail. Mas a restrição é técnica, não estética — pergunta condicional não pode apontar para frente.
-
-⚠️ **Consequência de negócio de uma decisão técnica:** quem paga por Pix não deixa e-mail nenhum. O contato dessa pessoa passa a ser o telefone, que entrou na mesma leva de mudanças. As duas se encaixam por acaso — vale conferir antes de tornar outro campo condicional.
+All rights reserved. Code published for reference only.
