@@ -20,7 +20,7 @@
 
 /* ---------------------------------------------------------------- o esquema, garantido
 
-   As quatro tabelas deste módulo nascem em `migracao_v4_7.sql`. Em 14/10/2026 a aba
+   As quatro tabelas deste módulo nascem em `migrations/140_v4_7.sql`. Em 14/10/2026 a aba
    Comunicação chegou à produção com o código publicado e a migração NÃO aplicada — e o modo
    de falhar foi o pior possível: `abrir()` estourava com "no such table: briefing", a exceção
    subia até o runtime, nenhuma resposta voltava, e o navegador escrevia "Failed to fetch".
@@ -31,7 +31,7 @@
    `OR IGNORE`, então em banco já migrado isto não faz nada, e catálogo editado no banco não é
    sobrescrito — ele continua morando lá, como foi decidido.
 
-   O SQL abaixo é EXTRAÍDO de `migracao_v4_7.sql`, não redigitado, e `tools/checar-travas.mjs`
+   O SQL abaixo é EXTRAÍDO de `migrations/140_v4_7.sql`, não redigitado, e `tools/checar-travas.mjs`
    confere que os dois não descolaram. */
 const ESQUEMA = [
   `CREATE TABLE IF NOT EXISTS catalogo_pecas (
@@ -123,7 +123,7 @@ async function garantirEsquema(db) {
 }
 
 
-/** Catálogo ativo, em ordem. Vem do banco de propósito — ver migracao_v4_7.sql. */
+/** Catálogo ativo, em ordem. Vem do banco de propósito — ver migrations/140_v4_7.sql. */
 export async function catalogo(db) {
   await garantirEsquema(db);
   const { results } = await db
