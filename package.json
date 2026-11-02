@@ -1,0 +1,15 @@
+{
+  "name": "eventos-desbravando-utv",
+  "private": true,
+  "type": "module",
+  "description": "Gestão de expedições off-road: Cloudflare Worker + D1 + R2.",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "travas": "node tools/checar-spa.mjs && node --import ./tools/html-como-texto.mjs tools/checar-travas.mjs && node tools/checar-zip.mjs && node tools/checar-antes-do-deploy.mjs",
+    "travas:tela": "node --import ./tools/html-como-texto.mjs tools/checar-tela.mjs",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "4.156.1"
+  }
+}
