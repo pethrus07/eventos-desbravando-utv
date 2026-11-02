@@ -96,4 +96,4 @@ Request flow, modules, database and roles are in [docs/ARQUITETURA.md](docs/ARQU
 
 ## License
 
-All rights reserved. Code published for reference only.
+All rights reserved. Published as portfolio; not licensed for reuse. See [LICENSE](LICENSE).
