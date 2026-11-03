@@ -18,6 +18,7 @@ Quatro formulários rodam no worker `cardapio` (mesmo banco do sistema):
 | `avaliacao-expedicao` | Urubici · ago | nome, nota de 1 a 5, comentário |
 | `cadastro-origens` | Origens · 23–25/10 | **nome, piloto/acompanhante, telefone, CPF, RG, endereço, CEP, nacionalidade, estado civil, camiseta, contato de emergência, forma de pagamento, e-mail** |
 | `bebidas-origens` | **Urubici · 16–20/09** | nome, bebidas do cooler e a quantidade de cada uma |
+| `cadastro-lencois` | Lençóis Maranhenses · 24–30/05/2027 | os mesmos campos do `cadastro-origens` (criado em 03/11/2026 direto no banco, fora do git, porque o texto traz preço) |
 
 ⚠️ **O slug `bebidas-origens` está errado no nome, e fica assim.** O formulário foi criado amarrado à Origens por inferência (a descrição da Origens menciona "bebidas e gelo para trilha") e em 16/09 o cliente corrigiu: os coolers são da **Urubici de Setembro**. O evento e o sobretítulo foram corrigidos, o slug não — o link já estava circulando e tinha resposta de cliente. **Slug é endereço: trocar quebra o link na mão de quem já recebeu**, e isso é pior do que um nome interno feio. Ao criar formulário novo, confirmar o evento ANTES: o nome do slug é a única coisa que não se conserta depois.
 
