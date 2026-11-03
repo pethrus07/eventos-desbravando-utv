@@ -1,6 +1,6 @@
-# Event Control · Desbravando UTV
+# Controle de Eventos · Desbravando UTV
 
-[Português](README.pt-BR.md) · English
+English · [Português](README.pt-BR.md)
 
 Management system for off-road UTV expeditions run by Desbravando UTV. One web app replaces
 a set of spreadsheets: logistics checklist, participants, receivables, costs and suppliers,
@@ -14,7 +14,7 @@ Known gap (checked 2026-11-01): the version live since 2026-10-21 was published 
 copy of the code that is not in this repository. `main` and production differ again. See
 [docs/ARQUITETURA.md §11](docs/ARQUITETURA.md) before any deploy.
 
-## The problem it solves
+## The problem
 
 The operation sold expeditions, tracked logistics, collected payments in installments and
 estimated costs in separate spreadsheets that several people edited at the same time.
@@ -58,7 +58,7 @@ npm run travas:tela   # opens every tab in Chromium (needs Playwright from the q
 `npm test` creates a temporary local D1 from `schema.sql`, uses test keys and never touches
 production.
 
-## Folder structure
+## Folders
 
 | Path | What it is |
 |---|---|

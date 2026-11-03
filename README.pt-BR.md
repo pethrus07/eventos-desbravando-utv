@@ -1,6 +1,6 @@
 # Controle de Eventos · Desbravando UTV
 
-Português · [English](README.md)
+[English](README.md) · Português
 
 Sistema de gestão das expedições off-road de UTV da Desbravando UTV. Um app web no lugar de
 um conjunto de planilhas: checklist de logística, participantes, contas a receber, custos e
@@ -16,7 +16,7 @@ partir de outra cópia do código, que não está neste repositório. O `main` e
 diferentes de novo. Leia a [docs/ARQUITETURA.md §11](docs/ARQUITETURA.md) antes de qualquer
 deploy.
 
-## O problema que resolve
+## O problema
 
 A operação vendia expedições, acompanhava a logística, cobrava em parcelas e estimava custos
 em planilhas separadas, editadas por várias pessoas ao mesmo tempo. Fórmula quebrava e uma
@@ -60,7 +60,7 @@ npm run travas:tela   # abre todas as abas num Chromium (usa o Playwright do che
 O `npm test` cria um D1 local temporário a partir do `schema.sql`, usa chaves de teste e
 nunca encosta na produção.
 
-## Estrutura de pastas
+## Pastas
 
 | Caminho | O que é |
 |---|---|
