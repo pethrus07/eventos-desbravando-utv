@@ -475,6 +475,16 @@ Consequências práticas:
   `C:\Users\olive\Arquivo-projetos\eventos-desbravando-utv\producao-2026-10-21-versao-9ff53cdf\`.
   É o melhor ponto de partida para juntar as duas linhas e para separar o `worker.js`.
 
+**Medido em 04/11/2026 (só arquivos, branch `reconcilia-producao-2026-10-21`).** O fonte do
+source map, empacotado de novo com o esbuild do repositório, dá byte a byte o bundle no ar. E o
+bundle de 21/10 comparado ao de 08/10 (`recuperado/worker.js`, a base do `main`) difere em
+**um ponto só**: a ferramenta `listar_participantes` do MCP passou a devolver `papel` e
+`desistente` e a deixar desistentes de fora, salvo `incluir_desistentes`. O resto do
+`worker.js` e o `ui.html` são os mesmos de 08/10. As ~1.400 linhas "só no ar" eram
+comentário e formatação do fonte original, não comportamento. Esse ponto foi trazido no
+branch, com teste. Nenhuma tabela ou coluna nova: `clientes.papel` e `clientes.desistente` já
+estão no `schema.sql`.
+
 **Antes de qualquer `wrangler deploy` deste repositório:** rodar
 `npx wrangler deployments list` e `node tools/recuperar-da-producao.mjs --saida=<pasta fora do repo>`,
 comparar com o checkout, e só publicar quando as duas linhas estiverem juntas. Publicar o

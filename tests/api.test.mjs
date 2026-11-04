@@ -187,3 +187,39 @@ test("/oauth/register recusa redirect_uri que não é https e limita por hora", 
   assert.equal(codigos.filter((c) => c === 201).length, 20);
   assert.equal(codigos.at(-1), 429);
 });
+
+/* ---------- branch reconcilia-producao-2026-10-21 ---------- */
+
+test("MCP listar_participantes: papel na resposta, desistente só quando pedido (versão do ar de 21/10)", async () => {
+  const ev = await api("/api/eventos", { metodo: "POST", corpo: { nome: "Expedição MCP", data_evento: "2026-12-10" } });
+  assert.equal(ev.status, 200, await ev.clone().text());
+  const { id: eid } = await ev.json();
+  for (const p of [
+    { nome: "Participante Um", papel: "piloto" },
+    { nome: "Participante Dois", papel: "acompanhante" },
+    { nome: "Participante Três", desistente: 1 },
+  ]) {
+    const r = await api(`/api/eventos/${eid}/clientes`, { metodo: "POST", corpo: p });
+    assert.equal(r.status, 200, await r.clone().text());
+  }
+
+  const chamar = async (args, chave = CHAVE_ADMIN) => {
+    const r = await fetch(BASE + "/mcp", { method: "POST",
+      headers: { "content-type": "application/json", "x-app-key": chave },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "listar_participantes", arguments: args } }) });
+    assert.equal(r.status, 200);
+    return (await r.json()).result;
+  };
+
+  const ativos = JSON.parse((await chamar({ evento_id: eid })).content[0].text);
+  assert.deepEqual(ativos.map((c) => c.nome).sort(), ["Participante Dois", "Participante Um"]);
+  assert.equal(ativos.find((c) => c.nome === "Participante Dois").papel, "acompanhante");
+  assert.ok(ativos.every((c) => c.desistente === 0));
+
+  const todos = JSON.parse((await chamar({ evento_id: eid, incluir_desistentes: true })).content[0].text);
+  assert.equal(todos.length, 3);
+  assert.equal(todos.find((c) => c.nome === "Participante Três").desistente, 1);
+
+  const equipe = await chamar({ evento_id: eid }, CHAVE_EQUIPE);
+  assert.equal(equipe.isError, true, "dado pessoal continua só para a chave admin");
+});

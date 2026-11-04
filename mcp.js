@@ -283,8 +283,8 @@ var TOOLS = [
   {
     name: "listar_participantes",
     role: "admin",
-    description: "[admin] Participantes de uma expedi\xE7\xE3o, com dados pessoais: nome, CPF, telefone, grupo, tipo, UTV, camiseta, contrato e pacote.",
-    inputSchema: { type: "object", properties: { evento_id: { type: "integer" } }, required: ["evento_id"] }
+    description: "[admin] Participantes ATIVOS de uma expedi\xE7\xE3o, com dados pessoais: nome, CPF, telefone, grupo, tipo, papel (piloto/acompanhante), UTV, camiseta, contrato e pacote. Desist\xEAncias ficam de fora — s\xF3 passe incluir_desistentes se o usu\xE1rio pedir explicitamente.",
+    inputSchema: { type: "object", properties: { evento_id: { type: "integer" }, incluir_desistentes: { type: "boolean", description: "true = traz tamb\xE9m quem desistiu (desistente=1). S\xF3 quando o usu\xE1rio pedir." } }, required: ["evento_id"] }
   },
   {
     name: "ver_custos",
@@ -403,13 +403,17 @@ async function runTool(name, args, env, papel2) {
       return { ok: (r.meta.changes || 0) > 0 };
     }
     case "listar_participantes": {
+      /* Trazido da versão no ar desde 21/10/2026 (9ff53cdf): devolve `papel` e `desistente`,
+         e por padrão deixa de fora quem desistiu. `incluir_desistentes` só muda um trecho fixo
+         da SQL; o evento continua indo por bind. */
       const { results } = await db.prepare(`
-        SELECT c.id, c.grupo, c.nome, c.cpf, c.telefone, c.tipo, c.camiseta, c.utv, c.nf,
-               c.contrato_enviado, c.contrato_assinado, c.staff,
+        SELECT c.id, c.grupo, c.nome, c.cpf, c.telefone, c.tipo, c.papel, c.camiseta, c.utv, c.nf,
+               c.contrato_enviado, c.contrato_assinado, c.staff, c.desistente,
                COALESCE(fr.valor_previsto, c.pacote) AS pacote,
                (SELECT COALESCE(SUM(p.valor),0) FROM pagamentos p WHERE p.cliente_id=c.id) AS pago
         FROM clientes c LEFT JOIN financeiro_receber fr ON fr.cliente_id=c.id
-        WHERE c.evento_id=? ORDER BY c.grupo, c.nome`).bind(eid).all();
+        WHERE c.evento_id=? ${args.incluir_desistentes ? "" : "AND COALESCE(c.desistente,0)=0"}
+        ORDER BY c.grupo, c.nome`).bind(eid).all();
       return results || [];
     }
     case "ver_custos": {
