@@ -343,7 +343,10 @@ function campoHtml(p) {
     ? ` hidden data-de="${esc(p.depende.campo)}" data-de-valor="${esc(p.depende.valor)}"` +
       (p.obrigatorio ? ` data-req="1"` : "")
     : "";
-  const controleFinal = p.depende && p.obrigatorio ? controle.replace(" required", "") : controle;
+  /* replaceAll: numa escolha cada opção carrega o próprio required, e com `replace` só a
+     primeira perdia o seu. Grupo de rádio com UM required já é obrigatório, então a
+     pergunta escondida barrava o envio (05/11/2026, cadastro da Lençóis). */
+  const controleFinal = p.depende && p.obrigatorio ? controle.replaceAll(" required", "") : controle;
   return `<div class="campo" data-campo="${esc(p.id)}"${dep}>
       <label class="rot">${esc(p.rotulo)}${marca}</label>${ajuda}${controleFinal}
     </div>`;
@@ -634,10 +637,16 @@ ${simbolos()}
       for (var k = 0; k < marcados.length; k++) if (marcados[k].value === esperado) vale = true;
       c.hidden = !vale;
       var campo = c.querySelector("input,textarea,select");
-      if (campo){
-        if (vale && c.getAttribute("data-req")) campo.setAttribute("required", "");
-        if (!vale){ campo.removeAttribute("required"); campo.value = ""; }
-      }
+      if (campo && vale && c.getAttribute("data-req")) campo.setAttribute("required", "");
+      /* Esconder limpa TODOS os controles. Em rádio e caixa, "limpar" é desmarcar:
+         value = "" apagava o valor da primeira opção, que voltava vazia se a pessoa
+         mudasse de ideia. Desmarcar também é o que faz a cadeia funcionar: a pergunta
+         escondida perde a resposta e as que dependem dela (que vêm depois, na mesma
+         passada) somem junto. */
+      if (!vale) Array.prototype.forEach.call(c.querySelectorAll("input,textarea,select"), function(el){
+        el.removeAttribute("required");
+        if (el.type === "radio" || el.type === "checkbox") el.checked = false; else el.value = "";
+      });
       if (!vale) c.classList.remove("falta");
     });
   }
