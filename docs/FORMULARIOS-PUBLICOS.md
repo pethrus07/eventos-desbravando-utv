@@ -9,7 +9,7 @@ Texto que estava no README até 01/11/2026. O formulário roda no Worker `cardap
 
 ## Os formulários
 
-Quatro formulários rodam no worker `cardapio` (mesmo banco do sistema):
+Os formulários rodam no worker `cardapio` (mesmo banco do sistema). Desde 05/11/2026 o mesmo código também está publicado como `formulario` (`wrangler.formulario.toml`), e é **esse o endereço que se manda daqui em diante**: `formulario.desbravando-utv.workers.dev/<slug>`. O `cardapio` continua no ar porque os links e as fórmulas de planilha já enviados apontam para ele. Publicou um, publica o outro: os dois têm de servir a mesma página (conferido byte a byte nos cinco slugs e no CSV no dia da criação).
 
 | slug | evento | o que coleta |
 |---|---|---|

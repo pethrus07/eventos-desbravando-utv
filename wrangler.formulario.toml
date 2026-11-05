@@ -1,0 +1,18 @@
+# O mesmo formulário público do wrangler.cardapio.toml, publicado com o nome "formulario"
+# (05/11/2026): o endereço formulario.desbravando-utv.workers.dev diz ao cliente o que ele
+# está abrindo; "cardapio" ficou da primeira versão, quando só havia o jantar.
+#
+#   npx wrangler deploy --config wrangler.formulario.toml
+#
+# O worker "cardapio" CONTINUA no ar: os links de cadastro e as fórmulas de planilha já
+# enviados apontam para ele, e trocar o endereço quebraria tudo na mão de quem recebeu. Os
+# dois rodam o mesmo código e o mesmo banco; quem publica um publica o outro junto.
+
+name = "formulario"
+main = "worker-cardapio.js"
+compatibility_date = "2026-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "eventos"
+database_id = "c77cfaee-afe3-4a18-b1f1-a4164bdc9c75"
